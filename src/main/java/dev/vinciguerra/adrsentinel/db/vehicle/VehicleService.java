@@ -1,0 +1,162 @@
+package dev.vinciguerra.adrsentinel.db.vehicle;
+
+import java.util.List;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.stereotype.Service;
+import dev.vinciguerra.adrsentinel.db.AbstractGenericService;
+import dev.vinciguerra.adrsentinel.db.CaffeineCacheConfiguration;
+import dev.vinciguerra.adrsentinel.exception.ResourceNotFoundException;
+
+/**
+ * Strato di Business Logic (Service Layer) per la gestione dell'entità {@link Vehicle}.
+ * <p>
+ * Questa classe orchestra le operazioni di dominio e funge da intermediario tra i Controller REST 
+ * e l'accesso ai dati ({@link VehicleRepository}). Implementa un'architettura altamente ottimizzata 
+ * basata su un sistema di <b>Caching Custom</b> ereditato da {@link AbstractGenericService}.
+ * </p>
+ * <p>
+ * <b>Scelte Architetturali:</b>
+ * <ul>
+ * <li><b>Defense in Depth (Validazione):</b> La classe è annotata con {@code @Validated} per garantire che 
+ * i parametri in ingresso ai metodi vengano sanificati (es. {@code @NotBlank}, {@code @Positive}) 
+ * <i>prima</i> di eseguire inutili letture in cache o costose query sul database.</li>
+ * <li><b>Sincronizzazione della Cache (Write-Through / Eviction):</b> I metodi di scrittura ({@code save}, {@code delete}) 
+ * non si limitano ad aggiornare il database, ma mantengono rigorosamente coerente lo stato della memoria RAM, 
+ * invocando i metodi {@code updateCache} e {@code deleteCache} sulle singole entità o sulle liste.</li>
+ * </ul>
+ * </p>
+ *
+ * @author Giovanni Vinciguerra
+ * @version 1.0
+ * @since 1.0
+ */
+@Service
+public class VehicleService extends AbstractGenericService {
+	private final VehicleRepository vehicleRepository;
+
+	/**
+	 * Costruttore per l'iniezione delle dipendenze (Dependency Injection).
+	 *
+	 * @param vehicleRepository il DAO per l'accesso fisico ai dati dei veicoli.
+	 * @param cacheManager il gestore della memoria cache configurato nell'applicazione.
+	 */
+	public VehicleService(VehicleRepository vehicleRepository, CacheManager cacheManager) {
+		super(cacheManager);
+		this.vehicleRepository = vehicleRepository;
+	}
+	
+	/**
+	 * Recupera un veicolo in base alla sua chiave di business (Targa).
+	 * <p>
+	 * <b>Flusso (Read-Through):</b> Controlla prima la cache {@code vehicle_by_license_plate}. 
+	 * Se si verifica un <i>Cache Miss</i>, interroga il database e salva il risultato in RAM per le chiamate future.
+	 * </p>
+	 *
+	 * @param licensePlate la targa esatta da cercare. Protetta da {@code @NotBlank} per evitare query vuote.
+	 * @return l'istanza del veicolo trovata.
+	 * @throws ResourceNotFoundException se la targa non esiste nel database (Domain Exception).
+	 */
+	@Cacheable(value = CaffeineCacheConfiguration.VEHICLE_BY_LICENSE_PLATE_CACHE, key = "#licensePlate")
+	public Vehicle getByLicensePlate(String licensePlate) throws ResourceNotFoundException {
+		logger.info("[DataBase CALL] Searching for the Vehicle by licensePlate: {}", licensePlate);
+		return vehicleRepository.findByLicensePlate(licensePlate)
+			.orElseThrow(() -> new ResourceNotFoundException("Vehicle not found: " + licensePlate));
+	}
+	
+	/**
+	 * Ricerca una flotta di veicoli capaci di trasportare <b>almeno</b> il peso utile specificato.
+	 * <p>
+	 * <b>Logica di Dominio:</b> Modella la necessità operativa di trovare veicoli idonei a un carico.
+	 * Interroga il DB cercando veicoli con portata utile {@code >=} al parametro richiesto.
+	 * </p>
+	 *
+	 * @param maxUsefulWeightkg il peso minimo che il veicolo deve poter caricare. Protetto da {@code @Positive}.
+	 * @return una lista di veicoli idonei al carico (può essere vuota).
+	 */
+	@Cacheable(value = CaffeineCacheConfiguration.VEHICLE_BY_MAX_USEFUL_WEIGHT_CACHE, key = "#maxUsefulWeightkg")
+	public List<Vehicle> getByMaxUsefulWeight(int maxUsefulWeightkg) {
+		logger.info("[DataBase CALL] Searching for the Vehicle by maxUsefulWeightkg: {}", maxUsefulWeightkg);
+		return vehicleRepository.findByMaxUsefulWeightkgGreaterThanEqual(maxUsefulWeightkg);
+	}
+	
+	/**
+	 * Recupera l'intero parco mezzi dal database.
+	 * L'intera lista viene messa in cache per massimizzare le performance sulle visualizzazioni globali.
+	 *
+	 * @return la lista di tutti i veicoli registrati nel sistema.
+	 */
+	@Cacheable(value = CaffeineCacheConfiguration.ALL_VEHICLE_CACHE, key = "'" + CaffeineCacheConfiguration.ALL_VEHICLE_KEY + "'")
+	public List<Vehicle> getAllVehicle() {
+		logger.info("[DataBase CALL] Retrieving all Vehicle");
+		return vehicleRepository.findAll();
+	}
+	
+	/**
+	 * Persiste un nuovo veicolo o aggiorna uno esistente, propagando le modifiche alla cache.
+	 * <p>
+	 * <b>Sincronizzazione:</b> Dopo aver salvato il record (garantendo l'ID), il metodo esegue 
+	 * un aggiornamento granulare delle tre cache principali (Singolo record, Lista per peso, Lista totale) 
+	 * per evitare dati stantii (<i>Stale Data</i>) alle successive letture.
+	 * La validazione dell'entità è demandata automaticamente ad Hibernate Validator durante la {@code INSERT/UPDATE}.
+	 * </p>
+	 *
+	 * @param newVehicle il veicolo da salvare nel database.
+	 * @return il veicolo salvato, comprensivo dell'ID generato dal database.
+	 */
+	public Vehicle save(Vehicle newVehicle) {
+		logger.info("[DataBase CALL] Saving new Vehicle with licensePlate: {}", newVehicle.getLicensePlate());
+		Vehicle savedVehicle = vehicleRepository.save(newVehicle);
+		updateCache(
+			CaffeineCacheConfiguration.VEHICLE_BY_LICENSE_PLATE_CACHE,
+			savedVehicle.getLicensePlate(),
+			savedVehicle,
+			CacheOperation.SINGLE_RECORD
+		);
+		updateCache(
+			CaffeineCacheConfiguration.VEHICLE_BY_MAX_USEFUL_WEIGHT_CACHE,
+			savedVehicle.getMaxUsefulWeightkg(),
+			savedVehicle,
+			CacheOperation.LIST_RECORD
+		);
+		updateCache(
+			CaffeineCacheConfiguration.ALL_VEHICLE_CACHE,
+			CaffeineCacheConfiguration.ALL_VEHICLE_KEY,
+			savedVehicle,
+			CacheOperation.LIST_RECORD
+		);
+		return savedVehicle;
+	}
+	
+	/**
+	 * Rimuove fisicamente un veicolo dal database e invalida le relative entry in cache.
+	 * <p>
+	 * Previene l'effetto "Veicolo Fantasma", assicurandosi che il record rimosso dal database 
+	 * sparisca istantaneamente anche dalle cache delle liste e dalle ricerche per targa.
+	 * </p>
+	 *
+	 * @param vehicleToDelete l'istanza del veicolo da rimuovere definitivamente.
+	 */
+	public void delete(Vehicle vehicleToDelete) {
+		logger.info("[DataBase CALL] Deleting Vehicle with licensePlate: {}", vehicleToDelete.getLicensePlate());
+		vehicleRepository.delete(vehicleToDelete);
+		deleteCache(
+			CaffeineCacheConfiguration.VEHICLE_BY_LICENSE_PLATE_CACHE,
+			vehicleToDelete.getLicensePlate(),
+			vehicleToDelete,
+			CacheOperation.SINGLE_RECORD
+		);
+		deleteCache(
+			CaffeineCacheConfiguration.VEHICLE_BY_MAX_USEFUL_WEIGHT_CACHE,
+			vehicleToDelete.getMaxUsefulWeightkg(),
+			vehicleToDelete,
+			CacheOperation.LIST_RECORD
+		);
+		deleteCache(
+			CaffeineCacheConfiguration.ALL_VEHICLE_CACHE,
+			CaffeineCacheConfiguration.ALL_VEHICLE_KEY,
+			vehicleToDelete,
+			CacheOperation.LIST_RECORD
+		);
+	}
+}

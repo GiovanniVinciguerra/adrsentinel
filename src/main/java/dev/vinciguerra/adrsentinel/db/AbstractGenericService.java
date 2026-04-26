@@ -1,0 +1,201 @@
+package dev.vinciguerra.adrsentinel.db;
+
+import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
+
+/**
+ * Superclasse astratta che centralizza la gestione manuale della cache in memoria.
+ * <p>
+ * Implementa il pattern <b>Template Method / Base Class</b> per fornire ai Service specializzati
+ * (es. {@code AdrClassService}, {@code UnNumberService}) metodi standardizzati, sicuri e
+ * <i>type-safe</i> (tramite Java Generics) per l'inserimento, l'aggiornamento e la rimozione
+ * manuale di oggetti o liste all'interno del {@link CacheManager} di Spring Boot.
+ * </p>
+ * <h3>Design Principles:</h3>
+ * <ul>
+ * <li><b>DRY (Don't Repeat Yourself):</b> Evita la duplicazione dei check per la nullità della cache e della chiave.</li>
+ * <li><b>Single Responsibility (per Enum):</b> Separa concettualmente le operazioni su record singoli da quelle su collezioni.</li>
+ * <li><b>Lazy Loading Support:</b> Rispetta il caricamento ritardato delle liste: se una lista non è ancora in RAM, non la crea forzatamente.</li>
+ * </ul>
+ *
+ * @author Giovanni Vinciguerra
+ * @version 1.0
+ * @since 1.0
+ */
+public abstract class AbstractGenericService {
+	/**
+     * Enum che definisce le possibili strategie operative quando si interagisce con una cache.
+     * Serve come "libretto di istruzioni" per i metodi di update e delete.
+     */
+	public enum CacheOperation {
+		/**
+         * Operazione su un record singolo (relazione 1:1). 
+         * Sovrascrive (o elimina) direttamente il valore associato alla chiave senza ulteriori controlli.
+         */
+		SINGLE_RECORD,
+		/**
+         * Operazione su una collezione (relazione 1:N). 
+         * Estrae la lista esistente, modifica l'elemento e reinserisce la lista aggiornata.
+         * Se la lista non esiste in memoria (non ancora caricata dal DB), l'operazione viene ignorata.
+         */
+		LIST_RECORD
+	}
+	
+	/** Il gestore centralizzato della cache iniettato da Spring. */
+	protected final CacheManager cacheManager;
+	/** Logger dinamico configurato sulla classe figlia (a runtime 'getClass()' restituirà la classe concreta).*/
+	protected final Logger logger = LoggerFactory.getLogger(getClass());
+	
+	/**
+     * Costruttore protetto utilizzato per la Dependency Injection tramite le sottoclassi.
+     * @param cacheManager L'istanza del CacheManager configurata nel contesto Spring.
+     */
+	protected AbstractGenericService(CacheManager cacheManager) {
+		this.cacheManager = cacheManager;
+	}
+	
+	/**
+	 * Motore di sincronizzazione (Write-Through) per l'aggiornamento o l'inserimento di dati in Cache.
+	 * <p>
+	 * <b>Policy di Dominio: Null-Safety</b><br>
+	 * Questo metodo implementa una rigorosa politica di esclusione dei valori nulli. Se il valore 
+	 * da persistere è {@code null}, l'operazione viene bloccata e loggata, proteggendo la RAM 
+	 * dalla corruzione di stato (no "buchi neri" nelle liste o nelle chiavi singole).
+	 * </p>
+	 * <p>
+	 * <b>Logica di Upsert (Update or Insert) per le Liste:</b><br>
+	 * Nel caso di {@code LIST_RECORD}, il metodo non si limita ad accodare il dato. 
+	 * Sfrutta il metodo {@link Object#equals(Object)} dell'entità per verificare se una versione 
+	 * precedente dell'oggetto (stessa Business Key) è già presente in memoria. In caso affermativo, 
+	 * la rimuove e la sostituisce con l'istanza aggiornata. Questo previene i duplicati e risolve 
+	 * alla radice il problema dello "Stale Data" (dati vecchi) dopo un'operazione di UPDATE.
+	 * </p>
+	 * @param <T> Il tipo di dato dell'entità gestita.
+	 * @param cacheName Il nome della regione di cache in cui operare.
+	 * @param key La chiave univoca di accesso alla cache.
+	 * @param value L'oggetto da inserire o aggiornare (non ammesso null).
+	 * @param cacheOperation La strategia operativa (SINGLE_RECORD o LIST_RECORD).
+	 * @throws IllegalArgumentException se i parametri operativi di base (key o cacheOperation) sono nulli.
+	 */
+	protected <T> void updateCache(String cacheName, Object key, T value, CacheOperation cacheOperation) throws IllegalArgumentException {
+		Cache cache = cacheManager.getCache(cacheName);
+		ifNullThrowException(key, "Cache key cannot be null for save");
+		ifNullThrowException(cacheOperation, "[SAVE] No cache operation, value was null");
+		if(!canProceedWithCacheOperation(cache, cacheName, value, "SAVE")) 
+			return;
+		switch(cacheOperation) {
+			case SINGLE_RECORD:
+				cache.put(key, value);
+				logger.info("Cache [{}] - Single record inserted for key: {}", cacheName, key);
+				break;
+			case LIST_RECORD:
+				Cache.ValueWrapper cacheValue = cache.get(key);
+				if(cacheValue != null && cacheValue.get() != null) {
+					@SuppressWarnings("unchecked")
+					List<T> temp = (List<T>) cacheValue.get();
+					boolean isAlreadyInList = temp.contains(value);
+					if(isAlreadyInList)
+						temp.remove(value);
+					temp.add(value);
+					cache.put(key, temp);
+					logger.info("Cache [{}] - New item appended to list for key: {}", cacheName, key);
+				} else
+					logger.warn("Cache [{}] - List for key {} not yet in memory. No append performed.", cacheName, key);
+				break;
+			default:
+				logger.warn("Unsupported cache operation: {}", cacheOperation);
+		}
+	}
+	
+	/**
+	 * Motore di sincronizzazione per la rimozione controllata di dati dalla Cache, 
+	 * a seguito di una cancellazione fisica sul database.
+	 * <p>
+	 * <b>Tracciabilità e Feedback (Observability):</b><br>
+	 * Implementa un sistema di logging granulare. Verifica preventivamente se l'elemento 
+	 * esisteva davvero in memoria (usando {@code evictIfPresent} o la risposta booleana di {@code remove}) 
+	 * per distinguere chiaramente nei log un'effettiva pulizia della RAM da un'operazione a vuoto (No-Op).
+	 * </p>
+	 * @param <T> Il tipo di dato dell'entità gestita.
+	 * @param cacheName Il nome della regione di cache.
+	 * @param key La chiave univoca associata al dato da invalidare.
+	 * @param value L'oggetto da rimuovere dalle collezioni (non ammesso null).
+	 * @param cacheOperation La strategia operativa: SINGLE_RECORD (evizione totale) o LIST_RECORD (rimozione dalla lista).
+	 * @throws IllegalArgumentException se i parametri operativi di base (key o cacheOperation) sono nulli.
+	 */
+	protected <T> void deleteCache(String cacheName, Object key, T value, CacheOperation cacheOperation) throws IllegalArgumentException {
+		Cache cache = cacheManager.getCache(cacheName);
+		ifNullThrowException(key, "Cache key cannot be null for deletion");
+		ifNullThrowException(cacheOperation, "[DELETE] No cache operation, value was null");
+		if(!canProceedWithCacheOperation(cache, cacheName, value, "DELETE")) 
+			return;
+		switch(cacheOperation) {
+			case SINGLE_RECORD:
+				boolean isKeyEvicted = cache.evictIfPresent(key);
+				if(isKeyEvicted)
+					logger.info("Cache [{}] - Single record deleted for key: {}", cacheName, key);
+				else
+					logger.warn("Cache [{}] - Key not found: {}. Cache unchanged.", cacheName, key);
+				break;
+			case LIST_RECORD:
+				Cache.ValueWrapper cacheValue = cache.get(key);
+				if(cacheValue != null && cacheValue.get() != null) {
+					@SuppressWarnings("unchecked")
+					List<T> temp = (List<T>) cacheValue.get();
+					boolean isRemoved = temp.remove(value);
+					if(isRemoved) {
+						cache.put(key, temp);
+						logger.info("Cache [{}] - Item successfully removed from list for key: {}", cacheName, key);
+					} else
+						logger.warn("Cache [{}] - Item not found in list for key: {}. Cache unchanged.", cacheName, key);
+				} else
+					logger.warn("Cache [{}] - List for key {} not yet in memory. No delete performed.", cacheName, key);
+				break;
+			default:
+				logger.warn("Unsupported cache operation: {}", cacheOperation);
+		}
+	}
+	
+	/**
+	 * Metodo helper dichiarativo per le Guard Clauses.
+	 * <p>
+	 * <b>Pattern Architetturale (Assertion / Fail-Fast):</b><br>
+	 * Centralizza la logica di validazione degli argomenti obbligatori. Se l'input è nullo, 
+	 * interrompe immediatamente l'esecuzione lanciando un'eccezione chiara e contestualizzata, 
+	 * proteggendo i metodi chiamanti da NullPointerException tardivi e difficili da debuggare.
+	 * </p>
+	 *
+	 * @param valueToCheck l'oggetto da validare.
+	 * @param message il messaggio di errore da iniettare nell'eccezione in caso di fallimento.
+	 * @throws IllegalArgumentException se l'oggetto verificato risulta nullo.
+	 */
+	private void ifNullThrowException(Object valueToCheck, String message) throws IllegalArgumentException {
+		if(valueToCheck == null)
+			throw new IllegalArgumentException(message);
+	}
+	
+	/**
+	 * Boolean Guard Method per validare silenziosamente lo stato della Cache e del Valore.
+	 * Se la cache non esiste o il valore è nullo, logga il warning appropriato e restituisce false, 
+	 * indicando al chiamante di interrompere pacificamente l'operazione (Graceful Degradation).
+	 *
+	 * @param cache l'istanza della cache recuperata dal CacheManager.
+	 * @param cacheName il nome della regione di cache (usato per i log).
+	 * @param value l'oggetto da validare (policy Null-Safety).
+	 * @param operationLabel etichetta dell'operazione (es. "SAVE", "DELETE") per contestualizzare i log.
+	 * @return true se l'operazione può procedere, false se deve essere abortita.
+	 */
+	private boolean canProceedWithCacheOperation(Cache cache, String cacheName, Object value, String operationLabel) {
+		if(cache == null) {
+			logger.warn("Cache [{}] not found (no {} operation performed)", cacheName, operationLabel);
+			return false;
+		} else if(value == null) {
+			logger.warn("Cache [{}] - Value was null. Cache unchanged during {}.", cacheName, operationLabel);
+			return false;
+		} else
+			return true;
+	}
+}

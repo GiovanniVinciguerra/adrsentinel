@@ -1,0 +1,87 @@
+@startuml
+
+!theme plain
+skinparam roundcorner 10
+skinparam class {
+    BackgroundColor White
+    ArrowColor Black
+    BorderColor Black
+}
+
+entity "adr_classes" as Classes {
+  * id : Long <<PK>>
+  --
+  * class_code : String <<UQ>>
+  * base_risk_factor: Integer
+  * description : String
+}
+
+entity "un_numbers" as UN {
+  * id : Long <<PK>>
+  --
+  * onu_code : String <<UQ>>
+  * name : String
+  * physical_state : String
+  * kemler_code : String
+  * packing_group : String
+  * tunnel_restriction : String
+  * transport_category : Integer
+  * adr_class_id : Long <<FK>>
+}
+
+entity "compatibility_rules" as Rules {
+  * id : Long <<PK>>
+  --
+  * class_a_id : Long <<FK>>
+  * class_b_id : Long <<FK>>
+  * is_compatible : Boolean
+  * warning_notes : String
+}
+
+entity "vehicles" as Vehicles {
+  * id : Long <<PK>>
+  --
+  * license_plate : String <<UQ>>
+  * vehicle_type : enum
+  * physical_state : enum
+  * max_weight_kg : Integer
+  * height_cm : Integer
+  * width_cm : Integer
+  * length_cm : Integer
+  * wheelbase : Integer
+  * n_axles : Integer
+  * adr_certified : Boolean
+}
+
+entity "shipments" as Shipments {
+  * id : Long <<PK>>
+  --
+  * tracking_number : String <<UQ>>
+  * shipment_date : Timestamp
+  * status : String
+  * origin_address : String
+  * destination_address : String
+  * distance_km : Double
+  * vehicle_id : Long <<FK>>
+}
+
+entity "shipment_lines" as Lines {
+  * id : Long <<PK>>
+  --
+  * quantity : Double
+  * unit_of_measure : String
+  * shipment_id : Long <<FK>>
+  * un_number_id : Long <<FK>>
+}
+
+' Relazioni Dominio Normativo
+Classes ||..o{ UN : "1 a N"
+Classes ||..o{ Rules : "Classe A"
+Classes ||..o{ Rules : "Classe B"
+
+' Relazioni Dominio Logistico
+Vehicles ||..o{ Shipments : "1 a N"
+Shipments ||..|{ Lines : "1 a N (Cascade)"
+UN ||..o{ Lines : "1 a N"
+
+@enduml

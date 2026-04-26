@@ -1,0 +1,196 @@
+package dev.vinciguerra.adrsentinel.db;
+
+import java.util.Arrays;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.annotation.EnableCaching;
+import org.springframework.cache.caffeine.CaffeineCache;
+import org.springframework.cache.support.SimpleCacheManager;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import dev.vinciguerra.adrsentinel.db.adrclass.AdrClassCacheSetting;
+import dev.vinciguerra.adrsentinel.db.compatibilityrule.CompatibilityRuleCacheSetting;
+import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumberCacheSetting;
+import dev.vinciguerra.adrsentinel.db.shipment.ShipmentCacheSetting;
+import dev.vinciguerra.adrsentinel.db.shipmentitem.ShipmentItemCacheSetting;
+import dev.vinciguerra.adrsentinel.db.vehicle.VehicleCacheSetting;
+
+/**
+ * Torre di controllo e configurazione dell'infrastruttura di Caching L1 (Local Memory).
+ * <p>
+ * <b>Architettura e Ruolo:</b><br>
+ * Questa classe definisce il "Motore di Memoria" dell'applicazione. Utilizza <b>Caffeine</b> 
+ * (lo standard di mercato ad altissime prestazioni per la JVM) per gestire l'evizione dei dati 
+ * e mantenere la latenza a livelli vicini allo zero (O(1)) su tutto il dominio logistico ADR.
+ * </p>
+ * <p>
+ * <b>Integrazione Type-Safe (Twelve-Factor App):</b><br>
+ * Tramite l'annotazione {@link EnableConfigurationProperties}, questa classe si disaccoppia 
+ * dai numeri magici (Hardcoding). Inietta a runtime i record di configurazione specifici per 
+ * ogni dominio (Catalogo ONU, Flotta, Spedizioni, ecc.), i quali contengono le policy di 
+ * Capacity Planning lette in modo rigoroso e sicuro dal file {@code application.yml}.
+ * </p>
+ * @author Giovanni Vinciguerra
+ * @version 1.0 (Caffeine Engine & Type-Safe Integration)
+ * @since 3.0
+ */
+@Configuration
+@EnableCaching
+@EnableConfigurationProperties({
+	AdrClassCacheSetting.class,
+	CompatibilityRuleCacheSetting.class,
+	OnuNumberCacheSetting.class,
+	ShipmentCacheSetting.class,
+	ShipmentItemCacheSetting.class,
+	VehicleCacheSetting.class
+})
+public class CaffeineCacheConfiguration {
+	/** Identificatore della regione di memoria per la ricerca di una macro-classe ADR (es. Classe 3). */
+	public static final String ADR_CLASS_BY_CLASS_CODE_CACHE = "adr_class_by_class_code";
+	/** Identificatore della regione di memoria dedicata alla conservazione in blocco di tutte le 9 Classi ADR. */
+	public static final String ALL_ADR_CLASS_CACHE = "all_adr_class";
+	/** Chiave statica globale per l'estrazione dalla cache dell'intero catalogo delle Classi ADR. */
+	public static final String ALL_ADR_CLASS_KEY = "all_adr_class_key";
+	/**
+	 * Identificatore della regione di memoria per la Matrice di Segregazione. 
+	 * Memorizza le regole di compatibilità di carico partendo da una classe sorgente (AdrClass A). 
+	 */
+	public static final String COMPATIBILITY_RULE_ADR_CLASS_A_CACHE = "compatibility_rule_adr_class_a";
+	/** Identificatore della regione di memoria per la ricerca puntuale di una materia tramite il suo codice a 4 cifre. */
+	public static final String ONU_NUMBER_BY_ONU_CODE_CACHE = "onu_number_by_onu_code";
+	/** Identificatore della regione di memoria per il raggruppamento delle merci in base al grado di pericolo (es. 33). */
+	public static final String ONU_NUMBER_BY_KEMLER_CODE_CACHE = "onu_number_by_kemler_code";
+	/** Identificatore della regione di memoria per il raggruppamento delle merci appartenenti alla stessa macro-classe. */
+	public static final String ONU_NUMBER_BY_ADR_CLASS_CACHE = "onu_number_by_adr_class";
+	/** Identificatore della regione di memoria per l'esportazione massiva (Client-Side Caching) di tutto il catalogo. */
+	public static final String ONU_NUMBER_ALL_CACHE = "onu_number_all";
+	/** Chiave statica globale per l'estrazione dalla cache dell'intero catalogo mondiale dei Numeri ONU. */
+	public static final String ONU_NUMBER_ALL_KEY = "all_onu_number_key";
+	/** Identificatore univoco della regione dedicata al lookup puntuale delle spedizioni mediante numero di tracciamento. */
+	public static final String SHIPMENT_BY_TRACKING_NUMBER_CACHE = "shipment_by_tracking_number";
+	/** Identificatore univoco della regione dedicata al raggruppamento temporale (es. spedizioni per data). */
+	public static final String SHIPMENT_BY_SHIPMENT_DATE_CACHE = "shipment_by_shipment_date";
+	/** Identificatore univoco per la topologia di cache dedicata al recupero puntuale delle singole righe di carico. */
+	public static final String SHIPMENT_ITEM_BY_ITEM_UUID_CACHE = "shipment_item_by_item_uuid";
+	/** Identificatore univoco per la topologia di cache aggregata, dedicata al raggruppamento delle righe di carico per Shipment. */
+	public static final String SHIPMENT_ITEM_BY_SHIPMENT_CACHE = "shipment_item_by_shipment";
+	/** Identificatore della regione di memoria per la ricerca istantanea di un mezzo tramite la targa. */
+	public static final String VEHICLE_BY_LICENSE_PLATE_CACHE = "vehicle_by_license_plate";
+	/** Identificatore della regione di memoria per il raggruppamento di mezzi in base alla loro portata utile (Capacity). */
+	public static final String VEHICLE_BY_MAX_USEFUL_WEIGHT_CACHE = "vehicle_by_max_useful_weight";
+	/** Identificatore della regione di memoria per il raggruppamento globale dell'intera flotta aziendale. */
+	public static final String ALL_VEHICLE_CACHE = "all_vehicle";
+	/** Chiave statica globale per l'estrazione dalla cache dell'intera flotta veicoli. */
+	public static final String ALL_VEHICLE_KEY = "all_vehicle_key";
+	
+	/**
+	 * Fabbrica e registra nel container di Spring il gestore centrale delle cache (CacheManager).
+	 * <p>
+	 * Questo metodo agisce da orchestratore: legge le policy dai record di configurazione 
+	 * e istanzia le singole regioni di memoria isolandole in compartimenti stagni. Questo garantisce 
+	 * che un picco di traffico sulle ricerche transazionali (es. Spedizioni) non causi lo svuotamento 
+	 * accidentale della memoria dedicata ai cataloghi statici (es. Numeri ONU o Flotta).
+	 * </p>
+	 * @param adrClassSetting le property di capacity planning per le macro-classi ADR.
+	 * @param compatibilityRuleCacheSetting le property di capacity planning per la matrice di segregazione.
+	 * @param onuNumberCacheSetting le property di capacity planning per il catalogo delle merci pericolose.
+	 * @param shipmentCacheSetting le property di capacity planning per i dati transazionali (viaggi).
+	 * @param vehicleCacheSetting le property di capacity planning per la flotta aziendale.
+	 * @return l'istanza di {@link CacheManager} pronta per essere utilizzata dai proxy di Spring.
+	 */
+	@Bean
+	public CacheManager cacheManager(AdrClassCacheSetting adrClassSetting, CompatibilityRuleCacheSetting compatibilityRuleCacheSetting, 
+			OnuNumberCacheSetting onuNumberCacheSetting, ShipmentCacheSetting shipmentCacheSetting, VehicleCacheSetting vehicleCacheSetting) {
+		SimpleCacheManager cacheManager = new SimpleCacheManager();
+		CaffeineCache adrClassClassCodeCache = buildCache(
+			ADR_CLASS_BY_CLASS_CODE_CACHE,
+			adrClassSetting.classCode().maxSize()
+		);
+		CaffeineCache adrClassAllCache = buildCache(
+			ALL_ADR_CLASS_CACHE,
+			adrClassSetting.allAdr().maxSize()
+		);
+		CaffeineCache compatibilityRuleAdrClassCache = buildCache(
+			COMPATIBILITY_RULE_ADR_CLASS_A_CACHE,
+			compatibilityRuleCacheSetting.adrClassA().maxSize()
+		);
+		CaffeineCache onuNumberOnuCodeCache = buildCache(
+			ONU_NUMBER_BY_ONU_CODE_CACHE,
+			onuNumberCacheSetting.onuCode().maxSize()
+		);
+		CaffeineCache onuNumberKemlerCodeCache = buildCache(
+			ONU_NUMBER_BY_KEMLER_CODE_CACHE,
+			onuNumberCacheSetting.kemlerCode().maxSize()
+		);
+		CaffeineCache onuNumberAdrClassCache = buildCache(
+			ONU_NUMBER_BY_ADR_CLASS_CACHE,
+			onuNumberCacheSetting.adrClass().maxSize()
+		);
+		CaffeineCache onuNumberAllCache = buildCache(
+			ONU_NUMBER_ALL_CACHE,
+			onuNumberCacheSetting.allOnuNumber().maxSize()
+		);
+		CaffeineCache shipmentTrackingCache = buildCache(
+			SHIPMENT_BY_TRACKING_NUMBER_CACHE,
+			shipmentCacheSetting.tracking().maxSize()
+		);
+		CaffeineCache shipmentVehicleCache = buildCache(
+			SHIPMENT_BY_SHIPMENT_DATE_CACHE,
+			shipmentCacheSetting.period().maxSize()
+		);
+		CaffeineCache vehicleLicensePlateCache = buildCache(
+			VEHICLE_BY_LICENSE_PLATE_CACHE,
+			vehicleCacheSetting.licensePlate().maxSize()
+		);
+		CaffeineCache vehicleMaxUsefulWeightCache = buildCache(
+			VEHICLE_BY_MAX_USEFUL_WEIGHT_CACHE,
+			vehicleCacheSetting.maxUsefulWeight().maxSize()
+		);
+		CaffeineCache vehicleAllCache = buildCache(
+			ALL_VEHICLE_CACHE,
+			vehicleCacheSetting.allVehicle().maxSize()
+		);
+		cacheManager.setCaches(
+			Arrays.asList(
+				adrClassClassCodeCache,
+				adrClassAllCache,
+				compatibilityRuleAdrClassCache,
+				onuNumberOnuCodeCache,
+				onuNumberKemlerCodeCache,
+				onuNumberAdrClassCache,
+				onuNumberAllCache,
+				shipmentTrackingCache,
+				shipmentVehicleCache,
+				vehicleLicensePlateCache,
+				vehicleMaxUsefulWeightCache,
+				vehicleAllCache
+			)
+		);
+		return cacheManager;
+	}
+	
+	/**
+	 * Builder interno per l'istanziazione standardizzata delle regioni Caffeine.
+	 * <p>
+	 * <b>Observability & Monitoring:</b><br>
+	 * Il metodo invoca esplicitamente {@code recordStats()}. Questa configurazione è vitale 
+	 * per le architetture Enterprise, in quanto espone a JMX e a Spring Boot Actuator le metriche 
+	 * di utilizzo (Hit Rate, Miss Rate, Eviction Count), permettendo il monitoraggio in tempo reale 
+	 * tramite sistemi come Prometheus o Grafana.
+	 * </p>
+	 * @param name il nome identificativo della cache da esporre a Spring.
+	 * @param maxSize il limite massimo (Upper Bound) di elementi tollerati in RAM prima dell'espulsione.
+	 * @return l'istanza nativa di {@link CaffeineCache} pre-configurata.
+	 */
+	private CaffeineCache buildCache(String name, int maxSize) {
+		return new CaffeineCache(
+			name,
+			Caffeine
+				.newBuilder()
+				.maximumSize(maxSize)
+				.recordStats()
+				.build()
+		);
+	}
+}

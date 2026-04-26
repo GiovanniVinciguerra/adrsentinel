@@ -1,0 +1,88 @@
+### SECURITY & SECRETS ###
+.env
+.env.*
+application-local.yaml
+application-local.properties
+application-secret.yaml
+application-secret.properties
+secrets.yaml
+*.key
+*.keystore
+*.jks
+*.p12
+
+### JAVA & SPRING BOOT ###
+target/
+*.class
+
+### Pacchetti compilati ###
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+###  Eccezione Maven Wrapper (fondamentale per la portabilità!) ###
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### LOGS & CACHE APP ###
+*.log
+logs/
+temp/
+/tmp/
+
+### Spazzatura del Sistema Operativo ###
+### macOS ###
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.AppleDouble
+
+### Windows ###
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+$RECYCLE.BIN/
+
+### Linux ###
+*~
+
+### IDE & EDITORS ###
+HELP.md
+
+### STS / Eclipse ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+
+### IntelliJ IDEA ###
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+*.code-workspace
