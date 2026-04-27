@@ -1,12 +1,7 @@
 ### SECURITY & SECRETS ###
 .env
 .env.*
-application.yaml
-application-local.yaml
-application-local.properties
-application-secret.yaml
-application-secret.properties
-secrets.yaml
+src/main/resources/application*.yaml
 *.key
 *.keystore
 *.jks
