@@ -1,12 +1,12 @@
 package dev.vinciguerra.adrsentinel.web.controller;
 
 import java.util.List;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -92,23 +92,7 @@ public class AdrClassController {
 	public ResponseEntity<AdrClassResponseDTO> create(@RequestBody @Valid AdrClassRequestDTO adrClassRequestDTO) {
 		AdrClass adrClassToSave = adrClassService.mapToEntity(adrClassRequestDTO);
 		AdrClass savedAdrClass = adrClassService.save(adrClassToSave);
-		return ResponseEntity.ok(mapToDTO(savedAdrClass));
-	}
-	
-	/**
-	 * Aggiorna i dati (Idempotente) di una Classe ADR esistente.
-	 * <p>
-	 * Implementa una validazione ibrida: il codice nell'URL viene validato tramite il proxy AOP 
-	 * della classe, mentre il payload viene validato dall'ispezione standard dei parametri.
-	 * </p>
-	 * @param classCode il codice identificativo della classe da modificare (dall'URL).
-	 * @param adrClassRequestDTO i nuovi dati da applicare (dal Body).
-	 * @return una {@link ResponseEntity} contenente l'entità aggiornata e lo status HTTP 200 (OK).
-	 */
-	@PutMapping("/{classCode}")
-	public ResponseEntity<AdrClassResponseDTO> update(@PathVariable @ValidatorAdrClassCode String classCode, @RequestBody @Valid AdrClassRequestDTO adrClassRequestDTO) {
-		AdrClass updatedAdrClass = adrClassService.update(classCode, adrClassRequestDTO);
-		return ResponseEntity.ok(mapToDTO(updatedAdrClass));
+		return ResponseEntity.status(HttpStatus.CREATED).body(mapToDTO(savedAdrClass));
 	}
 	
 	/**

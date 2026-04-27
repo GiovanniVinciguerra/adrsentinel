@@ -107,7 +107,7 @@ public class CompatibilityRule {
 	@Size(
 		min = 3,
 		max = 255,
-		message = "Compatibility rule description must be at least 14 characters and not exceeds the maximum allowed length of 255 characters"
+		message = "Compatibility rule warning note must be at least 14 characters and not exceeds the maximum allowed length of 255 characters"
 	)
 	@Column(
 		name = "warning_note",

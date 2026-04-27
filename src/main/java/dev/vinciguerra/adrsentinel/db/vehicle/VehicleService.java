@@ -4,6 +4,10 @@ import java.util.List;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+
 import dev.vinciguerra.adrsentinel.db.AbstractGenericService;
 import dev.vinciguerra.adrsentinel.db.CaffeineCacheConfiguration;
 import dev.vinciguerra.adrsentinel.exception.ResourceNotFoundException;
@@ -104,28 +108,75 @@ public class VehicleService extends AbstractGenericService {
 	 * @param newVehicle il veicolo da salvare nel database.
 	 * @return il veicolo salvato, comprensivo dell'ID generato dal database.
 	 */
+	@Transactional
 	public Vehicle save(Vehicle newVehicle) {
 		logger.info("[DataBase CALL] Saving new Vehicle with licensePlate: {}", newVehicle.getLicensePlate());
 		Vehicle savedVehicle = vehicleRepository.save(newVehicle);
-		updateCache(
+		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+			@Override
+			public void afterCommit() { writeThroughCacheIntegrityOperation(savedVehicle); }
+		});
+		return savedVehicle;
+	}
+	
+	/**
+	 * Esegue l'operazione di sincronizzazione e allineamento della cache applicativa per 
+	 * l'entità {@link Vehicle} (Veicolo/Automezzo), implementando il pattern Write-Through 
+	 * per garantire la coerenza in tempo reale della flotta logistica.
+	 * <p>
+	 * All'interno del dominio gestionale, l'automezzo rappresenta una risorsa fisica 
+	 * critica per la pianificazione dei trasporti ADR. Per supportare le diverse esigenze 
+	 * operative (ricerca puntuale, pianificazione dei carichi, gestione anagrafica), 
+	 * la strategia di caching mantiene simultaneamente tre indici in memoria RAM.
+	 * </p>
+	 * <p>
+	 * <b>Vincolo Transazionale:</b> Onde prevenire la corruzione della flotta in memoria 
+	 * (es. veicoli fantasma creati da un rollback del database), questo metodo deve essere 
+	 * registrato e invocato <b>esclusivamente</b> all'interno della fase {@code afterCommit} 
+	 * del {@code TransactionSynchronizationManager}.
+	 * </p>
+	 * <p>
+	 * <b>Logica di Sincronizzazione a Triplo Indice:</b>
+	 * <ul>
+	 * <li><b>1. Indice Univoco Operativo (Targa):</b> Inserisce o sovrascrive il veicolo 
+	 * all'interno della cache dedicata alle ricerche dirette O(1) 
+	 * ({@code VEHICLE_BY_LICENSE_PLATE_CACHE}). È fondamentale per le operazioni di spunta, 
+	 * assegnazione diretta e controlli ai varchi.</li>
+	 * <li><b>2. Indice di Capacità Logistica (Portata Massima):</b> Raggruppa i veicoli 
+	 * in base al loro peso utile massimo consentito ({@code VEHICLE_BY_MAX_USEFUL_WEIGHT_CACHE}). 
+	 * L'accodamento in questa cache a lista permette al motore di calcolo e al frontend 
+	 * di filtrare istantaneamente i mezzi idonei per una specifica spedizione basandosi 
+	 * sul tonnellaggio, senza interrogare il database.</li>
+	 * <li><b>3. Indice Flotta Globale:</b> Accoda l'entità alla lista omnicomprensiva 
+	 * di tutti i mezzi ({@code ALL_VEHICLE_CACHE}), utilizzata tipicamente per popolare 
+	 * le dropdown di assegnazione o le dashboard di fleet management nel frontend.</li>
+	 * </ul>
+	 * L'utilizzo dell'approccio Write-Through su queste tre dimensioni annulla la necessità 
+	 * di invalidare la cache (eviction), mantenendo le performance in lettura sempre massimizzate.
+	 * </p>
+	 * @param savedVehicle l'istanza consolidata dell'entità {@link Vehicle} appena persistita 
+	 * con successo nel database. L'oggetto deve trovarsi nello stato "Managed" e avere 
+	 * i campi chiave ({@code licensePlate} e {@code maxUsefulWeightkg}) obbligatoriamente valorizzati.
+	 */
+	private void writeThroughCacheIntegrityOperation(Vehicle savedVehicle) {
+		storeInCache(
 			CaffeineCacheConfiguration.VEHICLE_BY_LICENSE_PLATE_CACHE,
 			savedVehicle.getLicensePlate(),
 			savedVehicle,
 			CacheOperation.SINGLE_RECORD
 		);
-		updateCache(
+		storeInCache(
 			CaffeineCacheConfiguration.VEHICLE_BY_MAX_USEFUL_WEIGHT_CACHE,
 			savedVehicle.getMaxUsefulWeightkg(),
 			savedVehicle,
 			CacheOperation.LIST_RECORD
 		);
-		updateCache(
+		storeInCache(
 			CaffeineCacheConfiguration.ALL_VEHICLE_CACHE,
 			CaffeineCacheConfiguration.ALL_VEHICLE_KEY,
 			savedVehicle,
 			CacheOperation.LIST_RECORD
 		);
-		return savedVehicle;
 	}
 	
 	/**
@@ -137,22 +188,70 @@ public class VehicleService extends AbstractGenericService {
 	 *
 	 * @param vehicleToDelete l'istanza del veicolo da rimuovere definitivamente.
 	 */
+	@Transactional
 	public void delete(Vehicle vehicleToDelete) {
 		logger.info("[DataBase CALL] Deleting Vehicle with licensePlate: {}", vehicleToDelete.getLicensePlate());
 		vehicleRepository.delete(vehicleToDelete);
-		deleteCache(
+		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+			@Override
+			public void afterCommit() { deleteThroughCacheIntegrityOperation(vehicleToDelete); }
+		});
+	}
+	
+	/**
+	 * Esegue l'operazione di pulizia e allineamento della cache applicativa a seguito 
+	 * dell'eliminazione fisica (Hard Delete) di un'entità {@link Vehicle}, implementando 
+	 * il pattern architetturale Delete-Through.
+	 * <p>
+	 * Questo metodo garantisce la totale consistenza tra il database relazionale e la 
+	 * memoria RAM, prevenendo l'insorgenza del cosiddetto "Effetto Veicolo Fantasma" 
+	 * (Ghost Record), ovvero la situazione in cui un mezzo dismesso o rimosso dal sistema 
+	 * continui ad essere visibile nelle liste operative o suggerito per nuove spedizioni.
+	 * </p>
+	 * <p>
+	 * <b>Vincolo Transazionale:</b> Onde evitare di corrompere la cache a fronte di un 
+	 * potenziale Rollback (ad esempio, se l'eliminazione fallisce per una violazione di 
+	 * chiave esterna - Foreign Key Constraint - legata a spedizioni preesistenti), 
+	 * l'invocazione di questo metodo deve avvenire <b>rigorosamente</b> a transazione 
+	 * conclusa con successo, delegandola al blocco {@code afterCommit} del 
+	 * {@code TransactionSynchronizationManager}.
+	 * </p>
+	 * <p>
+	 * <b>Flusso di Rimozione Chirurgica a Triplo Indice:</b>
+	 * Il metodo intercetta ed elimina il veicolo da tutte le dimensioni di caching:
+	 * <ul>
+	 * <li><b>1. Indice Univoco Operativo (Targa):</b> Invalida la entry singola nella 
+	 * cache {@code VEHICLE_BY_LICENSE_PLATE_CACHE}. Questo previene anche eventuali bug di 
+	 * collisione nel caso in cui, in futuro, la stessa targa venga riciclata per un nuovo mezzo.</li>
+	 * <li><b>2. Indice di Capacità Logistica (Portata Massima):</b> Cerca il veicolo all'interno 
+	 * della specifica lista di portata ({@code VEHICLE_BY_MAX_USEFUL_WEIGHT_CACHE}) e lo rimuove 
+	 * puntualmente. L'approccio chirurgico evita di invalidare le liste di mezzi con altre portate.</li>
+	 * <li><b>3. Indice Flotta Globale:</b> Rimuove dinamicamente il mezzo dalla collezione 
+	 * omnicomprensiva ({@code ALL_VEHICLE_CACHE}). Grazie all'operazione {@code LIST_RECORD}, 
+	 * l'intera flotta rimanente viene preservata in RAM, evitando pesanti query di 
+	 * ri-popolamento al successivo accesso alla dashboard del frontend.</li>
+	 * </ul>
+	 * </p>
+	 * @param vehicleToDelete l'istanza dell'entità {@link Vehicle} appena rimossa con successo 
+	 * dal database. È assolutamente cruciale che l'oggetto in input mantenga intatti i 
+	 * propri valori originari (in particolare {@code licensePlate} e {@code maxUsefulWeightkg}), 
+	 * in quanto tali attributi vengono utilizzati dal motore di cache per localizzare 
+	 * e distruggere le esatte occorrenze in RAM basandosi sul metodo {@code equals()}.
+	 */
+	private void deleteThroughCacheIntegrityOperation(Vehicle vehicleToDelete) {
+		deleteFromCache(
 			CaffeineCacheConfiguration.VEHICLE_BY_LICENSE_PLATE_CACHE,
 			vehicleToDelete.getLicensePlate(),
 			vehicleToDelete,
 			CacheOperation.SINGLE_RECORD
 		);
-		deleteCache(
+		deleteFromCache(
 			CaffeineCacheConfiguration.VEHICLE_BY_MAX_USEFUL_WEIGHT_CACHE,
 			vehicleToDelete.getMaxUsefulWeightkg(),
 			vehicleToDelete,
 			CacheOperation.LIST_RECORD
 		);
-		deleteCache(
+		deleteFromCache(
 			CaffeineCacheConfiguration.ALL_VEHICLE_CACHE,
 			CaffeineCacheConfiguration.ALL_VEHICLE_KEY,
 			vehicleToDelete,

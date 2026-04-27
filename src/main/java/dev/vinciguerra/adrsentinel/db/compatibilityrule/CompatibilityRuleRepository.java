@@ -26,16 +26,17 @@ import dev.vinciguerra.adrsentinel.db.adrclass.AdrClass;
 @Repository
 public interface CompatibilityRuleRepository extends JpaRepository<CompatibilityRule, Long> {
 	/**
-	 * Recupera tutte le regole di compatibilità in cui la classe ADR specificata figura come "Classe A" (Sorgente).
+	 * Recupera tutte le regole di compatibilità in cui il classCode della classe ADR specificata figura 
+	 * come "Classe A" (Sorgente).
 	 * <p>
 	 * <b>Meccanica della Query (Spring Data JPA):</b><br>
 	 * Il framework analizza il nome del metodo ({@code findBy...}) e genera dinamicamente una query SQL 
-	 * che filtra i record della tabella {@code compatibility_rule} utilizzando la Foreign Key (es. {@code adr_class_a_id}) 
-	 * associata all'entità passata come parametro.
+	 * che filtra i record della tabella {@code compatibility_rule} utilizzando la Foreign Key 
+	 * (es. {@code adr_class_a_id}) associata all'entità passata come parametro.
 	 * </p>
-	 * @param adrClassA l'istanza completa dell'entità {@link AdrClass} che rappresenta la prima classe di pericolo da analizzare.
+	 * @param adrClassCodeA il classCode dell'istanza {@link AdrClass} che rappresenta la prima classe di pericolo da analizzare.
 	 * @return una {@link List} contenente tutte le regole di compatibilità applicabili alla classe specificata. 
 	 * Restituisce una lista vuota se la classe non ha regole censite nel sistema.
 	 */
-	List<CompatibilityRule> findByAdrClassA(AdrClass adrClassA);
+	List<CompatibilityRule> findByAdrClassA_ClassCode(String adrClassCodeA);
 }

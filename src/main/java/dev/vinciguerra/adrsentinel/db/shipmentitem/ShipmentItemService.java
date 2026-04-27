@@ -118,22 +118,60 @@ public class ShipmentItemService extends AbstractGenericService {
 		ShipmentItem savedShipmentItem = shipmentItemRepository.save(newShipmentItem);
 		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
 			@Override
-			public void afterCommit() {
-				Shipment shipment = savedShipmentItem.getShipment();
-				updateCache(
-					CaffeineCacheConfiguration.SHIPMENT_ITEM_BY_ITEM_UUID_CACHE,
-					savedShipmentItem.getItemUUID(),
-					savedShipmentItem,
-					CacheOperation.SINGLE_RECORD
-				);
-				updateCache(
-					CaffeineCacheConfiguration.SHIPMENT_ITEM_BY_SHIPMENT_CACHE,
-					shipment.getTrackingNumber(),
-					savedShipmentItem,
-					CacheOperation.LIST_RECORD
-				);
-			}
+			public void afterCommit() { writeThroughCacheIntegrityOperation(savedShipmentItem); }
 		});
 		return savedShipmentItem;
+	}
+	
+	/**
+	 * Esegue l'operazione di sincronizzazione e allineamento della cache applicativa per 
+	 * l'entità {@link ShipmentItem} (Dettaglio Merce/Collo), implementando rigorosamente 
+	 * il pattern architetturale Write-Through.
+	 * <p>
+	 * All'interno del dominio gestionale, il {@code ShipmentItem} rappresenta l'entità "figlia" 
+	 * in una forte relazione di composizione con l'entità "padre" {@link Shipment}. 
+	 * La strategia di caching adottata riflette i due pattern di accesso principali a questa risorsa: 
+	 * l'accesso puntuale (es. scansione di un singolo collo tramite terminale) e l'accesso 
+	 * aggregato (es. caricamento della distinta base di un'intera spedizione).
+	 * </p>
+	 * <p>
+	 * <b>Vincolo Transazionale:</b> Onde evitare inconsistenze critiche (es. colli presenti in RAM 
+	 * ma non salvati nel database relazionale a causa di un rollback), l'invocazione di questo metodo 
+	 * deve essere delegata <b>esclusivamente</b> al {@code TransactionSynchronizationManager}, 
+	 * registrandola all'interno della fase di {@code afterCommit}.
+	 * </p>
+	 * <p>
+	 * <b>Flusso di Sincronizzazione (Doppia Risoluzione):</b>
+	 * <ul>
+	 * <li><b>1. Indice di Granularità Singola (Item UUID):</b> Inserisce o sovrascrive l'entità 
+	 * all'interno della cache {@code SHIPMENT_ITEM_BY_ITEM_UUID_CACHE}. L'utilizzo dell'UUID come 
+	 * chiave garantisce un accesso O(1) ultra-veloce, fondamentale per operazioni real-time 
+	 * come la spunta logistica o la lettura tramite barcode scanner.</li>
+	 * <li><b>2. Indice di Aggregazione Relazionale (Tracking Number Padre):</b> Estrae il 
+	 * {@code trackingNumber} dall'entità padre ({@link Shipment}) e utilizza questo valore per 
+	 * intercettare la lista dei colli associata alla spedizione ({@code SHIPMENT_ITEM_BY_SHIPMENT_CACHE}).
+	 * L'accodamento dinamico del nuovo item in questa lista previene il problema delle query N+1, 
+	 * consentendo al frontend di caricare l'intera distinta della spedizione interrogando unicamente la RAM.</li>
+	 * </ul>
+	 * </p>
+	 * @param savedShipmentItem l'istanza dell'entità {@link ShipmentItem} appena persistita 
+	 * con successo nel database. L'oggetto deve trovarsi nello stato "Managed" e avere sia il 
+	 * proprio {@code itemUUID} valorizzato, sia la relazione {@code shipment} (padre) 
+	 * correttamente caricata (non-proxy) per consentire l'estrazione del Tracking Number.
+	 */
+	private void writeThroughCacheIntegrityOperation(ShipmentItem savedShipmentItem) {
+		Shipment shipment = savedShipmentItem.getShipment();
+		storeInCache(
+			CaffeineCacheConfiguration.SHIPMENT_ITEM_BY_ITEM_UUID_CACHE,
+			savedShipmentItem.getItemUUID(),
+			savedShipmentItem,
+			CacheOperation.SINGLE_RECORD
+		);
+		storeInCache(
+			CaffeineCacheConfiguration.SHIPMENT_ITEM_BY_SHIPMENT_CACHE,
+			shipment.getTrackingNumber(),
+			savedShipmentItem,
+			CacheOperation.LIST_RECORD
+		);
 	}
 }

@@ -58,7 +58,7 @@ public abstract class AbstractGenericService {
 	}
 	
 	/**
-	 * Motore di sincronizzazione (Write-Through) per l'aggiornamento o l'inserimento di dati in Cache.
+	 * Motore di sincronizzazione (Write-Through) per l'inserimento di dati in Cache (Caffeine).
 	 * <p>
 	 * <b>Policy di Dominio: Null-Safety</b><br>
 	 * Questo metodo implementa una rigorosa politica di esclusione dei valori nulli. Se il valore 
@@ -73,6 +73,17 @@ public abstract class AbstractGenericService {
 	 * la rimuove e la sostituisce con l'istanza aggiornata. Questo previene i duplicati e risolve 
 	 * alla radice il problema dello "Stale Data" (dati vecchi) dopo un'operazione di UPDATE.
 	 * </p>
+	 * <p>
+	 * <b>Prevenzione della Corruzione (Liste Parziali):</b><br>
+	 * Nel caso di {@code LIST_RECORD}, se la lista madre non è presente in memoria (Cache Miss), 
+	 * il metodo si astiene intenzionalmente dall'inizializzarla con il singolo elemento. Questo 
+	 * presidio architetturale è vitale: se la RAM venisse popolata con una "lista parziale", 
+	 * alla successiva richiesta di lettura (es. un {@code findAll}), il Proxy di Spring Cache 
+	 * intercetterebbe la chiave valorizzata e restituirebbe solo quell'unico elemento, bypassando 
+	 * completamente l'interrogazione al database (Hibernate) e nascondendo tutti i restanti record. 
+	 * Lasciando deliberatamente la cache vuota, si garantisce un Cache Miss legittimo che forzerà 
+	 * il ricaricamento sicuro e completo dell'intera lista dal DB.
+	 * </p>
 	 * @param <T> Il tipo di dato dell'entità gestita.
 	 * @param cacheName Il nome della regione di cache in cui operare.
 	 * @param key La chiave univoca di accesso alla cache.
@@ -80,7 +91,7 @@ public abstract class AbstractGenericService {
 	 * @param cacheOperation La strategia operativa (SINGLE_RECORD o LIST_RECORD).
 	 * @throws IllegalArgumentException se i parametri operativi di base (key o cacheOperation) sono nulli.
 	 */
-	protected <T> void updateCache(String cacheName, Object key, T value, CacheOperation cacheOperation) throws IllegalArgumentException {
+	protected <T> void storeInCache(String cacheName, Object key, T value, CacheOperation cacheOperation) throws IllegalArgumentException {
 		Cache cache = cacheManager.getCache(cacheName);
 		ifNullThrowException(key, "Cache key cannot be null for save");
 		ifNullThrowException(cacheOperation, "[SAVE] No cache operation, value was null");
@@ -111,22 +122,56 @@ public abstract class AbstractGenericService {
 	}
 	
 	/**
-	 * Motore di sincronizzazione per la rimozione controllata di dati dalla Cache, 
-	 * a seguito di una cancellazione fisica sul database.
+	 * Esegue la rimozione controllata e selettiva di un dato dalla cache applicativa (Caffeine).
 	 * <p>
-	 * <b>Tracciabilità e Feedback (Observability):</b><br>
-	 * Implementa un sistema di logging granulare. Verifica preventivamente se l'elemento 
-	 * esisteva davvero in memoria (usando {@code evictIfPresent} o la risposta booleana di {@code remove}) 
-	 * per distinguere chiaramente nei log un'effettiva pulizia della RAM da un'operazione a vuoto (No-Op).
+	 * Questo metodo funge da motore centrale per l'invalidazione della memoria, progettato per 
+	 * essere invocato a valle di una cancellazione fisica sul database (pattern Delete-Through). 
+	 * Gestisce in totale autonomia la differenza tra la distruzione di un record singolo e 
+	 * l'estrazione di un elemento da una collezione preesistente.
 	 * </p>
-	 * @param <T> Il tipo di dato dell'entità gestita.
-	 * @param cacheName Il nome della regione di cache.
-	 * @param key La chiave univoca associata al dato da invalidare.
-	 * @param value L'oggetto da rimuovere dalle collezioni (non ammesso null).
-	 * @param cacheOperation La strategia operativa: SINGLE_RECORD (evizione totale) o LIST_RECORD (rimozione dalla lista).
-	 * @throws IllegalArgumentException se i parametri operativi di base (key o cacheOperation) sono nulli.
+	 * * <p><b>Flusso di Validazione (Fail-Fast e Pre-Check):</b></p>
+	 * <ul>
+	 * <li><b>Controllo Parametri Obbligatori:</b> Il metodo blocca immediatamente l'esecuzione 
+	 * lanciando una {@link IllegalArgumentException} se la chiave ({@code key}) o l'operazione 
+	 * ({@code cacheOperation}) risultano assenti (null).</li>
+	 * <li><b>Validazione di Contesto:</b> Delega un controllo di ammissibilità al metodo 
+	 * {@code canProceedWithCacheOperation}. Se questo restituisce {@code false} (es. cache inesistente 
+	 * o valore nullo non processabile), il metodo interrompe l'esecuzione in modo pulito ({@code return}) 
+	 * senza lanciare eccezioni.</li>
+	 * </ul>
+	 * * <p><b>Strategie Operative (Switch Logic):</b></p>
+	 * <ul>
+	 * <li><b>{@code SINGLE_RECORD}:</b> Esegue un'evizione diretta tramite {@code cache.evictIfPresent(key)}.
+	 * Interroga il motore di cache per sapere se la chiave era effettivamente allocata in RAM, 
+	 * permettendo di discriminare nei log tra una pulizia reale (INFO) e un'operazione a vuoto (WARN).</li>
+	 * <li><b>{@code LIST_RECORD}:</b> Adotta un approccio di "Rimozione Chirurgica in Mutazione":
+	 * <ol>
+	 * <li>Tenta l'estrazione della lista dalla cache. Se la lista non esiste (Cache Miss), 
+	 * interrompe l'operazione loggando un WARN, evitando di inizializzare strutture vuote.</li>
+	 * <li>Se la lista esiste, effettua un cast a {@code List<T>} e invoca {@code temp.remove(value)}. 
+	 * <i>Nota architetturale:</i> Questo passaggio fa affidamento sull'implementazione del 
+	 * metodo {@link Object#equals(Object)} dell'entità per individuare l'esatta occorrenza da scartare.</li>
+	 * <li>Solo se la rimozione ha avuto successo ({@code isRemoved == true}), il metodo sovrascrive 
+	 * la cache chiamando {@code cache.put(key, temp)} per persistere lo stato aggiornato della lista. 
+	 * Se l'elemento non viene trovato nella lista, la cache non subisce mutazioni (WARN log).</li>
+	 * </ol>
+	 * </li>
+	 * </ul>
+	 * * <p><b>Tracciabilità e Feedback (Observability):</b><br>
+	 * Il metodo non è mai silente. Ogni ramo condizionale produce un output di logging mirato, 
+	 * indicando chiaramente il nome della cache, la chiave coinvolta e l'esito dell'operazione 
+	 * (successo, chiave non trovata, elemento non trovato nella lista, o operazione non supportata).
+	 * </p>
+	 * @param <T> Il tipo generico dell'entità o del DTO da gestire.
+	 * @param cacheName Il nome identificativo della cache target (es. configurata nel CacheManager).
+	 * @param key La chiave di lookup associata al dato da invalidare (singolo) o alla lista madre.
+	 * @param value L'oggetto target da rimuovere. Fondamentale per l'operazione {@code LIST_RECORD} 
+	 * in quanto viene passato al metodo {@code List.remove()}.
+	 * @param cacheOperation L'enumeratore che istruisce il motore sulla struttura dati da manipolare 
+	 * ({@code SINGLE_RECORD} o {@code LIST_RECORD}).
+	 * @throws IllegalArgumentException Se {@code key} o {@code cacheOperation} vengono passati come nulli.
 	 */
-	protected <T> void deleteCache(String cacheName, Object key, T value, CacheOperation cacheOperation) throws IllegalArgumentException {
+	protected <T> void deleteFromCache(String cacheName, Object key, T value, CacheOperation cacheOperation) throws IllegalArgumentException {
 		Cache cache = cacheManager.getCache(cacheName);
 		ifNullThrowException(key, "Cache key cannot be null for deletion");
 		ifNullThrowException(cacheOperation, "[DELETE] No cache operation, value was null");

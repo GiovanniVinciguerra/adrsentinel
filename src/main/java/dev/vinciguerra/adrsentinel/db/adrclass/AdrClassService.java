@@ -5,7 +5,8 @@ import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import dev.vinciguerra.adrsentinel.db.AbstractGenericService;
 import dev.vinciguerra.adrsentinel.db.CaffeineCacheConfiguration;
 import dev.vinciguerra.adrsentinel.exception.ResourceNotFoundException;
@@ -30,6 +31,7 @@ import dev.vinciguerra.adrsentinel.web.dto.adrclass.AdrClassRequestDTO;
  * @since 1.0
  */
 @Service
+@Transactional(readOnly = true)
 public class AdrClassService extends AbstractGenericService {
 	private final AdrClassRepository adrClassRepository;
 	
@@ -100,67 +102,60 @@ public class AdrClassService extends AbstractGenericService {
      * @param newAdrClass L'entità AdrClass da salvare (i dati devono essere già validati).
      * @return L'entità salvata, arricchita con l'ID autogenerato dal Database.
      */
+	@Transactional
 	public AdrClass save(AdrClass newAdrClass) {
 		logger.info("[DataBase CALL] Saving new AdrClass with classCode: {}", newAdrClass.getClassCode());
 		AdrClass savedAdrClass = adrClassRepository.save(newAdrClass);
+		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+			@Override
+			public void afterCommit() { writeThroughCacheIntegrityOperation(savedAdrClass); }
+		});
+		return savedAdrClass;
+	}
+	
+	/**
+	 * Esegue un'operazione di allineamento e sincronizzazione della cache applicativa 
+	 * (Caffeine) applicando il pattern architetturale Write-Through.
+	 * <p>
+	 * Questo metodo garantisce la coerenza assoluta tra lo stato dei dati in memoria (RAM) 
+	 * e quelli persistiti nel database. Per prevenire la corruzione della cache (es. 
+	 * inserimento di "ghost record" a seguito di un rollback del database), questo metodo 
+	 * deve essere invocato <b>esclusivamente</b> a valle di una transazione completata con 
+	 * successo, preferibilmente registrandolo all'interno della fase {@code afterCommit} 
+	 * del {@code TransactionSynchronizationManager}.
+	 * </p>
+	 * <p>
+	 * Il processo di mantenimento dell'integrità si articola in due passaggi sequenziali:
+	 * <ul>
+	 * <li><b>Sincronizzazione Entità Singola:</b> Inserisce ex-novo o sovrascrive il record 
+	 * all'interno della cache dedicata alle ricerche puntuali 
+	 * ({@code ADR_CLASS_BY_CLASS_CODE_CACHE}), utilizzando il Class Code come chiave.</li>
+	 * <li><b>Sincronizzazione Collezione Globale:</b> Accoda o aggiorna dinamicamente l'entità 
+	 * all'interno della lista globale in memoria ({@code ALL_ADR_CLASS_CACHE}). Questa 
+	 * ottimizzazione permette di mantenere la lista aggiornata senza dover scatenare 
+	 * un'invalidazione totale (eviction) e una successiva rilettura massiva dal database.</li>
+	 * </ul>
+	 * </p>
+	 * @param savedAdrClass l'istanza dell'entità {@link AdrClass} appena persistita o 
+	 * aggiornata con successo nel DB. L'oggetto fornito deve 
+	 * rappresentare lo stato consolidato (incluso di eventuali ID o 
+	 * campi generati).
+	 */
+	private void writeThroughCacheIntegrityOperation(AdrClass savedAdrClass) {
 		// 1. Aggiorna o crea il record singolo nella cache specifica
-		updateCache(
+		storeInCache(
 			CaffeineCacheConfiguration.ADR_CLASS_BY_CLASS_CODE_CACHE,
 			savedAdrClass.getClassCode(),
 			savedAdrClass,
 			CacheOperation.SINGLE_RECORD
 		);
 		// 2. Accoda il record alla lista globale (se caricata in precedenza)
-		updateCache(
+		storeInCache(
 			CaffeineCacheConfiguration.ALL_ADR_CLASS_CACHE,
 			CaffeineCacheConfiguration.ALL_ADR_CLASS_KEY,
 			savedAdrClass,
 			CacheOperation.LIST_RECORD
 		);
-		return savedAdrClass;
-	}
-	
-	/**
-	 * Esegue l'aggiornamento transazionale dello stato di una Classe ADR esistente.
-	 * <p>
-	 * <b>Architettura e Ottimizzazione (Hibernate Dirty Checking):</b><br>
-	 * Questo metodo sfrutta attivamente il <i>Persistence Context</i> di JPA. Grazie all'annotazione 
-	 * {@link Transactional}, l'entità recuperata dal database si trova in uno stato <b>Managed</b>. 
-	 * Le modifiche applicate tramite i metodi setter vengono tracciate in tempo reale dal framework 
-	 * (Dirty Checking). Al termine dell'esecuzione (commit della transazione), Hibernate genererà 
-	 * e invierà automaticamente l'istruzione SQL di {@code UPDATE} solo se rileva effettivi 
-	 * cambiamenti di stato, garantendo la massima efficienza e prevenendo query ridondanti.
-	 * </p>
-	 * <p>
-	 * <b>Gestione della Memoria (Direct State Transfer):</b><br>
-	 * A differenza dell'operazione di creazione, l'aggiornamento evita l'istanziazione di oggetti 
-	 * intermedi (es. un Mapper per convertire il DTO in una nuova Entità). I dati vengono riversati 
-	 * direttamente dal DTO, che agisce come un <i>Record Immutabile</i> in sola lettura, all'Entità 
-	 * persistente. Questo approccio minimizza il carico sul Garbage Collector e ottimizza il 
-	 * footprint di memoria della JVM.
-	 * </p>
-	 * <p>
-	 * <b>Integrità dei Dati (Atomicità):</b><br>
-	 * L'intera operazione è atomica (All-or-Nothing). Qualsiasi eccezione sollevata durante il 
-	 * travaso dei dati o durante la fase di flush verso il database provocherà un Rollback immediato, 
-	 * scongiurando il rischio di scritture parziali e mantenendo intatta la coerenza del sistema.
-	 * </p>
-	 * @param classCode il codice univoco di business (Natural Key) della classe ADR da modificare 
-	 * (es. "3", "1.4S"). Utilizzato per il recupero puntuale tramite Repository.
-	 * @param adrClassRequestDTO il payload in ingresso contenente i nuovi valori. È garantito dal 
-	 * livello Web (Controller) che i dati al suo interno siano già 
-	 * stati validati (Fail-Fast) e rispettino rigorosamente le regole di dominio.
-	 * @return l'istanza aggiornata di {@link AdrClass}, con i nuovi valori consolidati nel database.
-	 * @throws ResourceNotFoundException se non esiste alcuna classe ADR associata al {@code classCode} fornito.
-	 */
-	@Transactional
-	public AdrClass update(String classCode, AdrClassRequestDTO adrClassRequestDTO) {
-		logger.info("[DataBase CALL] Searching for the AdrClass by classCode: {}", classCode);
-		AdrClass existingEntity = adrClassRepository.findByClassCode(classCode)
-			.orElseThrow(() -> new ResourceNotFoundException("AdrClass not found: " + classCode));
-		existingEntity.setClassCode(adrClassRequestDTO.classCode());
-		existingEntity.setDescription(adrClassRequestDTO.description());
-		return adrClassRepository.save(existingEntity);
 	}
 	
 	/**

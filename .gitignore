@@ -1,6 +1,7 @@
 ### SECURITY & SECRETS ###
 .env
 .env.*
+application.yaml
 application-local.yaml
 application-local.properties
 application-secret.yaml

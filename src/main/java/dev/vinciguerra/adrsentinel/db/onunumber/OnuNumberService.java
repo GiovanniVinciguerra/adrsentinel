@@ -4,6 +4,9 @@ import java.util.List;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import dev.vinciguerra.adrsentinel.db.AbstractGenericService;
 import dev.vinciguerra.adrsentinel.db.CaffeineCacheConfiguration;
 import dev.vinciguerra.adrsentinel.db.adrclass.AdrClass;
@@ -117,34 +120,79 @@ public class OnuNumberService extends AbstractGenericService {
 	 * @param onuNumber l'entità nuova o modificata proveniente dal Controller.
 	 * @return l'entità consolidata salvata sul disco fisico.
 	 */
+	@Transactional
 	public OnuNumber save(OnuNumber newOnuNumber) {
 		logger.info("[DataBase CALL] Saving new OnuNumber with onuCode: {}", newOnuNumber.getOnuCode());
 		OnuNumber savedOnuNumber = onuNumberRepository.save(newOnuNumber);
+		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+			@Override
+			public void afterCommit() { writeThroughCacheIntegrityOperation(savedOnuNumber); }
+		});
+		return savedOnuNumber;
+	}
+	
+	/**
+	 * Esegue un'operazione di sincronizzazione multidimensionale della cache applicativa 
+	 * per l'entità Numero ONU (UN Number), applicando rigorosamente il pattern Write-Through.
+	 * <p>
+	 * A causa dell'alta frequenza di lettura e delle molteplici chiavi di ricerca associate 
+	 * a una singola materia pericolosa, l'architettura di caching prevede diversi indici 
+	 * in memoria. Questo metodo garantisce che tutti gli indici (chiavi singole e raggruppamenti) 
+	 * vengano aggiornati simultaneamente, mantenendo la coerenza assoluta con il database.
+	 * </p>
+	 * <p>
+	 * <b>Vincolo Transazionale:</b> Per prevenire la corruzione della memoria (ghost records) 
+	 * in caso di fallimento o rollback della transazione SQL, l'invocazione di questo metodo 
+	 * deve avvenire <b>esclusivamente</b> a valle di un commit completato con successo, tramite 
+	 * la registrazione nella fase {@code afterCommit} del {@code TransactionSynchronizationManager}.
+	 * </p>
+	 * <p>
+	 * <b>Flusso di Sincronizzazione (Propagazione su 4 Livelli):</b>
+	 * Il metodo propaga l'entità appena salvata sulle seguenti strutture Caffeine:
+	 * <ul>
+	 * <li><b>1. Indice Primario (Codice ONU):</b> Inserisce o sovrascrive il record singolo 
+	 * nella cache {@code ONU_NUMBER_BY_ONU_CODE_CACHE} per le ricerche puntuali (O(1)).</li>
+	 * <li><b>2. Indice di Pericolo (Codice Kemler):</b> Intercetta la lista in memoria associata 
+	 * al Codice Kemler e vi accoda l'entità ({@code ONU_NUMBER_BY_KEMLER_CODE_CACHE}).</li>
+	 * <li><b>3. Indice Categoriale (Classe ADR):</b> Estrae il {@code classCode} dalla relazione 
+	 * {@link AdrClass} e accoda l'entità alla lista delle materie compatibili 
+	 * ({@code ONU_NUMBER_BY_ADR_CLASS_CACHE}).</li>
+	 * <li><b>4. Collezione Globale:</b> Aggiorna la lista omnicomprensiva utilizzata 
+	 * tipicamente per popolare dropdown o tabelle massicce lato frontend ({@code ONU_NUMBER_ALL_CACHE}).</li>
+	 * </ul>
+	 * Questo approccio "aggressivo" in scrittura annulla la necessità di invalidare (evict) 
+	 * le cache, risparmiando al database relazionale il costo di ricostruire intere liste 
+	 * tramite pesanti query con JOIN.
+	 * </p>
+	 * @param savedOnuNumber l'istanza dell'entità {@link OnuNumber} persistita con successo 
+	 * nel database. L'oggetto deve essere nello stato "Managed" e avere la relazione padre 
+	 * ({@link AdrClass}) correttamente valorizzata per permettere l'estrazione delle chiavi composte.
+	 */
+	private void writeThroughCacheIntegrityOperation(OnuNumber savedOnuNumber) {
 		AdrClass adrClass = savedOnuNumber.getAdrClass();
-		updateCache(
+		storeInCache(
 			CaffeineCacheConfiguration.ONU_NUMBER_BY_ONU_CODE_CACHE,
 			savedOnuNumber.getOnuCode(),
 			savedOnuNumber,
 			CacheOperation.SINGLE_RECORD
 		);
-		updateCache(
+		storeInCache(
 			CaffeineCacheConfiguration.ONU_NUMBER_BY_KEMLER_CODE_CACHE,
 			savedOnuNumber.getKemlerCode(),
 			savedOnuNumber,
 			CacheOperation.LIST_RECORD
 		);
-		updateCache(
+		storeInCache(
 			CaffeineCacheConfiguration.ONU_NUMBER_BY_ADR_CLASS_CACHE,
 			adrClass.getClassCode(),
 			savedOnuNumber,
 			CacheOperation.LIST_RECORD
 		);
-		updateCache(
+		storeInCache(
 			CaffeineCacheConfiguration.ONU_NUMBER_ALL_CACHE,
 			CaffeineCacheConfiguration.ONU_NUMBER_ALL_KEY,
 			savedOnuNumber,
 			CacheOperation.LIST_RECORD
 		);
-		return savedOnuNumber;
 	}
 }

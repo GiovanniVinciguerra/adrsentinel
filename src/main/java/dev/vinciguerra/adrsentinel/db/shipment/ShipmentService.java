@@ -14,7 +14,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-
 import dev.vinciguerra.adrsentinel.db.AbstractGenericService;
 import dev.vinciguerra.adrsentinel.db.CaffeineCacheConfiguration;
 import dev.vinciguerra.adrsentinel.db.shipment.Shipment.ShipmentStatus;
@@ -171,21 +170,57 @@ public class ShipmentService extends AbstractGenericService {
 		Shipment savedShipment = shipmentRepository.save(newShipment);
 		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
 			@Override
-			public void afterCommit() {
-				updateCache(
-					CaffeineCacheConfiguration.SHIPMENT_BY_TRACKING_NUMBER_CACHE,
-					savedShipment.getTrackingNumber(),
-					savedShipment,
-					CacheOperation.SINGLE_RECORD
-				);
-				updateCache(
-					CaffeineCacheConfiguration.SHIPMENT_BY_SHIPMENT_DATE_CACHE,
-					savedShipment.getShipmentDate().toLocalDate(),
-					savedShipment,
-					CacheOperation.LIST_RECORD
-				);
-			}
+			public void afterCommit() { writeThroughCacheIntegrityOperation(savedShipment); }
 		});
 		return savedShipment;
+	}
+	
+	/**
+	 * Esegue l'operazione di allineamento della cache applicativa per l'entità {@link Shipment}, 
+	 * implementando il pattern Write-Through per garantire l'integrità dei dati operativi in tempo reale.
+	 * <p>
+	 * L'entità Spedizione rappresenta il core transazionale del sistema AdrSentinel. Essendo 
+	 * soggetta a frequenti letture sia puntuali (es. verifica di un singolo trasporto) sia 
+	 * massive (es. dashboard giornaliera), la strategia di caching prevede il mantenimento 
+	 * simultaneo di due indici in memoria RAM.
+	 * </p>
+	 * <p>
+	 * <b>Vincolo Architetturale:</b> Per evitare discrepanze critiche tra il database e la 
+	 * cache (dirty reads o ghost records in caso di eccezioni SQL), questo metodo deve essere 
+	 * registrato e invocato <b>esclusivamente</b> all'interno del blocco {@code afterCommit} 
+	 * fornito dal {@code TransactionSynchronizationManager}.
+	 * </p>
+	 * <p>
+	 * <b>Logica di Sincronizzazione a Doppio Indice:</b>
+	 * <ul>
+	 * <li><b>Indice Operativo Puntuale (Tracking Number):</b> Inserisce o sovrascrive l'entità 
+	 * all'interno della cache dedicata alle ricerche dirette O(1) 
+	 * ({@code SHIPMENT_BY_TRACKING_NUMBER_CACHE}). Questo garantisce che gli aggiornamenti di 
+	 * stato di una spedizione siano immediatamente visibili a chi ne interroga il tracking.</li>
+	 * <li><b>Indice Temporale (Data di Spedizione):</b> Estrae la componente {@code LocalDate} 
+	 * dal timestamp della spedizione e utilizza tale data come chiave di aggregazione. 
+	 * Il record viene dinamicamente accodato (o aggiornato se preesistente) nella lista delle 
+	 * spedizioni di quella specifica giornata ({@code SHIPMENT_BY_SHIPMENT_DATE_CACHE}).
+	 * Questa ottimizzazione permette al frontend di renderizzare le dashboard giornaliere 
+	 * senza sollecitare il database relazionale.</li>
+	 * </ul>
+	 * </p>
+	 * @param savedShipment l'istanza consolidata dell'entità {@link Shipment}, 
+	 * comprensiva di ID autogenerato, Tracking Number e Data di Spedizione, 
+	 * appena persistita con successo nel database sottostante.
+	 */
+	private void writeThroughCacheIntegrityOperation(Shipment savedShipment) {
+		storeInCache(
+			CaffeineCacheConfiguration.SHIPMENT_BY_TRACKING_NUMBER_CACHE,
+			savedShipment.getTrackingNumber(),
+			savedShipment,
+			CacheOperation.SINGLE_RECORD
+		);
+		storeInCache(
+			CaffeineCacheConfiguration.SHIPMENT_BY_SHIPMENT_DATE_CACHE,
+			savedShipment.getShipmentDate().toLocalDate(),
+			savedShipment,
+			CacheOperation.LIST_RECORD
+		);
 	}
 }
