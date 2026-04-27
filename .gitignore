@@ -51,6 +51,7 @@ $RECYCLE.BIN/
 
 ### IDE & EDITORS ###
 HELP.md
+dev/.asciidoctorconfig.adoc
 
 ### STS / Eclipse ###
 .apt_generated
