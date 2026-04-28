@@ -42,7 +42,6 @@ public class AdrClassService extends AbstractGenericService {
      * l'immutabilità delle dipendenze ({@code final}) e facilita i test unitari.
      * Il {@code CacheManager} viene passato al costruttore della superclasse tramite {@code super()}.
      * </p>
-     *
      * @param adrClassRepository Il Data Access Object per AdrClass.
      * @param cacheManager Il gestore della cache di Spring Boot.
      */

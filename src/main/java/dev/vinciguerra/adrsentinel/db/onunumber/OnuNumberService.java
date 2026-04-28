@@ -10,7 +10,11 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import dev.vinciguerra.adrsentinel.db.AbstractGenericService;
 import dev.vinciguerra.adrsentinel.db.CaffeineCacheConfiguration;
 import dev.vinciguerra.adrsentinel.db.adrclass.AdrClass;
-import dev.vinciguerra.adrsentinel.exception.ResourceNotFoundException;
+import dev.vinciguerra.adrsentinel.db.adrclass.AdrClassService;
+import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumber.PackingGroup;
+import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumber.PhysicalState;
+import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumber.TunnelRestriction;
+import dev.vinciguerra.adrsentinel.web.dto.onunumber.OnuNumberRequestDTO;
 
 /**
  * Strato di Business Logic (Service Layer) dedicato alla gestione del Catalogo ADR (Numeri ONU).
@@ -34,34 +38,76 @@ import dev.vinciguerra.adrsentinel.exception.ResourceNotFoundException;
 @Service
 public class OnuNumberService extends AbstractGenericService {
 	private final OnuNumberRepository onuNumberRepository;
+	private final AdrClassService adrClassService;
 	
 	/**
-	 * Costruttore con Dependency Injection nativa di Spring.
-	 * @param onuNumberRepository il livello di accesso ai dati fisici (Catalogo DB).
-	 * @param cacheManager l'orchestratore dell'infrastruttura di memoria (iniettato nella superclasse).
+	 * Costruttore principale per l'iniezione delle dipendenze (Dependency Injection) 
+	 * e l'inizializzazione del servizio di orchestrazione delle Onu Number ADR.
+	 * <p>
+	 * <b>Dettagli Architetturali:</b>
+	 * <ul>
+	 * <li><b>Ereditarietà e Gestione Memoria:</b> L'istanza del {@link CacheManager} viene 
+	 * passata al costruttore della superclasse tramite {@code super()}. Questo approccio 
+	 * abilita l'utilizzo nativo dei motori centralizzati di Write-Through e Delete-Through 
+	 * (es. i metodi operativi di inserimento ed evizione chirurgica dalla RAM).</li>
+	 * <li><b>Service-to-Service Communication:</b> Per la risoluzione delle entità anagrafiche, 
+	 * viene intenzionalmente iniettato il {@link AdrClassService} in luogo del suo Repository. 
+	 * Questa configurazione forza l'attraversamento dei Proxy di Spring, garantendo 
+	 * lo sfruttamento della cache di primo livello (Cache Hit) e la centralizzazione 
+	 * della logica di validazione (es. controlli di disattivazione logica o eccezioni custom), 
+	 * mantenendo rigidi i confini di dominio (Domain Boundaries).</li>
+	 * </ul>
+	 * </p>
+	 * @param onuNumberRepository L'interfaccia JPA di accesso ai dati persistenti, 
+	 * dedicata esclusivamente alle operazioni di mutazione e ricerca delle Onu Number.
+	 * @param adrClassService Il servizio di dominio delle Classi ADR, utilizzato per 
+	 * eseguire il lookup ottimizzato (tramite RAM) e sicuro delle entità genitore durante il 
+	 * mapping dei DTO.
+	 * @param cacheManager L'istanza del gestore centrale delle cache fornita dal contesto Spring Boot, 
+	 * delegata alla classe astratta base.
 	 */
-	public OnuNumberService(OnuNumberRepository onuNumberRepository, CacheManager cacheManager) {
+	public OnuNumberService(OnuNumberRepository onuNumberRepository, AdrClassService adrClassService, CacheManager cacheManager) {
 		super(cacheManager);
 		this.onuNumberRepository = onuNumberRepository;
+		this.adrClassService = adrClassService;
 	}
 	
 	/**
-	 * Recupera la definizione esatta di una singola materia pericolosa tramite il suo Codice ONU.
+	 * Recupera l'elenco delle varianti di Numeri ONU associate a uno specifico codice a 4 cifre, 
+	 * orchestrando l'accesso ai dati tramite un pattern architetturale di Read-Through Cache.
 	 * <p>
-	 * <b>Meccanismo di Caching:</b><br>
-	 * Intercetta la chiamata e cerca la stringa {@code onuCode} nella regione di memoria dedicata. 
-	 * Essendo una ricerca 1-a-1 altamente ricorrente durante l'inserimento delle spedizioni, 
-	 * la latenza garantita in caso di Hit è O(1).
+	 * <b>Strategia di Caching (Proxy Interception):</b><br>
+	 * L'annotazione {@code @Cacheable} delega a Spring l'intercettazione dell'invocazione. 
+	 * Utilizzando la SpEL (Spring Expression Language) {@code #onuCode} come chiave di 
+	 * indirizzamento univoca all'interno della regione {@code ONU_NUMBER_BY_ONU_CODE_CACHE}:
+	 * <ul>
+	 * <li><b>Cache Hit:</b> Se il dato risiede già in memoria RAM (Caffeine), il corpo del metodo 
+	 * viene del tutto ignorato. La lista viene restituita al chiamante con latenza quasi nulla.</li>
+	 * <li><b>Cache Miss:</b> In assenza della chiave, il Proxy esegue il blocco di codice, 
+	 * interroga il database relazionale, idrata la cache con il risultato e conclude l'operazione.</li>
+	 * </ul>
 	 * </p>
-	 * @param onuCode il codice di 4 cifre identificativo della materia (es. "1203").
-	 * @return l'entità {@link OnuNumber} popolata in tutti i suoi campi.
-	 * @throws ResourceNotFoundException se il codice inserito non esiste nel manuale ADR.
+	 * <p>
+	 * <b>Osservabilità e Diagnostica (Observability):</b><br>
+	 * La stampa del log (livello INFO) funge da "sentinella" prestazionale. Essendo eseguita 
+	 * unicamente in caso di Cache Miss, fornisce una prova visiva immediata nei log di produzione 
+	 * di quando il sistema sta effettivamente sostenendo il costo di una query su PostgreSQL.
+	 * </p>
+	 * <p>
+	 * <b>Dinamiche di Dominio (Gestione Varianti ADR):</b><br>
+	 * Il tipo di ritorno {@link List} modella la reale complessità normativa: un singolo codice 
+	 * identificativo (es. "1993") può diramarsi in molteplici record fisici differenziati 
+	 * per Gruppo di Imballaggio o Disposizioni Speciali.
+	 * </p>
+	 * @param onuCode La Business Key (es. "1203", "1993") utilizzata come filtro di ricerca 
+	 * sul database e come chiave di memorizzazione nel motore di cache.
+	 * @return Una {@link List} contenente le entità {@link OnuNumber} corrispondenti. Restituisce 
+	 * una lista vuota qualora il codice non sia censito.
 	 */
 	@Cacheable(value = CaffeineCacheConfiguration.ONU_NUMBER_BY_ONU_CODE_CACHE, key = "#onuCode")
-	public OnuNumber getByOnuCode(String onuCode) throws ResourceNotFoundException {
+	public List<OnuNumber> getByOnuCode(String onuCode) {
 		logger.info("[DataBase CALL] Searching for the OnuNumber by onuCode: {}", onuCode);
-		return onuNumberRepository.findByOnuCode(onuCode)
-			.orElseThrow(() -> new ResourceNotFoundException("OnuNumber not found: " + onuCode));
+		return onuNumberRepository.findByOnuCode(onuCode);
 	}
 	
 	/**
@@ -76,20 +122,44 @@ public class OnuNumberService extends AbstractGenericService {
 	}
 	
 	/**
-	 * Estrae l'intera libreria di merci pericolose appartenenti a una macro-classe ADR.
+	 * Recupera la lista dei Numeri ONU associati a una specifica Classe di Pericolo ADR, 
+	 * implementando il pattern architetturale Read-Through Cache.
 	 * <p>
-	 * <b>Ottimizzazione SpEL (Spring Expression Language):</b><br>
-	 * Il parametro {@code key = "#adrClass.classCode"} estrae proattivamente la stringa primitiva 
-	 * dall'oggetto complesso, utilizzandola come chiave di cache. Questo previene colli di bottiglia 
-	 * legati alla serializzazione e all'implementazione dei metodi {@code equals()/hashCode()} dell'entità.
+	 * <b>Strategia di Caching (Proxy Interception):</b><br>
+	 * Grazie all'annotazione {@code @Cacheable}, questo metodo viene avvolto da un Proxy di Spring. 
+	 * All'invocazione, il framework verifica la presenza della chiave (risolta tramite SpEL 
+	 * {@code #adrClassCode}) all'interno della regione {@code ONU_NUMBER_BY_ADR_CLASS_CACHE}:
+	 * <ul>
+	 * <li><b>Cache Hit:</b> Se la lista è già in RAM, il metodo originale <i>non viene eseguito</i>. 
+	 * La lista viene restituita istantaneamente al chiamante a costo zero per il database.</li>
+	 * <li><b>Cache Miss:</b> Se la chiave è assente, il metodo procede con l'esecuzione, 
+	 * interroga il database relazionale, salva il risultato in cache e infine lo restituisce.</li>
+	 * </ul>
 	 * </p>
-	 * @param adrClass l'oggetto di dominio rappresentante la classe di pericolo richiesta.
-	 * @return l'elenco completo e cachato dei Numeri ONU appartenenti alla classe.
+	 * <p>
+	 * <b>Osservabilità e Diagnostica (Observability):</b><br>
+	 * La stampa del log (livello INFO) all'interno del corpo del metodo svolge un ruolo diagnostico 
+	 * cruciale. Poiché il corpo del metodo viene ignorato in caso di Cache Hit, la presenza di 
+	 * questo log in console funge da prova inequivocabile di un Cache Miss (e della conseguente 
+	 * query fisica su PostgreSQL).
+	 * </p>
+	 * <p>
+	 * <b>Accesso ai Dati (Property Traversal):</b><br>
+	 * Il delegato al livello di persistenza ({@code onuNumberRepository.findByAdrClass_classCode}) 
+	 * sfrutta in modo sicuro l'operatore di navigazione di Spring Data (underscore {@code _}) 
+	 * per attraversare la relazione {@code @ManyToOne} ed estrarre i record basandosi sulla 
+	 * Business Key della classe padre, garantendo una query di JOIN ottimizzata da Hibernate.
+	 * </p>
+	 * @param adrClassCode il codice alfanumerico identificativo della Classe ADR (es. "3", "8", "6.1"). 
+	 * Tale parametro funge da parametro di ricerca per la query e da chiave esatta di indirizzamento 
+	 * per il motore di cache Caffeine.
+	 * @return una {@link List} contenente le entità {@link OnuNumber} associate alla classe. 
+	 * Restituisce una lista vuota se il database non contiene alcun numero ONU per la classe specificata.
 	 */
-	@Cacheable(value = CaffeineCacheConfiguration.ONU_NUMBER_BY_ADR_CLASS_CACHE, key = "#adrClass.classCode")
-	public List<OnuNumber> getByAdrClass(AdrClass adrClass) {
-		logger.info("[DataBase CALL] Searching for the OnuNumber by AdrClass classCode: {}", adrClass.getClassCode());
-		return onuNumberRepository.findByAdrClass(adrClass);
+	@Cacheable(value = CaffeineCacheConfiguration.ONU_NUMBER_BY_ADR_CLASS_CACHE, key = "#adrClassCode")
+	public List<OnuNumber> getByAdrClass(String adrClassCode) {
+		logger.info("[DataBase CALL] Searching for the OnuNumber by AdrClass classCode: {}", adrClassCode);
+		return onuNumberRepository.findByAdrClass_classCode(adrClassCode);
 	}
 	
 	/**
@@ -174,7 +244,7 @@ public class OnuNumberService extends AbstractGenericService {
 			CaffeineCacheConfiguration.ONU_NUMBER_BY_ONU_CODE_CACHE,
 			savedOnuNumber.getOnuCode(),
 			savedOnuNumber,
-			CacheOperation.SINGLE_RECORD
+			CacheOperation.LIST_RECORD
 		);
 		storeInCache(
 			CaffeineCacheConfiguration.ONU_NUMBER_BY_KEMLER_CODE_CACHE,
@@ -194,5 +264,48 @@ public class OnuNumberService extends AbstractGenericService {
 			savedOnuNumber,
 			CacheOperation.LIST_RECORD
 		);
+	}
+	
+	/**
+	 * Converte un Data Transfer Object (DTO) in ingresso in una nuova entità di dominio {@link OnuNumber}.
+	 * <p>
+	 * Questo metodo funge da strato di traduzione (Mapper / Anti-Corruption Layer) tra il contratto 
+	 * API "piatto" esposto al frontend e il complesso modello relazionale e tipizzato richiesto 
+	 * dal motore di persistenza JPA/Hibernate.
+	 * </p>
+	 * <p>
+	 * <b>Flusso di Orchestrazione e Idratazione:</b>
+	 * <ul>
+	 * <li><b>Risoluzione della Relazione (Lookup):</b> Il metodo interroga il {@code adrClassService} 
+	 * utilizzando la Business Key ({@code adrClassCode}). Questo passaggio garantisce che il numero ONU 
+	 * venga agganciato a un'entità {@link AdrClass} nello stato "Managed" (supervisionata da Hibernate), 
+	 * delegando la ricerca al Service Layer per beneficiare appieno dell'infrastruttura di Caching.</li>
+	 * <li><b>Type-Safety e Parsing delle Enumerazioni:</b> I campi ricevuti come primitive testuali 
+	 * (String) dal payload JSON vengono convertiti in enumerazioni Java fortemente tipizzate 
+	 * (es. {@link PhysicalState}, {@link PackingGroup}, {@link TunnelRestriction}). L'invocazione di 
+	 * {@code Enum.valueOf()} risulta intrinsecamente sicura (nessun rischio di {@code IllegalArgumentException}) 
+	 * in quanto l'esattezza lessicale delle stringhe è già stata garantita a monte dalle annotazioni di 
+	 * Edge Validation applicate sul DTO.</li>
+	 * <li><b>Mappatura Diretta:</b> I dati anagrafici base (codice ONU, denominazione, categoria di trasporto) 
+	 * vengono riversati direttamente nell'entità.</li>
+	 * </ul>
+	 * </p>
+	 * @param dto L'oggetto immutabile di trasferimento dati (Flat Record DTO) contenente il payload 
+	 * validato in fase di attraversamento del Controller REST.
+	 * @return Un'istanza "transiente" (priva di Primary Key e non ancora persistita su database) 
+	 * dell'entità {@link OnuNumber}, idratata con le relazioni e pronta per l'operazione di {@code save()}.
+	 */
+	public OnuNumber mapToEntity(OnuNumberRequestDTO dto) {
+		OnuNumber number = new OnuNumber();
+		AdrClass adrClass = adrClassService.getByClassCode(dto.adrClassCode());
+		number.setAdrClass(adrClass);
+		number.setOnuCode(dto.onuCode());
+		number.setName(dto.name());
+		number.setPhysicalState(Enum.valueOf(PhysicalState.class, dto.physicalState()));
+		number.setKemlerCode(dto.kemlerCode());
+		number.setPackingGroup(Enum.valueOf(PackingGroup.class, dto.packingGroup()));
+		number.setTunnelRestriction(Enum.valueOf(TunnelRestriction.class, dto.tunnelRestriction()));
+		number.setTransportCategory(dto.transportCategory());
+		return number;
 	}
 }
