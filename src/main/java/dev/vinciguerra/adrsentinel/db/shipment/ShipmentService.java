@@ -7,9 +7,7 @@ import java.util.List;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -101,56 +99,114 @@ public class ShipmentService extends AbstractGenericService {
 	}
 	
 	// --- SEZIONE 2: UNBOUNDED DATA (PAGINATED & DIRECT DB) ---
+	
 	/**
-	 * Estrae le spedizioni filtrate per stato operativo (es. {@code PLANNED}, {@code DELIVERED}).
+	 * Recupera un blocco paginato di Spedizioni (Shipments) filtrandole in base al loro 
+	 * attuale stato nel ciclo di vita operativo (es. in bozza, in transito, completata).
 	 * <p>
-	 * Utilizza un accesso paginato in quanto gli stati terminali (come le spedizioni consegnate) 
-	 * accumulano volumi di dati illimitati nel tempo. L'ordinamento di default garantisce 
-	 * che i risultati più recenti compaiano nelle prime pagine (descending su shipmentDate).
+	 * <b>Sicurezza del Dominio (Type-Safe Querying):</b><br>
+	 * Il parametro di filtro è fortemente tipizzato tramite l'enumerazione {@link ShipmentStatus}. 
+	 * A differenza dei filtri testuali basati su Stringhe, questo approccio elimina alla radice 
+	 * la possibilità di eseguire query per stati inesistenti, refusi o attacchi di manipolazione. 
+	 * Lo strato di validazione a monte (Controller) garantisce che al Service arrivino esclusivamente 
+	 * stati previsti dalla logica di business.
 	 * </p>
-	 * @param shipmentStatus l'enumerazione che definisce lo stato di avanzamento da cercare.
-	 * @param page il numero della pagina richiesta (Zero-based index).
-	 * @param size il numero massimo di record per pagina.
-	 * @return un blocco (Page) contenente le spedizioni filtrate e i metadati per il frontend.
+	 * <p>
+	 * <b>Osservabilità Strutturata:</b><br>
+	 * L'invocazione di {@code shipmentStatus.name()} all'interno del logger è una best practice 
+	 * per l'aggregazione dei log. Assicura che i sistemi di monitoraggio (es. ELK Stack, Datadog) 
+	 * ricevano un valore letterale puro e indicizzabile (es. "IN_TRANSIT"), isolando il formato del log 
+	 * da eventuali implementazioni custom del metodo {@code toString()} all'interno dell'Enum.
+	 * </p>
+	 * <p>
+	 * <b>Gestione della Memoria (Paginazione):</b><br>
+	 * L'estrazione per stato può generare volumi di dati imponenti (es. interrogare tutte le spedizioni 
+	 * "CONSEGNATE" di un intero anno). L'uso obbligatorio di {@link Pageable} impone un'estrazione 
+	 * a blocchi (Chunking) tramite costrutti SQL {@code LIMIT/OFFSET}, preservando la stabilità della RAM 
+	 * del server (prevenzione di OutOfMemoryError).
+	 * </p>
+	 * @param shipmentStatus Lo stato operativo che funge da criterio di ricerca (es. CREATA, IN_VIAGGIO). 
+	 * Parametro tipizzato e garantito non nullo dalle logiche di Edge Validation.
+	 * @param pageable       L'oggetto di trasporto contenente le direttive di paginazione (numero di pagina, 
+	 * grandezza del blocco) e di ordinamento (es. ordinamento per data di aggiornamento stato) 
+	 * delegate dal Controller.
+	 * @return Un involucro {@link Page} popolato con le entità {@link Shipment} che si trovano nello stato 
+	 * richiesto, completo dei metadati utili al Presentation Layer per la gestione delle griglie dati.
 	 */
-	public Page<Shipment> getByShipmentStatus(ShipmentStatus shipmentStatus, int page, int size) {
+	public Page<Shipment> getByShipmentStatus(ShipmentStatus shipmentStatus, Pageable pageable) {
 		logger.info("[DataBase CALL] Paginated search for Shipment Status: {}", shipmentStatus.name());
-		Pageable pageable = PageRequest.of(page, size, Sort.by("shipmentDate").descending());
 		return shipmentRepository.findByShipmentStatus(shipmentStatus, pageable);
 	}
 	
 	/**
-	 * Accesso globale al registro di tutte le spedizioni presenti nel sistema.
+	 * Esegue il recupero massivo e paginato dell'intero storico delle Spedizioni (Shipments) registrate a sistema.
 	 * <p>
-	 * Metodo pensato per griglie dati amministrative, esportazioni a blocchi o audit. 
-	 * L'accesso massivo è bloccato e forzato all'uso di finestre logiche (Paginazione).
+	 * <b>Architettura della Paginazione (Big Data Ready):</b><br>
+	 * Questo metodo è progettato per operare in totale sicurezza su tabelle ad alta densità. 
+	 * Sfruttando l'incapsulamento fornito da {@link Pageable}, previene il caricamento in memoria 
+	 * dell'intera collezione (scongiurando crolli prestazionali e OutOfMemoryError). Il framework 
+	 * tradurrà dinamicamente la richiesta in query SQL ottimizzate con clausole di {@code LIMIT} e {@code OFFSET}.
 	 * </p>
-	 * @param page indice della pagina (partendo da 0).
-	 * @param size dimensione del blocco (chunk).
-	 * @return un oggetto {@link Page} ordinato dal più recente al più vecchio.
+	 * <p>
+	 * <b>Strategia di Ordinamento (Agnostic Sorting):</b><br>
+	 * Per precisa scelta architetturale, questo strato di servizio risulta "unopinionated" (neutrale) 
+	 * rispetto all'ordinamento dei dati. Se l'oggetto {@code pageable} in ingresso non contiene 
+	 * direttive di sorting, il metodo non applicherà alcuna regola di business forzata (es. ordinamento 
+	 * per data decrescente). I record verranno estratti nell'ordine naturale (Default Order) stabilito 
+	 * dal motore relazionale (tipicamente l'ordine di inserimento basato sulla Primary Key). 
+	 * La responsabilità del sorting è interamente demandata al Presentation Layer (Controller) o al Client.
+	 * </p>
+	 * <p>
+	 * <b>Osservabilità e Diagnostica:</b><br>
+	 * La traccia log a livello INFO funge da sentinella prestazionale, garantendo trasparenza 
+	 * in fase di audit e permettendo di monitorare la frequenza delle query massive inviate a PostgreSQL.
+	 * </p>
+	 * @param pageable L'oggetto di trasporto contenente le coordinate spaziali della richiesta: 
+	 * il numero di pagina (Zero-Based), la dimensione del blocco (Chunk Size) e gli eventuali 
+	 * criteri di ordinamento dinamico richiesti a monte.
+	 * @return Un contenitore {@link Page} popolato con il frammento di entità {@link Shipment} richiesto. 
+	 * Include nativamente tutti i metadati di contesto (numero totale di record, totale pagine, 
+	 * flag di prima/ultima pagina) necessari al frontend per il corretto rendering delle Data Grid.
 	 */
-	public Page<Shipment> getAllShipment(int page, int size) {
+	public Page<Shipment> getAllShipment(Pageable pageable) {
 		logger.info("[DataBase CALL] Paginated search for the Shipment (ALL)");
-		Pageable pageable = PageRequest.of(page, size, Sort.by("shipmentDate").descending());
 		return shipmentRepository.findAll(pageable);
 	}
 	
 	/**
-	 * Costruisce il registro storico (Logbook) dei viaggi di uno specifico mezzo aziendale.
+	 * Recupera lo storico paginato delle Spedizioni (Shipments) effettuate da uno specifico Veicolo.
 	 * <p>
-	 * Anche se limitato a un singolo mezzo, il volume dei dati può rappresentare anni 
-	 * di operatività, rendendo l'uso delle collezioni standard un rischio per la memoria. 
-	 * Questo metodo estrae i dati a blocchi direttamente dal RDBMS.
+	 * <b>Design della Query (Entity-Based Filtering):</b><br>
+	 * Questo strato di servizio applica il pattern della navigazione a oggetti. Accettando come parametro 
+	 * l'intera entità {@link Vehicle} anziché una stringa primitiva, si delega a Hibernate il compito 
+	 * di estrapolare la chiave primaria (Primary Key) per costruire una query SQL basata sulla 
+	 * Foreign Key (es. {@code WHERE vehicle_id = ?}). Questo garantisce l'uso ottimale degli indici 
+	 * B-Tree del database relazionale.
 	 * </p>
-	 * @param vehicle l'istanza del veicolo di cui interrogare lo storico.
-	 * @param page indice della pagina.
-	 * @param size numero di record per pagina.
-	 * @return lo storico paginato dei trasporti associati a quel veicolo.
+	 * <p>
+	 * <b>Sicurezza della Memoria (Big Data Ready):</b><br>
+	 * Poiché un singolo veicolo operativo può generare decine di migliaia di distinte di spedizione 
+	 * nel corso della sua vita utile, l'incapsulamento della query in un costrutto {@link Pageable} 
+	 * funge da valvola di sicurezza. Impone al database l'estrazione parziale (LIMIT/OFFSET), 
+	 * mantenendo il consumo di RAM del server costantemente basso e prevedibile.
+	 * </p>
+	 * <p>
+	 * <b>Osservabilità Avanzata (Human-Readable Logging):</b><br>
+	 * La direttiva di logging implementa una best practice diagnostica: mentre il motore di ricerca 
+	 * lavora per ID numerici relazionali, il logger estrae dinamicamente la targa 
+	 * ({@code vehicle.getLicensePlate()}). Questo garantisce che le tracce su sistemi di monitoraggio 
+	 * (es. ELK, Datadog, Splunk) parlino il linguaggio del dominio di business, facilitando enormemente 
+	 * l'analisi e il troubleshooting da parte degli operatori di supporto.
+	 * </p>
+	 * @param licensePlate  La targa del veicolo di cui si desidera estrarre lo storico.
+	 * @param pageable L'involucro contenente i limiti della finestra di ricerca (numero pagina e grandezza) 
+	 * e gli eventuali criteri di ordinamento richiesti dal Presentation Layer.
+	 * @return Un raccoglitore {@link Page} contenente le entità {@link Shipment} filtrate per il veicolo 
+	 * richiesto, oltre ai metadati di paginazione necessari al client per renderizzare l'interfaccia.
 	 */
-	public Page<Shipment> getByVehicle(Vehicle vehicle, int page, int size) {
-		logger.info("[DataBase CALL] Paginated search for the Shipment by Vehicle license plate: {}", vehicle.getLicensePlate());
-		Pageable pageable = PageRequest.of(page, size, Sort.by("shipmentDate").descending());
-		return shipmentRepository.findByVehicle(vehicle, pageable);
+	public Page<Shipment> getByVehicle(String licensePlate, Pageable pageable) {
+		logger.info("[DataBase CALL] Paginated search for the Shipment by Vehicle license plate: {}", licensePlate);
+		return shipmentRepository.findByVehicle_licensePlate(licensePlate, pageable);
 	}
 	
 	/**

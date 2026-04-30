@@ -1,4 +1,4 @@
-package dev.vinciguerra.adrsentinel.web.annotation.onunumber;
+package dev.vinciguerra.adrsentinel.web.annotation.shipment;
 
 import static java.lang.annotation.ElementType.FIELD;
 import static java.lang.annotation.ElementType.PARAMETER;
@@ -9,24 +9,24 @@ import java.lang.annotation.Target;
 import jakarta.validation.Constraint;
 import jakarta.validation.Payload;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 
 @Documented
 @Retention(RUNTIME)
 @Target({ FIELD, PARAMETER })
 @Constraint(validatedBy = {})
-@NotNull(message = "Onu number code cannot be null")
-@Pattern(
-	regexp = "^\\d{4}$",
-	message = "Invalid ONU code format: must be exactly 4 digits"
+@NotNull(message = "Shipment status cannot be null")
+@Size(
+	max = 255,
+	message = "Shipment status must not exceed 255 characters."
 )
-public @interface ValidatorOnuNumberCode {
+public @interface ValidatorShipmentStatus {
 	/**
 	 * Il messaggio di errore unificato che verrà restituito nel payload di risposta (es. HTTP 400) 
 	 * in caso di fallimento di uno qualsiasi dei vincoli sottostanti.
 	 * @return il messaggio testuale che descrive chiaramente sia l'obbligatorietà che il limite dimensionale.
 	 */
-	String message() default "Invalid Onu number code format or missing code.";
+	String message() default "Shipment status is required and must not exceed 255 characters.";
 	/**
 	 * Partiziona l'esecuzione del vincolo associandolo a specifici Validation Groups.
 	 * <p>Utile per differenziare i controlli a seconda del contesto (es. Creazione vs Aggiornamento).</p>

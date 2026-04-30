@@ -23,7 +23,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
-import jakarta.validation.constraints.Size;
 
 /**
  * Entità JPA che rappresenta un Veicolo commerciale all'interno del dominio logistico ADR Sentinel.
@@ -133,8 +132,10 @@ public class Vehicle {
 	 * </p>
 	 */
 	@NotBlank(message = "License plate cannot be empty or blank")
-	@Size(min = 4, max = 10, message = "License plate must be between 4 and 10 characters")
-	@Pattern(regexp = "^[A-Z0-9]+$", message = "License plate can only contain letters and numbers (no special characters)")
+	@Pattern(
+		regexp = "^[A-Z0-9]{4,10}$",
+		message = "License plate must be between 4 and 10 characters and contain only uppercase letters and numbers"
+	)
 	@Column(
 		name = "license_plate",
 		unique = true,

@@ -1,4 +1,4 @@
-package dev.vinciguerra.adrsentinel.web.annotation.onunumber;
+package dev.vinciguerra.adrsentinel.web.annotation.shipment;
 
 import static java.lang.annotation.ElementType.FIELD;
 import static java.lang.annotation.ElementType.PARAMETER;
@@ -15,18 +15,18 @@ import jakarta.validation.constraints.Pattern;
 @Retention(RUNTIME)
 @Target({ FIELD, PARAMETER })
 @Constraint(validatedBy = {})
-@NotNull(message = "Onu number code cannot be null")
+@NotNull(message = "Shipment date cannot be null")
 @Pattern(
-	regexp = "^\\d{4}$",
-	message = "Invalid ONU code format: must be exactly 4 digits"
+	regexp = "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$",
+	message = "Wrong date format. Correct: yyyy-mm-gg"
 )
-public @interface ValidatorOnuNumberCode {
+public @interface ValidatorLocalDate {
 	/**
 	 * Il messaggio di errore unificato che verrà restituito nel payload di risposta (es. HTTP 400) 
 	 * in caso di fallimento di uno qualsiasi dei vincoli sottostanti.
 	 * @return il messaggio testuale che descrive chiaramente sia l'obbligatorietà che il limite dimensionale.
 	 */
-	String message() default "Invalid Onu number code format or missing code.";
+	String message() default "Wrong format or missing date.";
 	/**
 	 * Partiziona l'esecuzione del vincolo associandolo a specifici Validation Groups.
 	 * <p>Utile per differenziare i controlli a seconda del contesto (es. Creazione vs Aggiornamento).</p>

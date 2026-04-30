@@ -3,13 +3,11 @@ package dev.vinciguerra.adrsentinel.db.shipment;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 import dev.vinciguerra.adrsentinel.db.shipment.Shipment.ShipmentStatus;
-import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle;
 
 /**
  * Data Access Object (DAO) primario per l'entità {@link Shipment}.
@@ -93,9 +91,9 @@ public interface ShipmentRepository extends JpaRepository<Shipment, Long> {
 	 * richiesta di un registro (Logbook) di un mezzo storico causi colli di bottiglia sul database 
 	 * o saturi il Thread locale del server applicativo.
 	 * </p>
-	 * @param vehicle l'istanza di dominio del veicolo di cui si vuole consultare il registro spedizioni.
+	 * @param licensePlate La targa del veicolo di cui si vogliono conoscere le spedizioni.
 	 * @param pageable i criteri strutturati per il caricamento progressivo (lazy/infinite scrolling dei record).
 	 * @return un oggetto {@link Page} contenente il sottoinsieme dello storico del veicolo, pronto per l'esposizione.
 	 */
-	Page<Shipment> findByVehicle(Vehicle vehicle, Pageable pageable);
+	Page<Shipment> findByVehicle_licensePlate(String licensePlate, Pageable pageable);
 }

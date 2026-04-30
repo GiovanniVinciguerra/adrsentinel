@@ -1,4 +1,4 @@
-package dev.vinciguerra.adrsentinel.web.annotation.onunumber;
+package dev.vinciguerra.adrsentinel.web.annotation.vehicle;
 
 import static java.lang.annotation.ElementType.FIELD;
 import static java.lang.annotation.ElementType.PARAMETER;
@@ -15,18 +15,18 @@ import jakarta.validation.constraints.Pattern;
 @Retention(RUNTIME)
 @Target({ FIELD, PARAMETER })
 @Constraint(validatedBy = {})
-@NotNull(message = "Onu number code cannot be null")
+@NotNull(message = "License plate cannot be null.")
 @Pattern(
-	regexp = "^\\d{4}$",
-	message = "Invalid ONU code format: must be exactly 4 digits"
+	regexp = "^[A-Z0-9]{4,10}$",
+	message = "License plate must be between 4 and 10 characters and contain only uppercase letters and numbers"
 )
-public @interface ValidatorOnuNumberCode {
+public @interface ValidatorLicensePlate {
 	/**
 	 * Il messaggio di errore unificato che verrà restituito nel payload di risposta (es. HTTP 400) 
 	 * in caso di fallimento di uno qualsiasi dei vincoli sottostanti.
 	 * @return il messaggio testuale che descrive chiaramente sia l'obbligatorietà che il limite dimensionale.
 	 */
-	String message() default "Invalid Onu number code format or missing code.";
+	String message() default "License plate number code format or missing code.";
 	/**
 	 * Partiziona l'esecuzione del vincolo associandolo a specifici Validation Groups.
 	 * <p>Utile per differenziare i controlli a seconda del contesto (es. Creazione vs Aggiornamento).</p>
