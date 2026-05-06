@@ -127,7 +127,10 @@ public class Shipment {
 	 * </p>
 	 */
 	@NotBlank(message = "Origin Address cannot be empty or blank")
-	@Pattern(regexp = "^[^<>%&$#@!^*]+$", message = "Shipping Origin Address contains invalid or unsafe characters")
+	@Pattern(
+		regexp = "^[^<>%&$#@!^*]+$",
+		message = "Shipping Origin Address contains invalid or unsafe characters"
+	)
 	@Size(
 		min = 20,
 		max = 255,
@@ -144,7 +147,10 @@ public class Shipment {
 	 * <p>Condivide le medesime logiche di validazione e normalizzazione dell'indirizzo di origine.</p>
 	 */
 	@NotBlank(message = "Destination Address cannot be empty or blank")
-	@Pattern(regexp = "^[^<>%&$#@!^*]+$", message = "Shipping Destination Address contains invalid or unsafe characters")
+	@Pattern(
+		regexp = "^[^<>%&$#@!^*]+$",
+		message = "Shipping Destination Address contains invalid or unsafe characters"
+	)
 	@Size(
 		min = 20,
 		max = 255,

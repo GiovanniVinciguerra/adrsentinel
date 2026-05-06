@@ -30,7 +30,6 @@ import dev.vinciguerra.adrsentinel.exception.ResourceNotFoundException;
  * invocando i metodi {@code updateCache} e {@code deleteCache} sulle singole entità o sulle liste.</li>
  * </ul>
  * </p>
- *
  * @author Giovanni Vinciguerra
  * @version 1.0
  * @since 1.0

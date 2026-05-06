@@ -11,6 +11,42 @@ import jakarta.validation.Payload;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 
+/**
+ * Vincolo di validazione perimetrale (Edge Validation) per la Targa del Veicolo 
+ * (License Plate) assegnato al trasporto logistico.
+ * <p><b>Contesto Architetturale (Identificazione Flotta e Normativa ADR):</b></p>
+ * Nel dominio dei trasporti di merci pericolose, la targa del veicolo non è un semplice 
+ * attributo testuale, ma un identificatore legale vincolante, essenziale per la tracciabilità, 
+ * i controlli doganali e l'associazione con i documenti di trasporto (Lettera di Vettura). 
+ * Questa annotazione agisce come "Anti-Corruption Layer", assicurando che il sistema 
+ * acquisisca esclusivamente targhe formalmente valide e normalizzate, respingendo input 
+ * sporchi derivanti da digitazioni errate o da sistemi di terze parti non allineati.
+ * <p><b>Motore di Validazione (Constraint Composition e Normalizzazione):</b></p>
+ * Sfruttando la delega ai vincoli nativi ({@code @Constraint(validatedBy = {})}), 
+ * il validatore impone un rigoroso standard di formattazione:
+ * <ul>
+ * <li><b>Esistenza ({@code @NotNull}):</b> Garantisce che l'identificativo del mezzo 
+ * sia sempre fornito. Un trasporto logistico non può esistere senza un veicolo fisico.</li>
+ * <li><b>Integrità e Standardizzazione ({@code @Pattern}):</b> Attraverso la regex 
+ * {@code ^[A-Z0-9]{4,10}$}, impone regole ferree e internazionali:
+ * <ul>
+ * <li><b>Alfanumerico Maiuscolo:</b> Accetta esclusivamente lettere maiuscole e numeri, 
+ * vietando esplicitamente caratteri speciali, spaziature (es. "AB 123 CD") o 
+ * trattini (es. "AB-123-CD"). Questo azzera le ambiguità nel database.</li>
+ * <li><b>Dimensionamento:</b> Richiede una lunghezza compresa tra 4 e 10 caratteri, 
+ * coprendo la quasi totalità dei formati di targa civili e commerciali a livello europeo.</li>
+ * </ul>
+ * </li>
+ * </ul>
+ * <p><b>Applicabilità Architetturale:</b></p>
+ * Targettizzata per {@code { FIELD, PARAMETER }}, è progettata per operare su campi di tipo 
+ * {@code String} all'interno dei Data Transfer Object (es. {@code VehicleDTO}, {@code ShipmentRequestDTO}) 
+ * o direttamente sui parametri esposti nei Controller REST.
+ * @return Il messaggio di errore predefinito o personalizzato in caso di fallimento della validazione.
+ * @author Giovanni Vinciguerra
+ * @version 1.0 (ADR Domain Validator)
+ * @since 1.0
+ */
 @Documented
 @Retention(RUNTIME)
 @Target({ FIELD, PARAMETER })

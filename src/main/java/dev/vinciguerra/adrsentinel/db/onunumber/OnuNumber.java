@@ -156,7 +156,7 @@ public class OnuNumber {
 		nullable = false,
 		length = 4
 	)
-	@ColumnDefault("NONE")
+	@ColumnDefault("'NONE'")
 	private String kemlerCode;
 	/** Il grado di pericolo associato a questo record. */
 	@NotNull(message = "Packing group cannot be null")

@@ -77,13 +77,13 @@ public class ShipmentItemService extends AbstractGenericService {
 	 * Questo approccio previene il noto problema del "LazyInitializationException" nei DTO 
 	 * e fornisce una vista istantanea e cachata del contenuto della spedizione.
 	 * </p>
-	 * @param shipment l'entità padre (Spedizione) di cui si vogliono recuperare i dettagli.
+	 * @param shipmentTrackingNumber il numero di tracking della spedizione di cui si vogliono recuperare i dettagli.
 	 * @return una lista (potenzialmente vuota ma non nulla) di {@link ShipmentItem}.
 	 */
-	@Cacheable(value = CaffeineCacheConfiguration.SHIPMENT_ITEM_BY_SHIPMENT_CACHE, key = "#shipment.trackingNumber")
-	public List<ShipmentItem> getByShipment(Shipment shipment) {
-		logger.info("[DataBase CALL] Searching for the ShipmentItem by Shipment trackingNumber: {}", shipment.getTrackingNumber());
-		return shipmentItemRepository.findByShipment(shipment);
+	@Cacheable(value = CaffeineCacheConfiguration.SHIPMENT_ITEM_BY_SHIPMENT_CACHE, key = "#shipmentTrackingNumber")
+	public List<ShipmentItem> getByShipment(String shipmentTrackingNumber) {
+		logger.info("[DataBase CALL] Searching for the ShipmentItem by Shipment trackingNumber: {}", shipmentTrackingNumber);
+		return shipmentItemRepository.findByShipment(shipmentTrackingNumber);
 	}
 	
 	/**

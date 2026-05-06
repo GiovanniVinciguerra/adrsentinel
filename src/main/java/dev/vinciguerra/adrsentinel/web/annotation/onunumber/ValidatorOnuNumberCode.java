@@ -11,6 +11,33 @@ import jakarta.validation.Payload;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 
+/**
+ * Vincolo di validazione perimetrale (Edge Validation) per il Numero ONU (UN Number).
+ * <p><b>Contesto di Dominio (Normativa ADR):</b></p>
+ * Il Numero ONU è l'identificativo univoco a quattro cifre assegnato dal Comitato di Esperti 
+ * delle Nazioni Unite sul Trasporto di Merci Pericolose. Serve a classificare in modo 
+ * inequivocabile sostanze, materie o oggetti pericolosi (es. {@code 1202} per il Gasolio, 
+ * {@code 1203} per la Benzina). Questa annotazione funge da barriera (Anti-Corruption Layer) 
+ * per assicurare l'integrità del dato logistico prima del suo ingresso nella logica di business.
+ * <p><b>Motore di Validazione (Constraint Composition):</b></p>
+ * Questo vincolo implementa il pattern avanzato della "Composizione di Annotazioni". 
+ * Dichiarando un {@code @Constraint(validatedBy = {})} vuoto, delega l'intera validazione 
+ * alla sinergia delle regole native sottostanti:
+ * <ul>
+ * <li><b>Esistenza ({@code @NotNull}):</b> Intercetta i payload malevoli o incompleti, garantendo 
+ * che una classificazione ADR non possa mai esistere senza il suo identificatore primario.</li>
+ * <li><b>Integrità Strutturale ({@code @Pattern}):</b> Tramite la regex {@code ^\d{4}$}, impone 
+ * che la stringa sia composta da <i>esattamente</i> quattro cifre numeriche. Respinge 
+ * automaticamente spaziature, caratteri alfabetici o lunghezze anomale.</li>
+ * </ul>
+ * <p><b>Applicabilità Architetturale:</b></p>
+ * Targettizzata per {@code { FIELD, PARAMETER }}, fornisce una copertura totale sia sui 
+ * Data Transfer Object (DTO) serializzati, sia sulle variabili di percorso (Path Variables) 
+ * o parametri di query esposti nei Controller REST.
+ * @author Giovanni Vinciguerra
+ * @version 1.0 (ADR Domain Validator)
+ * @since 1.0
+ */
 @Documented
 @Retention(RUNTIME)
 @Target({ FIELD, PARAMETER })

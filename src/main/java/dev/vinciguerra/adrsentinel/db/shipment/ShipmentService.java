@@ -16,7 +16,11 @@ import dev.vinciguerra.adrsentinel.db.AbstractGenericService;
 import dev.vinciguerra.adrsentinel.db.CaffeineCacheConfiguration;
 import dev.vinciguerra.adrsentinel.db.shipment.Shipment.ShipmentStatus;
 import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle;
+import dev.vinciguerra.adrsentinel.db.vehicle.VehicleService;
 import dev.vinciguerra.adrsentinel.exception.ResourceNotFoundException;
+import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentRequestDTO;
+import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentUpdateDTO;
+import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentUpdateStatusDTO;
 
 /**
  * Strato di Business Logic (Service Layer) per l'orchestrazione del dominio {@link Shipment}.
@@ -37,7 +41,7 @@ import dev.vinciguerra.adrsentinel.exception.ResourceNotFoundException;
  * </p>
  * <p>
  * <b>Sincronizzazione (Write-Through Pattern):</b><br>
- * Le operazioni di mutazione (Save/Delete) sono responsabili dell'aggiornamento atomico 
+ * Le operazioni di mutazione (Save/Update) sono responsabili dell'aggiornamento atomico 
  * sia del database fisico che delle regioni di memoria in RAM, prevenendo letture 
  * di dati obsoleti (Stale Data).
  * </p>
@@ -49,14 +53,16 @@ import dev.vinciguerra.adrsentinel.exception.ResourceNotFoundException;
 @Service
 public class ShipmentService extends AbstractGenericService {
 	private final ShipmentRepository shipmentRepository;
+	private final VehicleService vehicleService;
 	
 	/**
 	 * Costruttore con Dependency Injection nativa di Spring.
 	 * @param shipmentRepository il livello di accesso ai dati fisici (Database).
 	 * @param cacheManager il gestore dell'infrastruttura di memoria (iniettato nella superclasse).
 	 */
-	public ShipmentService(ShipmentRepository shipmentRepository, CacheManager cacheManager) {
+	public ShipmentService(ShipmentRepository shipmentRepository, VehicleService vehicleService, CacheManager cacheManager) {
 		super(cacheManager);
+		this.vehicleService = vehicleService;
 		this.shipmentRepository = shipmentRepository;
 	}
 	
@@ -226,46 +232,108 @@ public class ShipmentService extends AbstractGenericService {
 		Shipment savedShipment = shipmentRepository.save(newShipment);
 		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
 			@Override
-			public void afterCommit() { writeThroughCacheIntegrityOperation(savedShipment); }
+			public void afterCommit() { syncCacheAfterInsert(savedShipment); }
 		});
 		return savedShipment;
 	}
 	
 	/**
-	 * Esegue l'operazione di allineamento della cache applicativa per l'entità {@link Shipment}, 
-	 * implementando il pattern Write-Through per garantire l'integrità dei dati operativi in tempo reale.
+	 * Aggiorna i dati logistici anagrafici di una spedizione esistente tramite il suo Tracking Number.
 	 * <p>
-	 * L'entità Spedizione rappresenta il core transazionale del sistema AdrSentinel. Essendo 
-	 * soggetta a frequenti letture sia puntuali (es. verifica di un singolo trasporto) sia 
-	 * massive (es. dashboard giornaliera), la strategia di caching prevede il mantenimento 
-	 * simultaneo di due indici in memoria RAM.
+	 * <b>Pattern Architetturale (Full Update via PUT):</b><br>
+	 * Questo metodo implementa la semantica rigorosa del verbo HTTP PUT. Il client è tenuto 
+	 * a fornire un payload completo (garantito dallo strato di validazione {@code @Valid} a monte). 
+	 * Il servizio sovrascriverà i campi bersaglio senza necessità di controlli di esistenza (null checks), 
+	 * mantenendo il codice lineare e privo di logica condizionale complessa.
 	 * </p>
 	 * <p>
-	 * <b>Vincolo Architetturale:</b> Per evitare discrepanze critiche tra il database e la 
-	 * cache (dirty reads o ghost records in caso di eccezioni SQL), questo metodo deve essere 
-	 * registrato e invocato <b>esclusivamente</b> all'interno del blocco {@code afterCommit} 
-	 * fornito dal {@code TransactionSynchronizationManager}.
+	 * <b>Gestione Relazioni e Dirty Checking:</b><br>
+	 * L'entità {@link Shipment} recuperata entra in stato 'Managed'. Le assegnazioni successive 
+	 * scatenano il meccanismo di Dirty Checking di Hibernate, che genererà una query di UPDATE 
+	 * ottimizzata in fase di commit transazionale.
 	 * </p>
-	 * <p>
-	 * <b>Logica di Sincronizzazione a Doppio Indice:</b>
-	 * <ul>
-	 * <li><b>Indice Operativo Puntuale (Tracking Number):</b> Inserisce o sovrascrive l'entità 
-	 * all'interno della cache dedicata alle ricerche dirette O(1) 
-	 * ({@code SHIPMENT_BY_TRACKING_NUMBER_CACHE}). Questo garantisce che gli aggiornamenti di 
-	 * stato di una spedizione siano immediatamente visibili a chi ne interroga il tracking.</li>
-	 * <li><b>Indice Temporale (Data di Spedizione):</b> Estrae la componente {@code LocalDate} 
-	 * dal timestamp della spedizione e utilizza tale data come chiave di aggregazione. 
-	 * Il record viene dinamicamente accodato (o aggiornato se preesistente) nella lista delle 
-	 * spedizioni di quella specifica giornata ({@code SHIPMENT_BY_SHIPMENT_DATE_CACHE}).
-	 * Questa ottimizzazione permette al frontend di renderizzare le dashboard giornaliere 
-	 * senza sollecitare il database relazionale.</li>
-	 * </ul>
-	 * </p>
-	 * @param savedShipment l'istanza consolidata dell'entità {@link Shipment}, 
-	 * comprensiva di ID autogenerato, Tracking Number e Data di Spedizione, 
-	 * appena persistita con successo nel database sottostante.
+	 * @param trackingNumber L'identificativo di business univoco (Business Key) della spedizione.
+	 * @param updateDto Il DTO contenente l'intero set di dati anagrafici (mai parziale).
+	 * @return L'entità aggiornata.
+	 * @throws ResourceNotFoundException Se il tracking number o la targa fornita non esistono a sistema.
 	 */
-	private void writeThroughCacheIntegrityOperation(Shipment savedShipment) {
+	@Transactional
+	public Shipment updateDetailsByTrackingNumber(String trackingNumber, ShipmentUpdateDTO updateDto) throws ResourceNotFoundException {
+		Shipment shipment = shipmentRepository.findByTrackingNumber(trackingNumber)
+			.orElseThrow(() -> new ResourceNotFoundException("Shipment not found: " + trackingNumber));
+		LocalDate oldDate = shipment.getShipmentDate().toLocalDate();
+		Vehicle vehicle = vehicleService.getByLicensePlate(updateDto.vehicleLicensePlate());
+		shipment.setVehicle(vehicle);
+		shipment.setShipmentDate(LocalDateTime.parse(updateDto.date()));
+		shipment.setDestinationAddress(updateDto.destination());
+		Shipment updatedShipment = shipmentRepository.save(shipment);
+		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+			@Override
+			public void afterCommit() { syncCacheAfterUpdate(updatedShipment, oldDate); }
+		});
+		return updatedShipment;
+	}
+	
+	/**
+	 * Esegue l'aggiornamento chirurgico dello stato logistico di una spedizione esistente, 
+	 * garantendo l'allineamento transazionale tra Database e Memoria Cache.
+	 * <p><b>Contesto Architetturale e Transazionalità:</b></p>
+	 * Il metodo opera all'interno di un contesto {@code @Transactional}. L'aggiornamento sul 
+	 * database (via Hibernate) e la successiva mutazione della memoria RAM (Caffeine) sono 
+	 * strettamente disaccoppiati. L'orchestrazione della cache viene deferita alla fase di 
+	 * <i>Post-Commit</i> tramite {@link TransactionSynchronizationManager}. Questo previene 
+	 * scenari di "Dirty Read" o disallineamenti: se la transazione sul DB fallisce (Rollback), 
+	 * la cache non viene inquinata.
+	 * <p><b>Flusso Operativo e Trucco Architetturale (Cache Compass):</b></p>
+	 * <ol>
+	 * <li><b>Lookup:</b> Recupera l'entità tramite la sua Business Key (Tracking Number).</li>
+	 * <li><b>State Capture (La Bussola della Cache):</b> Estrae e congela in memoria la data di spedizione 
+	 * corrente ({@code oldDate}). Sebbene la data non subisca variazioni in questo specifico flusso, 
+	 * essa viene passata al motore di cache ({@code syncCacheAfterUpdate}) per permettergli di 
+	 * valutare l'assenza di un "Key Shift" e agire con una sostituzione (Upsert) sicura e 
+	 * localizzata all'interno della corretta lista in RAM.</li>
+	 * <li><b>Mutazione & Salvataggio:</b> Converte in modo rigoroso (case-sensitive) la stringa 
+	 * del DTO nel corrispondente valore {@link ShipmentStatus} e persiste l'entità.</li>
+	 * </ol>
+	 * @param trackingNumber La Business Key (Targa alfanumerica) che identifica univocamente la spedizione nel sistema.
+	 * @param updateStatusDTO Il payload contenente il nuovo stato logistico (es. "IN_VIAGGIO", "CONSEGNATA").
+	 * @return L'istanza aggiornata di {@link Shipment}, ricaricata col nuovo stato e persistita.
+	 * @throws ResourceNotFoundException Se il {@code trackingNumber} fornito non trova riscontro nel database.
+	 * @throws IllegalArgumentException Se la stringa di stato fornita nel DTO non corrisponde esattamente 
+	 * (tramite {@code Enum.valueOf}) a nessuna costante definita in {@link ShipmentStatus}.
+	 */
+	@Transactional
+	public Shipment updateStatusByTrackingNumber(String trackingNumber, ShipmentUpdateStatusDTO updateStatusDTO) {
+		Shipment shipment = shipmentRepository.findByTrackingNumber(trackingNumber)
+			.orElseThrow(() -> new ResourceNotFoundException("Shipment not found: " + trackingNumber));
+		LocalDate oldDate = shipment.getShipmentDate().toLocalDate();
+		shipment.setShipmentStatus(Enum.valueOf(ShipmentStatus.class, updateStatusDTO.status()));
+		Shipment updatedShipment = shipmentRepository.save(shipment);
+		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+			@Override
+			public void afterCommit() { syncCacheAfterUpdate(updatedShipment, oldDate); }
+		});
+		return updatedShipment;
+	}
+	
+	/**
+	 * Orchestratore di allineamento delle cache (Write-Through) invocato a seguito 
+	 * della persistenza di una nuova entità nel database (INSERT).
+	 * <p><b>Contesto Architetturale:</b></p>
+	 * Questo metodo garantisce la "Strict Consistency" tra il database relazionale e la 
+	 * memoria RAM (Caffeine) immediatamente dopo il commit di una transazione di salvataggio.
+	 * <p><b>Comportamento Operativo:</b></p>
+	 * Essendo il ciclo di vita dell'entità appena iniziato, non esiste uno stato precedente.
+	 * Di conseguenza, non vi è alcun rischio di "Key Shift" (mutazione della chiave). 
+	 * Il metodo delega l'operazione al motore di Upsert di base (4 parametri), popolando 
+	 * simultaneamente:
+	 * <ul>
+	 * <li><b>Cache Immutabile (Single Record):</b> Indicizza l'entità per la sua Business Key primaria ({@code TrackingNumber}).</li>
+	 * <li><b>Cache Mutabile (List Record):</b> Accoda l'entità nella lista corrispondente alla sua data di competenza ({@code ShipmentDate}).</li>
+	 * </ul>
+	 * @param savedShipment L'entità {@link Shipment} appena salvata sul database (deve contenere i valori generati, es. ID o chiavi finali).
+	 */
+	private void syncCacheAfterInsert(Shipment savedShipment) {
 		storeInCache(
 			CaffeineCacheConfiguration.SHIPMENT_BY_TRACKING_NUMBER_CACHE,
 			savedShipment.getTrackingNumber(),
@@ -278,5 +346,75 @@ public class ShipmentService extends AbstractGenericService {
 			savedShipment,
 			CacheOperation.LIST_RECORD
 		);
+	}
+	
+	/**
+	 * Orchestratore avanzato di allineamento delle cache invocato a seguito della 
+	 * mutazione di stato di un'entità esistente (UPDATE).
+	 * <p><b>Contesto Architetturale:</b></p>
+	 * A differenza di un normale salvataggio, un aggiornamento può alterare i campi 
+	 * utilizzati come chiavi di raggruppamento nelle cache (es. lo spostamento di una spedizione 
+	 * da una data all'altra). Questo metodo implementa una strategia ibrida per prevenire la 
+	 * corruzione dei dati in RAM ("Stale Data" o "Dati Fantasma").
+	 * <p><b>Comportamento Operativo Differenziato:</b></p>
+	 * <ul>
+	 * <li><b>Chiavi Immutabili ({@code TrackingNumber}):</b> Essendo il Tracking una chiave di dominio 
+	 * inalterabile, non subisce mutazioni. Viene invocato il motore di Upsert di base 
+	 * (4 parametri) per sovrascrivere silenziosamente il vecchio valore in memoria.</li>
+	 * <li><b>Chiavi Mutabili ({@code ShipmentDate}):</b> La data può variare. Viene invocato 
+	 * il motore di Eviction avanzato (5 parametri), iniettando la {@code oldKey}. 
+	 * Se il motore rileva un "Key Shift" ({@code oldKey != newKey}), provvederà a epurare 
+	 * il record fantasma dalla vecchia lista prima di inserire il record aggiornato nella nuova lista.</li>
+	 * </ul>
+	 * @param updatedShipment L'entità {@link Shipment} aggiornata e sincronizzata con il database.
+	 * @param oldKey Il valore della chiave mutabile (es. la vecchia {@link LocalDate}) <i>prima</i> che l'entità venisse aggiornata. 
+	 * Utilizzato come trigger vitale per il meccanismo di Key Shift Eviction.
+	 */
+	private void syncCacheAfterUpdate(Shipment updatedShipment, Object oldKey) {
+		storeInCache(
+			CaffeineCacheConfiguration.SHIPMENT_BY_TRACKING_NUMBER_CACHE,
+			updatedShipment.getTrackingNumber(),
+			updatedShipment,
+			CacheOperation.SINGLE_RECORD
+		);
+		storeInCache(
+			CaffeineCacheConfiguration.SHIPMENT_BY_SHIPMENT_DATE_CACHE,
+			updatedShipment.getShipmentDate().toLocalDate(),
+			oldKey,
+			updatedShipment,
+			CacheOperation.LIST_RECORD
+		);
+	}
+	
+	/**
+	 * Converte un Data Transfer Object (DTO) di richiesta in una nuova entità di dominio {@link Shipment}.
+	 * <p><b>Contesto Architetturale (Data Mapper Pattern):</b></p>
+	 * Questo metodo agisce come strato anti-corruzione (Anti-Corruption Layer) tra l'interfaccia 
+	 * API (frontend) e il modello dati JPA (backend). Assicura che la logica di persistenza riceva 
+	 * un oggetto strutturalmente coerente e pronto per il database.
+	 * <p><b>Risoluzione delle Relazioni (Lookup & Hydration):</b></p>
+	 * Il mapping non è puramente scalare (copia 1 a 1). Per l'associazione con il veicolo, 
+	 * il metodo esegue una query di <i>lookup</i>. Utilizza la Business Key (targa) fornita dal DTO 
+	 * per interrogare il {@code vehicleService} e agganciare all'entità {@link Shipment} 
+	 * l'istanza corretta e gestita di {@link Vehicle}.
+	 * <p><b>Gestione Rigorosa degli Enum:</b></p>
+	 * La conversione dello stato logistico avviene tramite la funzione nativa {@code Enum.valueOf}. 
+	 * Questa operazione è intrinsecamente case-sensitive e richiede una corrispondenza esatta 
+	 * tra la stringa del DTO e la costante enumerata Java.
+	 * @param dto Il payload di richiesta contenente i dati anagrafici e logistici della spedizione. 
+	 * Si assume che i campi obbligatori siano già stati sanificati e verificati 
+	 * (es. tramite annotazioni {@code @Valid}).
+	 * @return Una nuova istanza di {@link Shipment} in stato <i>Transient</i> (non ancora gestita dall'EntityManager).
+	 */
+	public Shipment mapToEntity(ShipmentRequestDTO dto) {
+		Shipment shipment = new Shipment();
+		Vehicle vehicle = vehicleService.getByLicensePlate(dto.vehicleLicensePlate());
+		shipment.setVehicle(vehicle);
+		shipment.setShipmentDate(LocalDateTime.parse(dto.date()));
+		shipment.setShipmentStatus(Enum.valueOf(ShipmentStatus.class, dto.status()));
+		shipment.setOriginAddress(dto.origin());
+		shipment.setDestinationAddress(dto.destination());
+		shipment.setDistancekm(dto.distancekm());
+		return shipment;
 	}
 }

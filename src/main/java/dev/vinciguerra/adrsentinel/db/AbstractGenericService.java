@@ -122,6 +122,76 @@ public abstract class AbstractGenericService {
 	}
 	
 	/**
+	 * Orchestratore avanzato per le operazioni di UPDATE in cache, dotato di gestione automatica 
+	 * del "Key Shift" (Mutazione della Chiave) e meccanismo di "Fail-Safe Eviction".
+	 * <p><b>Contesto Architetturale:</b></p>
+	 * Durante l'aggiornamento di un'entità, i campi utilizzati come chiavi di raggruppamento 
+	 * (es. la data di spedizione) possono subire variazioni. Questo metodo agisce come un 
+	 * intercettore intelligente per garantire la <i>Strict Consistency</i> tra Database e RAM, 
+	 * prevenendo attivamente la permanenza di dati fantasma ("Stale Data") nelle vecchie 
+	 * locazioni di memoria.
+	 * <p><b>Flusso Operativo e Pattern Applicati:</b></p>
+	 * <ol>
+	 * <li><b>Validazione Iniziale (Fail-Fast):</b> Verifica rigorosa anti-null per entrambe le chiavi 
+	 * (necessarie per il confronto).</li>
+	 * <li><b>Rilevamento Key Shift:</b> Valuta l'espressione {@code !oldKey.equals(key)}. 
+	 * Se rileva una mutazione, innesca preventivamente {@link #deleteFromCache} per epurare 
+	 * il record obsoleto dalla vecchia allocazione.</li>
+	 * <li><b>Delega Upsert:</b> Invoca il motore di base (a 4 parametri) per eseguire l'inserimento 
+	 * (o l'aggiornamento) dell'entità nella nuova allocazione di memoria.</li>
+	 * <li><b>Fail-Safe Eviction (Protezione della RAM):</b> In caso di fallimento della catena 
+	 * operativa, il sistema intercetta l'eccezione e adotta una strategia di distruzione difensiva. 
+	 * Esegue l'<i>eviction</i> forzata sia per la vecchia che per la nuova chiave, riportando 
+	 * la memoria a uno stato pulito. Alla successiva richiesta di lettura, un Cache Miss forzerà 
+	 * il sistema a rileggere il dato coerente e allineato direttamente dal database.</li>
+	 * </ol>
+	 * @param <T> Il tipo generico dell'oggetto da persistere in memoria.
+	 * @param cacheName L'identificativo testuale della regione di cache in cui operare.
+	 * @param key La nuova chiave (attuale) su cui l'oggetto deve essere mappato. Non ammette {@code null}.
+	 * @param oldKey La chiave originaria (pre-aggiornamento) dell'oggetto. È il parametro trigger 
+	 * vitale per innescare la logica di Key Shift. Non ammette {@code null}.
+	 * @param value L'istanza dell'oggetto aggiornato da persistere/sostituire in cache.
+	 * @param cacheOperation La strategia operativa (es. {@code SINGLE_RECORD} per sovrascrittura diretta, 
+	 * {@code LIST_RECORD} per logica di Upsert all'interno di una collezione).
+	 * @throws IllegalArgumentException se le chiavi passate al metodo in fase di invocazione sono nulle 
+	 * (le eccezioni interne al blocco try-catch vengono invece inghiottite dal meccanismo di Fail-Safe).
+	 */
+	protected <T> void storeInCache(String cacheName, Object key, Object oldKey, T value, CacheOperation cacheOperation) throws IllegalArgumentException {
+		ifNullThrowException(oldKey, "Old cache key cannot be null for update");
+		ifNullThrowException(key, "New cache key cannot be null for update");
+		try {
+			if(!oldKey.equals(key)) {
+				logger.info("UPDATE - Key Shift detected ({} -> {}). Triggering cleanup for old key.", oldKey, key);
+				deleteFromCache(
+					cacheName,
+					oldKey,
+					value,
+					cacheOperation
+				);
+			}
+			storeInCache(
+				cacheName,
+				key,
+				value,
+				cacheOperation
+			);
+		} catch(RuntimeException error) {
+			logger.error(
+				"[CACHE FATAL] Error during cache Upsert [{}]. Risk of data corruption. Forcing eviction for keys {} and {} to guarantee cache consistency. Error: {}",
+				cacheName,
+				oldKey,
+				key,
+				error.getMessage()
+			);
+			Cache cache = cacheManager.getCache(cacheName);
+			if (cache != null) {
+				cache.evictIfPresent(oldKey);
+				cache.evictIfPresent(key);
+			}
+		}
+	}
+	
+	/**
 	 * Esegue la rimozione controllata e selettiva di un dato dalla cache applicativa (Caffeine).
 	 * <p>
 	 * Questo metodo funge da motore centrale per l'invalidazione della memoria, progettato per 
