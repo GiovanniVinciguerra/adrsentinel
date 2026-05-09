@@ -60,7 +60,7 @@ public class AdrClassController {
 	@GetMapping
 	public ResponseEntity<List<AdrClassResponseDTO>> getAll() {
 		List<AdrClass> classes = adrClassService.getAllAdrClasses();
-		List<AdrClassResponseDTO> response = classes.stream().map(this::mapToDTO).toList();
+		List<AdrClassResponseDTO> response = classes.stream().map(AdrClassResponseDTO::fromEntity).toList();
 		return ResponseEntity.ok(response);
 	}
 	
@@ -74,7 +74,7 @@ public class AdrClassController {
 	@GetMapping("/{classCode}")
 	public ResponseEntity<AdrClassResponseDTO> getByClassCode(@PathVariable @ValidatorAdrClassCode String classCode) {
 		AdrClass entity = adrClassService.getByClassCode(classCode);
-		return ResponseEntity.ok(mapToDTO(entity));
+		return ResponseEntity.ok(AdrClassResponseDTO.fromEntity(entity));
 	}
 	
 	/**
@@ -92,21 +92,6 @@ public class AdrClassController {
 	public ResponseEntity<AdrClassResponseDTO> create(@RequestBody @Valid AdrClassRequestDTO adrClassRequestDTO) {
 		AdrClass adrClassToSave = adrClassService.mapToEntity(adrClassRequestDTO);
 		AdrClass savedAdrClass = adrClassService.save(adrClassToSave);
-		return ResponseEntity.status(HttpStatus.CREATED).body(mapToDTO(savedAdrClass));
-	}
-	
-	/**
-	 * Fabbrica interna (Mapper) per la conversione dallo strato di Persistenza allo strato Web.
-	 * Estrae i dati dall'entità di database e li sigilla in un Record  immutabile prima della 
-	 * serializzazione JSON.
-	 * @param entity l'entità recuperata dal database.
-	 * @return una vista di sola lettura (DTO) formattata per il client.
-	 */
-	private AdrClassResponseDTO mapToDTO(AdrClass entity) {
-		return new AdrClassResponseDTO(
-			entity.getId(),
-			entity.getClassCode(),
-			entity.getDescription()
-		);
+		return ResponseEntity.status(HttpStatus.CREATED).body(AdrClassResponseDTO.fromEntity(savedAdrClass));
 	}
 }

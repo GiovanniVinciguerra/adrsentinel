@@ -1,13 +1,10 @@
 package dev.vinciguerra.adrsentinel.web.dto.onunumber;
 
+import dev.vinciguerra.adrsentinel.web.annotation.ValidatorRequiredString;
 import dev.vinciguerra.adrsentinel.web.annotation.adrclass.ValidatorAdrClassCode;
 import dev.vinciguerra.adrsentinel.web.annotation.onunumber.ValidatorKemlerCode;
 import dev.vinciguerra.adrsentinel.web.annotation.onunumber.ValidatorOnuNumberCode;
-import dev.vinciguerra.adrsentinel.web.annotation.onunumber.ValidatorOnuNumberName;
-import dev.vinciguerra.adrsentinel.web.annotation.onunumber.ValidatorPackingGroup;
-import dev.vinciguerra.adrsentinel.web.annotation.onunumber.ValidatorPhysicalState;
 import dev.vinciguerra.adrsentinel.web.annotation.onunumber.ValidatorTransportCategory;
-import dev.vinciguerra.adrsentinel.web.annotation.onunumber.ValidatorTunnelRestriction;
 
 /**
  * Data Transfer Object (DTO) immutabile, implementato come Java Record, progettato per 
@@ -50,7 +47,7 @@ import dev.vinciguerra.adrsentinel.web.annotation.onunumber.ValidatorTunnelRestr
  * @version 1.0 (Strict Validated Input Payload)
  * @since 1.0
  */
-public record OnuNumberRequestDTO(@ValidatorOnuNumberCode String onuCode, @ValidatorOnuNumberName String name,
-	@ValidatorPhysicalState String physicalState, @ValidatorKemlerCode String kemlerCode,
-	@ValidatorPackingGroup String packingGroup, @ValidatorTunnelRestriction String tunnelRestriction,
+public record OnuNumberRequestDTO(@ValidatorOnuNumberCode String onuCode, @ValidatorRequiredString String name,
+	@ValidatorRequiredString String physicalState, @ValidatorKemlerCode String kemlerCode,
+	@ValidatorRequiredString String packingGroup, @ValidatorRequiredString String tunnelRestriction,
 	@ValidatorTransportCategory Integer transportCategory, @ValidatorAdrClassCode String adrClassCode) {}

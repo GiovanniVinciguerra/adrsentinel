@@ -64,7 +64,7 @@ public class OnuNumberController {
 	@GetMapping
 	public ResponseEntity<List<OnuNumberResponseDTO>> getAll() {
 		List<OnuNumber> numbers = onuNumberService.getAllOnuNumber();
-		List<OnuNumberResponseDTO> response = numbers.stream().map(this::mapToDTO).toList();
+		List<OnuNumberResponseDTO> response = numbers.stream().map(OnuNumberResponseDTO::fromEntity).toList();
 		return ResponseEntity.ok(response);
 	}
 	
@@ -82,7 +82,7 @@ public class OnuNumberController {
 	@GetMapping("/{onuCode}")
 	public ResponseEntity<List<OnuNumberResponseDTO>> getByOnuCode(@PathVariable @ValidatorOnuNumberCode String onuCode) {
 		List<OnuNumber> numbers = onuNumberService.getByOnuCode(onuCode);
-		List<OnuNumberResponseDTO> response = numbers.stream().map(this::mapToDTO).toList();
+		List<OnuNumberResponseDTO> response = numbers.stream().map(OnuNumberResponseDTO::fromEntity).toList();
 		return ResponseEntity.ok(response);
 	}
 	
@@ -99,7 +99,7 @@ public class OnuNumberController {
 	@GetMapping("/kemler-code/{kemlerCode}")
 	public ResponseEntity<List<OnuNumberResponseDTO>> getByKemlerCode(@PathVariable @ValidatorKemlerCode String kemlerCode) {
 		List<OnuNumber> numbers = onuNumberService.getByKemlerCode(kemlerCode);
-		List<OnuNumberResponseDTO> response = numbers.stream().map(this::mapToDTO).toList();
+		List<OnuNumberResponseDTO> response = numbers.stream().map(OnuNumberResponseDTO::fromEntity).toList();
 		return ResponseEntity.ok(response);
 	}
 	
@@ -111,7 +111,7 @@ public class OnuNumberController {
 	@GetMapping("/adr-class/{adrClassCode}")
 	public ResponseEntity<List<OnuNumberResponseDTO>> getByAdrClass(@PathVariable @ValidatorAdrClassCode String adrClassCode) {
 		List<OnuNumber> numbers = onuNumberService.getByAdrClass(adrClassCode);
-		List<OnuNumberResponseDTO> response = numbers.stream().map(this::mapToDTO).toList();
+		List<OnuNumberResponseDTO> response = numbers.stream().map(OnuNumberResponseDTO::fromEntity).toList();
 		return ResponseEntity.ok(response);
 	}
 	
@@ -134,30 +134,6 @@ public class OnuNumberController {
 	public ResponseEntity<OnuNumberResponseDTO> create(@RequestBody @Valid OnuNumberRequestDTO onuNumberRequestDTO) {
 		OnuNumber onuNumberToSave = onuNumberService.mapToEntity(onuNumberRequestDTO);
 		OnuNumber savedOnuNumber = onuNumberService.save(onuNumberToSave);
-		return ResponseEntity.status(HttpStatus.CREATED).body(mapToDTO(savedOnuNumber));
-	}
-	
-	/**
-	 * Funzione di utilità (Mapper) per la conversione dallo strato di Persistenza allo strato di Presentazione.
-	 * <p>
-	 * Produce un "Rich DTO", ovvero un oggetto di risposta che include le istanze idratate delle 
-	 * relazioni padre (es. l'intera {@code AdrClass}), ottimizzando il numero di chiamate di rete 
-	 * necessarie al frontend per renderizzare l'anagrafica completa.
-	 * </p>
-	 * @param entity L'entità di dominio recuperata dal database o dalla cache.
-	 * @return Il DTO pronto per essere serializzato in JSON da Jackson.
-	 */
-	private OnuNumberResponseDTO mapToDTO(OnuNumber entity) {
-		return new OnuNumberResponseDTO(
-			entity.getId(),
-			entity.getOnuCode(),
-			entity.getName(),
-			entity.getPhysicalState(),
-			entity.getKemlerCode(),
-			entity.getPackingGroup(),
-			entity.getTunnelRestriction(),
-			entity.getTransportCategory(),
-			entity.getAdrClass()
-		);
+		return ResponseEntity.status(HttpStatus.CREATED).body(OnuNumberResponseDTO.fromEntity(savedOnuNumber));
 	}
 }

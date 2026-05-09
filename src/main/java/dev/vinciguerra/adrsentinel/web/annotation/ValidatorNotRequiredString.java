@@ -1,4 +1,4 @@
-package dev.vinciguerra.adrsentinel.web.annotation.compatibilityrule;
+package dev.vinciguerra.adrsentinel.web.annotation;
 
 import static java.lang.annotation.ElementType.FIELD;
 import static java.lang.annotation.ElementType.PARAMETER;
@@ -11,34 +11,31 @@ import jakarta.validation.Payload;
 import jakarta.validation.constraints.Size;
 
 /**
- * Annotazione di validazione custom (Constraint Composition) per la verifica formale 
- * della nota operativa (Warning Note) all'interno delle regole di compatibilità ADR.
- * <p>
- * <b>Obiettivo Architetturale (DRY & Ubiquitous Language):</b><br>
- * Questa interfaccia funge da meta-annotazione (wrapper) per i vincoli standard di 
- * Jakarta/Hibernate Validator. Centralizza la regola di business relativa alla lunghezza 
- * massima ammessa per le note operative. Invece di disperdere l'annotazione 
- * {@code @Size(max = 255)} su molteplici DTO, Entità o firme di metodi, l'utilizzo di 
- * {@code @ValidatorWarningNote} garantisce che la regola risieda in un'unica fonte di verità 
- * (Single Source of Truth). Qualora le specifiche di database o normative cambiassero, 
- * l'adeguamento avverrà esclusivamente in questa classe.
- * </p>
- * <p>
- * <b>Dettagli Implementativi:</b>
+ * Vincolo di validazione perimetrale centralizzato (Macro-Vincolo) per campi testuali 
+ * opzionali (Not Required) a lunghezza standard (massimo 255 caratteri).
+ * <p><b>Contesto Architetturale (Gestione Dati Opzionali & DRY):</b></p>
+ * Questa meta-annotazione funge da gemella speculare della validazione per i campi obbligatori. 
+ * È progettata per consolidare la validazione di tutti quei campi ausiliari nel dominio 
+ * (es. note operative, descrizioni aggiuntive, dettagli secondari) in un'unica 
+ * "Fonte di Verità". Applica rigorosamente il principio DRY (Don't Repeat Yourself), 
+ * ripulendo i Data Transfer Object (DTO) e standardizzando la gestione dei testi opzionali.
+ * <p><b>Motore di Validazione (Comportamento Condizionale):</b></p>
+ * Sfruttando la composizione dei vincoli ({@code @Constraint(validatedBy = {})}), 
+ * questo validatore opera in modo permissivo sull'assenza del dato, ma restrittivo sulla sua forma:
  * <ul>
- * <li><b>Limite Fisico ({@link Size}):</b> Impone un limite rigido di 255 caratteri, 
- * perfettamente allineato con la lunghezza standard di una colonna {@code VARCHAR} su database.</li>
- * <li><b>Delega di Validazione:</b> L'attributo {@code validatedBy = {}} all'interno di 
- * {@code @Constraint} è intenzionalmente vuoto. Comunica al motore di validazione di Spring 
- * che non esiste una classe validatrice custom in Java (nessun {@code ConstraintValidator} 
- * da istanziare), ma che il motore deve unicamente valutare la somma delle meta-annotazioni 
- * applicate all'interfaccia (in questo caso, solo {@code @Size}).</li>
- * <li><b>Contesti di Applicazione (Targeting):</b> È configurata per operare sia sui campi 
- * delle classi ({@code FIELD}, tipico dei Request DTO) sia sui parametri espliciti dei 
- * metodi ({@code PARAMETER}, utile nei Controller REST per validazioni isolate).</li>
+ * <li><b>Tolleranza ai Null (Assenza di {@code @NotNull}):</b> Secondo le specifiche di 
+ * Jakarta Validation, se un campo è {@code null}, l'annotazione {@code @Size} viene 
+ * bypassata considerando il dato valido. Se il client non invia il campo, l'API 
+ * non genererà alcun errore 400 (Bad Request).</li>
+ * <li><b>Allineamento al Database ({@code @Size}):</b> Se il client decide di valorizzare 
+ * il campo (stringa non nulla), scatta il limite architetturale di 255 caratteri. 
+ * Questo protegge l'infrastruttura SQL da attacchi di <i>Payload Bloating</i> e previene 
+ * le fatali eccezioni di <i>Data Truncation</i> (Overflow) durante il salvataggio 
+ * su colonne {@code VARCHAR(255)}.</li>
  * </ul>
- * </p>
- * @return Il messaggio di errore restituito al frontend in caso di fallimento della validazione.
+ * <p><b>Applicabilità:</b></p>
+ * Progettata per essere applicata su campi testuali ({@code String}) all'interno dei DTO 
+ * o sui parametri non obbligatori dei Controller REST.
  * @author Giovanni Vinciguerra
  * @version 1.0 (ADR Domain Validator)
  * @since 1.0
@@ -49,9 +46,9 @@ import jakarta.validation.constraints.Size;
 @Constraint(validatedBy = {})
 @Size(
 	max = 255,
-	message = "Compatibility rule warning note must not exceed 255 characters."
+	message = "String must not exceed 255 characters."
 )
-public @interface ValidatorWarningNote {
+public @interface ValidatorNotRequiredString {
 	/**
 	 * Definisce il messaggio di errore predefinito che verrà restituito al client 
 	 * (es. esposto tramite {@code MethodArgumentNotValidException} nel GlobalExceptionHandler) 
@@ -67,7 +64,7 @@ public @interface ValidatorWarningNote {
 	 * </p>
 	 * @return il messaggio testuale che descrive la violazione del vincolo.
 	 */
-	String message() default "Compatibility rule warning note must not exceed 255 characters.";
+	String message() default "String must not exceed 255 characters.";
 	/**
 	 * Permette di partizionare l'esecuzione di questa validazione raggruppandola logicamente 
 	 * (Validation Groups).

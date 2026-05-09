@@ -17,9 +17,9 @@ import org.springframework.web.bind.annotation.RestController;
 import dev.vinciguerra.adrsentinel.db.shipment.Shipment;
 import dev.vinciguerra.adrsentinel.db.shipment.ShipmentService;
 import dev.vinciguerra.adrsentinel.db.shipment.Shipment.ShipmentStatus;
+import dev.vinciguerra.adrsentinel.web.annotation.ValidatorRequiredString;
+import dev.vinciguerra.adrsentinel.web.annotation.ValidatorUUID;
 import dev.vinciguerra.adrsentinel.web.annotation.shipment.ValidatorLocalDate;
-import dev.vinciguerra.adrsentinel.web.annotation.shipment.ValidatorShipmentStatus;
-import dev.vinciguerra.adrsentinel.web.annotation.shipment.ValidatorTrackingNumber;
 import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorLicensePlate;
 import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentRequestDTO;
 import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentResponseDTO;
@@ -75,7 +75,7 @@ public class ShipmentController {
 	@GetMapping
 	public ResponseEntity<Page<ShipmentResponseDTO>> getAll(Pageable pageable) {
 		Page<Shipment> page = shipmentService.getAllShipment(pageable);
-		Page<ShipmentResponseDTO> response = page.map(this::mapToDTO);
+		Page<ShipmentResponseDTO> response = page.map(ShipmentResponseDTO::fromEntity);
 		return ResponseEntity.ok(response);
 	}
 	
@@ -89,9 +89,9 @@ public class ShipmentController {
 	 * @return Un payload HTTP 200 (OK) contenente i risultati filtrati.
 	 */
 	@GetMapping("/status/{status}")
-	public ResponseEntity<Page<ShipmentResponseDTO>> getByStatus(@PathVariable @ValidatorShipmentStatus String status, Pageable pageable) {
+	public ResponseEntity<Page<ShipmentResponseDTO>> getByStatus(@PathVariable @ValidatorRequiredString String status, Pageable pageable) {
 		Page<Shipment> page = shipmentService.getByShipmentStatus(Enum.valueOf(ShipmentStatus.class, status), pageable);
-		Page<ShipmentResponseDTO> response = page.map(this::mapToDTO);
+		Page<ShipmentResponseDTO> response = page.map(ShipmentResponseDTO::fromEntity);
 		return ResponseEntity.ok(response);
 	}
 	
@@ -105,7 +105,7 @@ public class ShipmentController {
 	@GetMapping("/vehicle/{licensePlate}")
 	public ResponseEntity<Page<ShipmentResponseDTO>> getByVehicle(@PathVariable @ValidatorLicensePlate String licensePlate, Pageable pageable) {
 		Page<Shipment> page = shipmentService.getByVehicle(licensePlate, pageable);
-		Page<ShipmentResponseDTO> response = page.map(this::mapToDTO);
+		Page<ShipmentResponseDTO> response = page.map(ShipmentResponseDTO::fromEntity);
 		return ResponseEntity.ok(response);
 	}
 	
@@ -116,9 +116,9 @@ public class ShipmentController {
 	 * @return Un payload HTTP 200 (OK) con il DTO della spedizione richiesta.
 	 */
 	@GetMapping("/{tracking}")
-	public ResponseEntity<ShipmentResponseDTO> getByTrackingNumber(@PathVariable @ValidatorTrackingNumber String tracking) {
+	public ResponseEntity<ShipmentResponseDTO> getByTrackingNumber(@PathVariable @ValidatorRequiredString String tracking) {
 		Shipment shipment = shipmentService.getByTrackingNumber(tracking);
-		return ResponseEntity.ok(mapToDTO(shipment));
+		return ResponseEntity.ok(ShipmentResponseDTO.fromEntity(shipment));
 	}
 	
 	/**
@@ -133,7 +133,7 @@ public class ShipmentController {
 	public ResponseEntity<List<ShipmentResponseDTO>> getByShipmentDate(@PathVariable @ValidatorLocalDate String date) {
 		LocalDate parsedDate = LocalDate.parse(date);
 		List<Shipment> shipments = shipmentService.getByShipmentDate(parsedDate);
-		List<ShipmentResponseDTO> response = shipments.stream().map(this::mapToDTO).toList();
+		List<ShipmentResponseDTO> response = shipments.stream().map(ShipmentResponseDTO::fromEntity).toList();
 		return ResponseEntity.ok(response);
 	}
 	
@@ -148,7 +148,7 @@ public class ShipmentController {
 	public ResponseEntity<ShipmentResponseDTO> create(@RequestBody @Valid ShipmentRequestDTO shipmentRequestDTO) {
 		Shipment shipmentToSave = shipmentService.mapToEntity(shipmentRequestDTO);
 		Shipment savedShipment = shipmentService.save(shipmentToSave);
-		return ResponseEntity.status(HttpStatus.CREATED).body(mapToDTO(savedShipment));
+		return ResponseEntity.status(HttpStatus.CREATED).body(ShipmentResponseDTO.fromEntity(savedShipment));
 	}
 	
 	/**
@@ -158,10 +158,10 @@ public class ShipmentController {
 	 * @return Un payload HTTP 200 (OK) con l'entità aggiornata e riallineata in cache.
 	 */
 	@PutMapping("/{tracking}")
-	public ResponseEntity<ShipmentResponseDTO> updateShipmentDetails(@PathVariable @ValidatorTrackingNumber String tracking,
+	public ResponseEntity<ShipmentResponseDTO> updateShipmentDetails(@PathVariable @ValidatorUUID String tracking,
 			@RequestBody @Valid ShipmentUpdateDTO updateDto) {
 		Shipment updatedShipment = shipmentService.updateDetailsByTrackingNumber(tracking, updateDto);
-		return ResponseEntity.ok(mapToDTO(updatedShipment));
+		return ResponseEntity.ok(ShipmentResponseDTO.fromEntity(updatedShipment));
 	}
 	
 	/**
@@ -173,26 +173,9 @@ public class ShipmentController {
 	 * @return Un payload HTTP 200 (OK) a conferma dell'avvenuta transizione di stato.
 	 */
 	@PutMapping("/status/{tracking}")
-	public ResponseEntity<ShipmentResponseDTO> updateShipmentStatus(@PathVariable @ValidatorTrackingNumber String tracking,
+	public ResponseEntity<ShipmentResponseDTO> updateShipmentStatus(@PathVariable @ValidatorUUID String tracking,
 			@RequestBody @Valid ShipmentUpdateStatusDTO updateStatusDTO) {
 		Shipment updatedShipment = shipmentService.updateStatusByTrackingNumber(tracking, updateStatusDTO);
-		return ResponseEntity.ok(mapToDTO(updatedShipment));
-	}
-	
-	/**
-	 * Metodo di utilità per isolare la logica di mappatura Entity -> DTO.
-	 * Converte il modello di dominio complesso in un oggetto piatto e sicuro per la serializzazione JSON.
-	 */
-	private ShipmentResponseDTO mapToDTO(Shipment entity) {
-		return new ShipmentResponseDTO(
-			entity.getId(),
-			entity.getTrackingNumber(),
-			entity.getShipmentDate().toString(),
-			entity.getShipmentStatus(),
-			entity.getOriginAddress(),
-			entity.getDestinationAddress(),
-			entity.getDistancekm(),
-			entity.getVehicle()
-		);
+		return ResponseEntity.ok(ShipmentResponseDTO.fromEntity(updatedShipment));
 	}
 }

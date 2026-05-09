@@ -113,7 +113,7 @@ public class CompatibilityRuleService extends AbstractGenericService {
 		CompatibilityRule savedCompatibilityRule = compatibilityRuleRepository.save(newCompatibilityRule);
 		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
 			@Override
-			public void afterCommit() { writeThroughCacheIntegrityOperation(savedCompatibilityRule); }
+			public void afterCommit() { syncCacheAfterInsert(savedCompatibilityRule); }
 		});
 		return savedCompatibilityRule;
 	}
@@ -146,7 +146,7 @@ public class CompatibilityRuleService extends AbstractGenericService {
 	 * nel database. L'oggetto deve essere nello stato "Managed" o comunque rappresentare i dati 
 	 * consolidati definitivi.
 	 */
-	private void writeThroughCacheIntegrityOperation(CompatibilityRule savedCompatibilityRule) {
+	private void syncCacheAfterInsert(CompatibilityRule savedCompatibilityRule) {
 		AdrClass adrClassA = savedCompatibilityRule.getAdrClassA();
 		storeInCache(
 			CaffeineCacheConfiguration.COMPATIBILITY_RULE_ADR_CLASS_A_CACHE,

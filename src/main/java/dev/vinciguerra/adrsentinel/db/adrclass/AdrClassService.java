@@ -107,7 +107,7 @@ public class AdrClassService extends AbstractGenericService {
 		AdrClass savedAdrClass = adrClassRepository.save(newAdrClass);
 		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
 			@Override
-			public void afterCommit() { writeThroughCacheIntegrityOperation(savedAdrClass); }
+			public void afterCommit() { syncCacheAfterInsert(savedAdrClass); }
 		});
 		return savedAdrClass;
 	}
@@ -140,7 +140,7 @@ public class AdrClassService extends AbstractGenericService {
 	 * rappresentare lo stato consolidato (incluso di eventuali ID o 
 	 * campi generati).
 	 */
-	private void writeThroughCacheIntegrityOperation(AdrClass savedAdrClass) {
+	private void syncCacheAfterInsert(AdrClass savedAdrClass) {
 		// 1. Aggiorna o crea il record singolo nella cache specifica
 		storeInCache(
 			CaffeineCacheConfiguration.ADR_CLASS_BY_CLASS_CODE_CACHE,

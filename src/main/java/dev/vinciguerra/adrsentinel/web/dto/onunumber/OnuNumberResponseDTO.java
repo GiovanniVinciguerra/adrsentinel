@@ -1,9 +1,7 @@
 package dev.vinciguerra.adrsentinel.web.dto.onunumber;
 
-import dev.vinciguerra.adrsentinel.db.adrclass.AdrClass;
-import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumber.PackingGroup;
-import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumber.PhysicalState;
-import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumber.TunnelRestriction;
+import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumber;
+import dev.vinciguerra.adrsentinel.web.dto.adrclass.AdrClassResponseDTO;
 
 /**
  * Data Transfer Object (DTO) in sola lettura (Read-Only) per l'esposizione dei 
@@ -42,5 +40,53 @@ import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumber.TunnelRestriction;
  * @version 1.0 (Strict Validated Input Payload)
  * @since 1.0
  */
-public record OnuNumberResponseDTO(Long id, String onuCode, String name, PhysicalState physicalState, String kemlerCode,
-	PackingGroup packingGroup, TunnelRestriction tunnelRestriction, Integer transportCategory, AdrClass adrClass) {}
+public record OnuNumberResponseDTO(Long id, String onuCode, String name, String physicalState, String kemlerCode,
+		String packingGroup, String tunnelRestriction, Integer transportCategory, AdrClassResponseDTO adrClass) {
+	
+	/**
+	 * Factory Method statico per la conversione (Mapping) e l'aggregazione di un'entità 
+	 * di dominio {@link OnuNumber} nel suo corrispondente Data Transfer Object {@link OnuNumberResponseDTO}.
+	 *
+	 * <p><b>Contesto Architetturale (Pattern DTO e Information Hiding):</b></p>
+	 * Questo metodo agisce come traduttore tra il livello di persistenza (JPA/Hibernate) 
+	 * e il contratto API (Presentation Layer). Incapsula la logica di estrazione dei dati 
+	 * dall'anagrafica normativa delle merci pericolose (Numero ONU), garantendo che dettagli 
+	 * implementativi del database non vengano mai esposti al client o serializzati per errore.
+	 * <p><b>Design Pattern e Tecniche Implementate:</b></p>
+	 * <ul>
+	 * <li><b>Sicurezza e Robustezza (Guard Clause):</b> L'implementazione adotta una rigorosa 
+	 * clausola di salvaguardia iniziale ({@code if(entity == null)}). Questo rende il metodo 
+	 * intrinsecamente <i>Null-Safe</i>, prevenendo {@code NullPointerException} durante 
+	 * le elaborazioni massive (es. mapping di liste tramite Stream API).</li>
+	 * <li><b>Serializzazione Sicura degli Enum (Type Erasure):</b> I campi basati su enumeratori 
+	 * (Stato Fisico, Gruppo d'Imballaggio, Restrizione Gallerie) vengono esplicitamente 
+	 * convertiti in formato testuale tramite l'invocazione di {@code .name()}. Questa pratica 
+	 * disaccoppia il payload JSON dalle classi Enum interne di Java, offrendo una 
+	 * serializzazione prevedibile, sicura e compatibile con qualsiasi client esterno.</li>
+	 * <li><b>Mapping Annidato (Delegated Resolving):</b> Per la risoluzione del grafo degli oggetti, 
+	 * invece di implementare logica duplicata, il metodo delega la costruzione dell'oggetto 
+	 * figlio al factory method competente ({@link AdrClassResponseDTO#fromEntity}). 
+	 * Questo rispetta il principio DRY (Don't Repeat Yourself) e garantisce coerenza strutturale.</li>
+	 * </ul>
+	 * @param entity L'istanza dell'entità JPA recuperata dal database, rappresentante 
+	 * la "carta d'identità" ADR di una sostanza. Ammette valori {@code null}.
+	 * @return Una nuova istanza immutabile (Record) di {@link OnuNumberResponseDTO} popolata 
+	 * con i dati logistici e normativi, oppure {@code null} se l'entità sorgente era assente.
+	 */
+	public static OnuNumberResponseDTO fromEntity(OnuNumber entity) {
+		if(entity == null)
+			return null;
+		
+		return new OnuNumberResponseDTO(
+			entity.getId(),
+			entity.getOnuCode(),
+			entity.getName(),
+			entity.getPhysicalState().name(),
+			entity.getKemlerCode(),
+			entity.getPackingGroup().name(),
+			entity.getTunnelRestriction().name(),
+			entity.getTransportCategory(),
+			AdrClassResponseDTO.fromEntity(entity.getAdrClass())
+		);
+	}
+}

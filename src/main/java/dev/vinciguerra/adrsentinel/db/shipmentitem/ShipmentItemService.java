@@ -1,6 +1,7 @@
 package dev.vinciguerra.adrsentinel.db.shipmentitem;
 
 import java.util.List;
+import org.hibernate.LazyInitializationException;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -9,8 +10,15 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import dev.vinciguerra.adrsentinel.db.AbstractGenericService;
 import dev.vinciguerra.adrsentinel.db.CaffeineCacheConfiguration;
+import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumber;
+import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumber.PackingGroup;
+import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumberService;
 import dev.vinciguerra.adrsentinel.db.shipment.Shipment;
+import dev.vinciguerra.adrsentinel.db.shipment.ShipmentService;
+import dev.vinciguerra.adrsentinel.db.shipmentitem.ShipmentItem.UnitOfMeasure;
 import dev.vinciguerra.adrsentinel.exception.ResourceNotFoundException;
+import dev.vinciguerra.adrsentinel.web.dto.shipmentitem.ShipmentItemRequestDTO;
+import dev.vinciguerra.adrsentinel.web.dto.shipmentitem.ShipmentItemUpdateDTO;
 
 /**
  * Service Layer dedicato alla gestione della logica di business e dell'accesso ai dati 
@@ -41,15 +49,19 @@ import dev.vinciguerra.adrsentinel.exception.ResourceNotFoundException;
 @Service
 public class ShipmentItemService extends AbstractGenericService {
 	private final ShipmentItemRepository shipmentItemRepository;
+	private final ShipmentService shipmentService;
+	private final OnuNumberService onuNumberService;
 	
 	/**
 	 * Costruttore per l'iniezione delle dipendenze.
 	 * @param shipmentItemRepository il repository Spring Data JPA per l'accesso fisico al DB.
 	 * @param cacheManager il gestore delle cache (es. Caffeine) passato alla superclasse.
 	 */
-	public ShipmentItemService(ShipmentItemRepository shipmentItemRepository, CacheManager cacheManager) {
+	public ShipmentItemService(ShipmentItemRepository shipmentItemRepository, ShipmentService shipmentService, OnuNumberService onuNumberService, CacheManager cacheManager) {
 		super(cacheManager);
 		this.shipmentItemRepository = shipmentItemRepository;
+		this.shipmentService = shipmentService;
+		this.onuNumberService = onuNumberService;
 	}
 	
 	/**
@@ -116,11 +128,63 @@ public class ShipmentItemService extends AbstractGenericService {
 	public ShipmentItem save(ShipmentItem newShipmentItem) {
 		logger.info("[DataBase CALL] Saving new ShipmentItem with itemUUID: {}", newShipmentItem.getItemUUID());
 		ShipmentItem savedShipmentItem = shipmentItemRepository.save(newShipmentItem);
+		final String shipmentTrackingNumber = savedShipmentItem.getShipment().getTrackingNumber();
 		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
 			@Override
-			public void afterCommit() { writeThroughCacheIntegrityOperation(savedShipmentItem); }
+			public void afterCommit() { syncCacheAfterInsertOrUpdate(savedShipmentItem, shipmentTrackingNumber); }
 		});
 		return savedShipmentItem;
+	}
+	
+	/**
+	 * Esegue l'aggiornamento parziale (Mutation) dei dati logistici e normativi di una riga 
+	 * di carico (Shipment Item) identificata tramite la sua Business Key (UUID).
+	 * <p><b>Contesto Transazionale (ACID e Dirty Checking):</b></p>
+	 * Il metodo è blindato all'interno di un confine transazionale ({@code @Transactional}). 
+	 * Questo garantisce che tutte le operazioni di lettura (lookup dell'Item e dell'anagrafica ONU) 
+	 * e di mutazione avvengano in modo <i>Atomico</i>. Se il recupero dell'anagrafica fallisce 
+	 * o se la conversione degli Enum lancia un'eccezione, l'intera transazione subisce un 
+	 * <i>Rollback</i>, lasciando il database in uno stato coerente e incontaminato.
+	 * <p><b>Risoluzione delle Relazioni (Business Driven):</b></p>
+	 * L'aggiornamento della scheda normativa ({@link OnuNumber}) non avviene tramit ID fisici 
+	 * del database, ma interrogando il servizio di dominio tramite la chiave composita 
+	 * (Codice ONU + Gruppo di Imballaggio). I valori testuali (Enum) in ingresso dal DTO vengono 
+	 * decodificati a runtime in modo sicuro.
+	 * <p><b>Strategia di Caching Avanzata (Post-Commit Synchronization):</b></p>
+	 * Questa è una sezione critica dell'architettura. Per evitare la pericolosa desincronizzazione 
+	 * tra Database e Cache (che si verificherebbe se la cache venisse aggiornata prima di un 
+	 * improvviso rollback del database), l'aggiornamento in memoria è delegato al 
+	 * {@link TransactionSynchronizationManager}. 
+	 * L'hook {@code afterCommit()} garantisce che la RAM venga toccata <b>solo ed esclusivamente</b> 
+	 * se il salvataggio su disco è andato a buon fine. 
+	 * <br>
+	 * <i>Nota di Design:</i> Poiché le chiavi primarie della cache ({@code itemUUID} e il 
+	 * {@code trackingNumber} della spedizione padre) sono architetturalmente <b>immutabili</b>, 
+	 * non vi è alcun rischio di chiavi orfane (Stale Keys). Di conseguenza, si riutilizza in modo 
+	 * ottimizzato l'operazione unificata {@code syncCacheAfterInsertOrUpdate}, senza la necessità 
+	 * di tracciare la "vecchia" chiave (oldKey) per le operazioni di sfratto (Eviction).
+	 * @param itemUUID L'identificatore univoco universale e immutabile della riga di carico.
+	 * @param updateDto Il payload validato contenente esclusivamente le grandezze mutabili 
+	 * (quantità, unità di misura) e i riferimenti per la risoluzione della nuova anagrafica ADR.
+	 * @return L'entità {@link ShipmentItem} completamente idratata e persistita post-aggiornamento.
+	 * @throws ResourceNotFoundException Se l'UUID fornito non corrisponde ad alcun articolo esistente 
+	 * (attivando il Fail-Fast e il conseguente Rollback transazionale).
+	 */
+	@Transactional
+	public ShipmentItem updateDetailsByItemUUID(String itemUUID, ShipmentItemUpdateDTO updateDto) throws ResourceNotFoundException {
+		ShipmentItem item = shipmentItemRepository.findByItemUUID(itemUUID)
+			.orElseThrow(() -> new ResourceNotFoundException("ShipmentItem not found: " + itemUUID));
+		final String shipmentTrackingNumber = item.getShipment().getTrackingNumber();
+		OnuNumber number = onuNumberService.getByOnuCodeAndPackingGroup(updateDto.onuCode(), Enum.valueOf(PackingGroup.class, updateDto.packingGroup()));
+		item.setOnuNumber(number);
+		item.setQuantity(updateDto.quantity());
+		item.setUnitOfMeasure(Enum.valueOf(UnitOfMeasure.class, updateDto.unitOfMeasure()));
+		ShipmentItem updatedShipmentItem = shipmentItemRepository.save(item);
+		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+			@Override
+			public void afterCommit() { syncCacheAfterInsertOrUpdate(updatedShipmentItem, shipmentTrackingNumber); }
+		});
+		return updatedShipmentItem;
 	}
 	
 	/**
@@ -158,9 +222,11 @@ public class ShipmentItemService extends AbstractGenericService {
 	 * con successo nel database. L'oggetto deve trovarsi nello stato "Managed" e avere sia il 
 	 * proprio {@code itemUUID} valorizzato, sia la relazione {@code shipment} (padre) 
 	 * correttamente caricata (non-proxy) per consentire l'estrazione del Tracking Number.
+	 * @param shipmentTrackingNumber il tracking number associato allo shipment. Viene utilizzato per 
+	 * gestire il comportamento {@code FetchType.LAZY} associato alla relazione {@code ManyToOne} evitando 
+	 * che il metodo chiamato alla chiusura di una transizione lanci una {@link LazyInitializationException}
 	 */
-	private void writeThroughCacheIntegrityOperation(ShipmentItem savedShipmentItem) {
-		Shipment shipment = savedShipmentItem.getShipment();
+	private void syncCacheAfterInsertOrUpdate(ShipmentItem savedShipmentItem, String shipmentTrackingNumber) {
 		storeInCache(
 			CaffeineCacheConfiguration.SHIPMENT_ITEM_BY_ITEM_UUID_CACHE,
 			savedShipmentItem.getItemUUID(),
@@ -169,9 +235,38 @@ public class ShipmentItemService extends AbstractGenericService {
 		);
 		storeInCache(
 			CaffeineCacheConfiguration.SHIPMENT_ITEM_BY_SHIPMENT_CACHE,
-			shipment.getTrackingNumber(),
+			shipmentTrackingNumber,
 			savedShipmentItem,
 			CacheOperation.LIST_RECORD
 		);
+	}
+	
+	/**
+	 * Converte un Data Transfer Object (DTO) {@link ShipmentItemRequestDTO} nella rispettiva entità di dominio {@link ShipmentItem}.
+	 * <p>
+	 * Questo metodo non si limita a una semplice copia dei campi scalari, ma si occupa di:
+	 * <ul>
+	 * <li><b>Risoluzione delle relazioni:</b> Interroga i service layer dedicati per recuperare dal database
+	 * le entità correlate esistenti. Nello specifico, recupera l'entità {@link Shipment} tramite il tracking number
+	 * e l'entità {@link OnuNumber} tramite il codice ONU e il gruppo di imballaggio.</li>
+	 * <li><b>Conversione dei tipi (Type Casting):</b> Converte le rappresentazioni testuali (String) provenienti 
+	 * dal DTO nei rispettivi tipi fortemente tipizzati (Enum) del dominio, come {@link PackingGroup} e {@link UnitOfMeasure}.</li>
+	 * </ul>
+	 * </p>
+	 * <p><b>Nota sull'implementazione:</b> Il metodo istanzia un nuovo oggetto {@link ShipmentItem} ad ogni chiamata.
+	 * È quindi indicato per operazioni di creazione (POST) e non di aggiornamento (PUT/PATCH) di entità preesistenti.</p>
+	 * @param dto l'oggetto di trasferimento dati contenente le informazioni dell'articolo della spedizione. 
+	 * Non dovrebbe essere {@code null}.
+	 * @return una nuova istanza dell'entità {@link ShipmentItem} completamente popolata e pronta per essere persistita.
+	 */
+	public ShipmentItem mapToEntity(ShipmentItemRequestDTO dto) {
+		ShipmentItem item = new ShipmentItem();
+		Shipment shipment = shipmentService.getByTrackingNumber(dto.shipmentTrackingNumber());
+		OnuNumber onuNumber = onuNumberService.getByOnuCodeAndPackingGroup(dto.onuNumberCode(), Enum.valueOf(PackingGroup.class, dto.packingGroup()));
+		item.setShipment(shipment);
+		item.setOnuNumber(onuNumber);
+		item.setQuantity(dto.quantity());
+		item.setUnitOfMeasure(Enum.valueOf(UnitOfMeasure.class, dto.unitOfMeasure()));
+		return item;
 	}
 }

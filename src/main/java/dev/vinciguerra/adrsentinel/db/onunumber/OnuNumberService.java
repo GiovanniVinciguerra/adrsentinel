@@ -1,6 +1,8 @@
 package dev.vinciguerra.adrsentinel.db.onunumber;
 
 import java.util.List;
+
+import org.hibernate.LazyInitializationException;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -14,6 +16,7 @@ import dev.vinciguerra.adrsentinel.db.adrclass.AdrClassService;
 import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumber.PackingGroup;
 import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumber.PhysicalState;
 import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumber.TunnelRestriction;
+import dev.vinciguerra.adrsentinel.exception.ResourceNotFoundException;
 import dev.vinciguerra.adrsentinel.web.dto.onunumber.OnuNumberRequestDTO;
 
 /**
@@ -70,6 +73,50 @@ public class OnuNumberService extends AbstractGenericService {
 		super(cacheManager);
 		this.onuNumberRepository = onuNumberRepository;
 		this.adrClassService = adrClassService;
+	}
+	
+	/**
+	 * Esegue un lookup (ricerca puntuale) per recuperare l'anagrafica normativa di una materia 
+	 * pericolosa utilizzando la sua chiave di business composita (Codice ONU + Gruppo di Imballaggio).
+	 * <p><b>Contesto di Dominio (Chiave Composita ADR):</b></p>
+	 * Nella normativa internazionale ADR, il solo Codice ONU (es. 1263 per "Pitture") spesso non è 
+	 * sufficiente per identificare univocamente le restrizioni di trasporto. La stessa sostanza può 
+	 * presentare gradi di pericolo chimico differenti, classificati tramite il Gruppo di Imballaggio 
+	 * (I = Alto, II = Medio, III = Basso). Questo metodo interroga la base dati utilizzando questa 
+	 * esatta combinazione per garantire l'estrazione della corretta scheda normativa (esenzioni, 
+	 * etichette, restrizioni tunnel).
+	 * <p><b>Design Pattern e Osservabilità (Fail-Fast & Telemetry):</b></p>
+	 * <ul>
+	 * <li><b>Observability:</b> Il metodo traccia l'accesso al database tramite un logger strategico 
+	 * ({@code [DataBase CALL]}). Questo è vitale in ambienti Enterprise per monitorare le performance 
+	 * (es. tracciare i <i>Cache Miss</i>) e agevolare il debugging distribuito.</li>
+	 * <li><b>Fail-Fast & Exception Translation:</b> Utilizzando il costrutto funzionale {@code orElseThrow}, 
+	 * il metodo converte elegantemente un potenziale stato di assenza ({@code Optional.empty}) 
+	 * in un'eccezione di dominio esplicita ({@link ResourceNotFoundException}). Questo impedisce 
+	 * la propagazione di valori nulli ai layer superiori (Controller), demandando la gestione 
+	 * dell'errore (es. traduzione in HTTP 404) a un gestore centralizzato ({@code @ControllerAdvice}).</li>
+	 * </ul>
+	 * @param onuCode Il codice ONU a 4 cifre identificativo della materia (es. "1202").
+	 * @param packingGroup L'enumeratore rappresentante il grado di pericolo e il gruppo d'imballaggio.
+	 * @return L'entità {@link OnuNumber} completamente idratata dal database.
+	 * @throws ResourceNotFoundException Se nessuna materia attiva corrisponde all'accoppiata fornita, 
+	 * interrompendo immediatamente il flusso di esecuzione (Fail-Fast).
+	 */
+	@Cacheable(value = CaffeineCacheConfiguration.ONU_NUMBER_BY_ONU_CODE_AND_PACKING_GROUP_CACHE, key = "#onuCode + '-' + #packingGroup.name()")
+	public OnuNumber getByOnuCodeAndPackingGroup(String onuCode, PackingGroup packingGroup) throws ResourceNotFoundException {
+		logger.info("[DataBase CALL] Searching for the OnuNumber by onuCode and packingGroup: {} {}", onuCode, packingGroup);
+		return onuNumberRepository.findByOnuCodeAndPackingGroup(onuCode, packingGroup)
+			.orElseThrow(
+				() -> new ResourceNotFoundException(
+					new StringBuilder()
+						.append("OnuNumber not found: {")
+						.append(onuCode)
+						.append(", ")
+						.append(packingGroup)
+						.append("}")
+						.toString()
+				)
+			);
 	}
 	
 	/**
@@ -194,9 +241,10 @@ public class OnuNumberService extends AbstractGenericService {
 	public OnuNumber save(OnuNumber newOnuNumber) {
 		logger.info("[DataBase CALL] Saving new OnuNumber with onuCode: {}", newOnuNumber.getOnuCode());
 		OnuNumber savedOnuNumber = onuNumberRepository.save(newOnuNumber);
+		final String adrClassCode = savedOnuNumber.getAdrClass().getClassCode();
 		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
 			@Override
-			public void afterCommit() { writeThroughCacheIntegrityOperation(savedOnuNumber); }
+			public void afterCommit() { syncCacheAfterInsert(savedOnuNumber, adrClassCode); }
 		});
 		return savedOnuNumber;
 	}
@@ -220,14 +268,16 @@ public class OnuNumberService extends AbstractGenericService {
 	 * <b>Flusso di Sincronizzazione (Propagazione su 4 Livelli):</b>
 	 * Il metodo propaga l'entità appena salvata sulle seguenti strutture Caffeine:
 	 * <ul>
-	 * <li><b>1. Indice Primario (Codice ONU):</b> Inserisce o sovrascrive il record singolo 
-	 * nella cache {@code ONU_NUMBER_BY_ONU_CODE_CACHE} per le ricerche puntuali (O(1)).</li>
-	 * <li><b>2. Indice di Pericolo (Codice Kemler):</b> Intercetta la lista in memoria associata 
+	 * <li><b>1. Indice Primario (Codice ONU + Codice Imballaggio):</b> Inserisce o sovrascrive il record 
+	 * nella cache {@code ONU_NUMBER_BY_ONU_CODE_AND_PACKING_GROUP_CACHE} per la ricerca puntuale (O(1)). </li>
+	 * <li><b>2. Indice Primario (Codice ONU):</b> Intercetta la lista in memoria associata al Codice ONU 
+	 * e vi accoda l'entità ({@code ONU_NUMBER_BY_ONU_CODE_CACHE})
+	 * <li><b>3. Indice di Pericolo (Codice Kemler):</b> Intercetta la lista in memoria associata 
 	 * al Codice Kemler e vi accoda l'entità ({@code ONU_NUMBER_BY_KEMLER_CODE_CACHE}).</li>
-	 * <li><b>3. Indice Categoriale (Classe ADR):</b> Estrae il {@code classCode} dalla relazione 
+	 * <li><b>4. Indice Categoriale (Classe ADR):</b> Estrae il {@code classCode} dalla relazione 
 	 * {@link AdrClass} e accoda l'entità alla lista delle materie compatibili 
 	 * ({@code ONU_NUMBER_BY_ADR_CLASS_CACHE}).</li>
-	 * <li><b>4. Collezione Globale:</b> Aggiorna la lista omnicomprensiva utilizzata 
+	 * <li><b>5. Collezione Globale:</b> Aggiorna la lista omnicomprensiva utilizzata 
 	 * tipicamente per popolare dropdown o tabelle massicce lato frontend ({@code ONU_NUMBER_ALL_CACHE}).</li>
 	 * </ul>
 	 * Questo approccio "aggressivo" in scrittura annulla la necessità di invalidare (evict) 
@@ -237,9 +287,17 @@ public class OnuNumberService extends AbstractGenericService {
 	 * @param savedOnuNumber l'istanza dell'entità {@link OnuNumber} persistita con successo 
 	 * nel database. L'oggetto deve essere nello stato "Managed" e avere la relazione padre 
 	 * ({@link AdrClass}) correttamente valorizzata per permettere l'estrazione delle chiavi composte.
+	 * @param adrClassCode il codice classe adr associato allo numero onu. Viene utilizzato per 
+	 * gestire il comportamento {@code FetchType.LAZY} associato alla relazione {@code ManyToOne} evitando 
+	 * che il metodo chiamato alla chiusura di una transizione lanci una {@link LazyInitializationException}
 	 */
-	private void writeThroughCacheIntegrityOperation(OnuNumber savedOnuNumber) {
-		AdrClass adrClass = savedOnuNumber.getAdrClass();
+	private void syncCacheAfterInsert(OnuNumber savedOnuNumber, String adrClassCode) {
+		storeInCache(
+			CaffeineCacheConfiguration.ONU_NUMBER_BY_ONU_CODE_AND_PACKING_GROUP_CACHE,
+			savedOnuNumber.getOnuCode() + "'-'" + savedOnuNumber.getPackingGroup().name(),
+			savedOnuNumber,
+			CacheOperation.SINGLE_RECORD
+		);
 		storeInCache(
 			CaffeineCacheConfiguration.ONU_NUMBER_BY_ONU_CODE_CACHE,
 			savedOnuNumber.getOnuCode(),
@@ -254,7 +312,7 @@ public class OnuNumberService extends AbstractGenericService {
 		);
 		storeInCache(
 			CaffeineCacheConfiguration.ONU_NUMBER_BY_ADR_CLASS_CACHE,
-			adrClass.getClassCode(),
+			adrClassCode,
 			savedOnuNumber,
 			CacheOperation.LIST_RECORD
 		);

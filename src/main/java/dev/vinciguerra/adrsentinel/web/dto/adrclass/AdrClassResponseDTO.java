@@ -1,5 +1,7 @@
 package dev.vinciguerra.adrsentinel.web.dto.adrclass;
 
+import dev.vinciguerra.adrsentinel.db.adrclass.AdrClass;
+
 /**
  * Data Transfer Object (DTO) in uscita per la rappresentazione in sola lettura di una Classe ADR.
  * <p>
@@ -30,4 +32,36 @@ package dev.vinciguerra.adrsentinel.web.dto.adrclass;
  * @version 1.0 (Read-Only Immutable View)
  * @since 1.0
  */
-public record AdrClassResponseDTO(Long id, String classCode, String description) {}
+public record AdrClassResponseDTO(Long id, String classCode, String description) {
+	/**
+	 * Factory Method statico per la conversione (Mapping) di un'entità di dominio {@link AdrClass} 
+	 * nel suo corrispondente Data Transfer Object {@link AdrClassResponseDTO}.
+	 * <p><b>Contesto Architetturale (Pattern DTO e Information Hiding):</b></p>
+	 * Questo metodo centralizza e isola la logica di trasformazione dal modello relazionale (JPA) 
+	 * al contratto API (Response Payload). Agendo come un traduttore monodirezionale, assicura 
+	 * che il layer di presentazione (Controller) o il client esterno non entrino mai in contatto 
+	 * diretto con il ciclo di vita dell'ORM (Hibernate), prevenendo le classiche vulnerabilità 
+	 * di <i>LazyInitializationException</i> e la serializzazione accidentale di metadati del database.
+	 * <p><b>Design Pattern e Sicurezza (Null-Safety / Guard Clause):</b></p>
+	 * L'implementazione adotta una rigorosa clausola di salvaguardia iniziale (Guard Clause): 
+	 * {@code if(entity == null)}. Questo approccio difensivo rende il metodo intrinsecamente 
+	 * <i>Null-Safe</i>. È una caratteristica fondamentale quando il metodo viene invocato 
+	 * all'interno di iterazioni funzionali (es. {@code stream().map(AdrClassResponseDTO::fromEntity)}), 
+	 * poiché garantisce che eventuali campi nulli nel database non inneschino fatali 
+	 * {@code NullPointerException} a runtime, restituendo elegantemente un {@code null} gestibile da Jackson.
+	 * @param entity L'istanza dell'entità JPA recuperata dalla base dati, rappresentante 
+	 * la classe normativa di pericolo ADR (es. Classe 3, Classe 8). Il parametro ammette valori {@code null}.
+	 * @return Una nuova istanza immutabile (Record) di {@link AdrClassResponseDTO} popolata 
+	 * con i dati estratti dall'entità, oppure {@code null} se l'input fornito era assente.
+	 */
+	public static AdrClassResponseDTO fromEntity(AdrClass entity) {
+		if(entity == null)
+			return null;
+		
+		return new AdrClassResponseDTO(
+			entity.getId(),
+			entity.getClassCode(),
+			entity.getDescription()
+		);
+	}
+}

@@ -57,7 +57,9 @@ public class CaffeineCacheConfiguration {
 	 * Memorizza le regole di compatibilità di carico partendo da una classe sorgente (AdrClass A). 
 	 */
 	public static final String COMPATIBILITY_RULE_ADR_CLASS_A_CACHE = "compatibility_rule_adr_class_a";
-	/** Identificatore della regione di memoria per la ricerca puntuale di una materia tramite il suo codice a 4 cifre. */
+	/** Identificatore della regione di memoria per la ricerca puntuale di una materia tramite il suo codice a 4 cifre e il codice imballaggio. */
+	public static final String ONU_NUMBER_BY_ONU_CODE_AND_PACKING_GROUP_CACHE = "onu_number_by_onu_code_and_packing_group";
+	/** Identificatore della regione di memoria per la ricerca di una materia tramite il suo codice a 4 cifre. */
 	public static final String ONU_NUMBER_BY_ONU_CODE_CACHE = "onu_number_by_onu_code";
 	/** Identificatore della regione di memoria per il raggruppamento delle merci in base al grado di pericolo (es. 33). */
 	public static final String ONU_NUMBER_BY_KEMLER_CODE_CACHE = "onu_number_by_kemler_code";
@@ -115,6 +117,10 @@ public class CaffeineCacheConfiguration {
 			COMPATIBILITY_RULE_ADR_CLASS_A_CACHE,
 			compatibilityRuleCacheSetting.adrClassA().maxSize()
 		);
+		CaffeineCache onuNumberOnuCodeAndPackingGroupCache = buildCache(
+			ONU_NUMBER_BY_ONU_CODE_AND_PACKING_GROUP_CACHE,
+			onuNumberCacheSetting.onuCodeAndPackingGroup().maxSize()
+		);
 		CaffeineCache onuNumberOnuCodeCache = buildCache(
 			ONU_NUMBER_BY_ONU_CODE_CACHE,
 			onuNumberCacheSetting.onuCode().maxSize()
@@ -156,6 +162,7 @@ public class CaffeineCacheConfiguration {
 				adrClassClassCodeCache,
 				adrClassAllCache,
 				compatibilityRuleAdrClassCache,
+				onuNumberOnuCodeAndPackingGroupCache,
 				onuNumberOnuCodeCache,
 				onuNumberKemlerCodeCache,
 				onuNumberAdrClassCache,

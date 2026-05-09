@@ -1,8 +1,12 @@
 package dev.vinciguerra.adrsentinel.db.onunumber;
 
 import java.util.List;
+import java.util.Optional;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
+
+import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumber.PackingGroup;
 
 /**
  * Livello di accesso ai dati (Data Access Layer) per il catalogo delle merci pericolose ADR (Numeri ONU).
@@ -26,6 +30,36 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 public interface OnuNumberRepository extends JpaRepository<OnuNumber, Long> {
+	/**
+	 * Esegue un'interrogazione mirata (Lookup) sul database per estrarre l'anagrafica 
+	 * di una materia pericolosa (ADR) utilizzando la sua chiave di business composita.
+	 * <p><b>Contesto Architetturale (Spring Data JPA & Derived Query):</b></p>
+	 * Questo metodo sfrutta il potente meccanismo delle <i>Query Derivate</i> (Query Derivation) 
+	 * di Spring Data. Non essendo presente alcuna annotazione {@code @Query}, l'infrastruttura 
+	 * di Spring analizzerà la firma del metodo a runtime (fase di Bootstrap) e genererà 
+	 * dinamicamente il proxy e la query SQL sottostante (es. 
+	 * {@code SELECT * FROM onu_number WHERE onu_code = ? AND packing_group = ?}). 
+	 * Questo approccio azzera il boilerplate code e garantisce che la query sia sempre 
+	 * allineata con i nomi dei campi dell'Entity.
+	 * <p><b>Contesto di Dominio (Chiave Composita ADR):</b></p>
+	 * Nel dominio dei trasporti pericolosi, l'identità legale e normativa di una sostanza 
+	 * è raramente definita dal solo Codice ONU. Sostanze con lo stesso codice possono avere 
+	 * restrizioni totalmente diverse in base al loro grado di pericolo, rappresentato dal 
+	 * Gruppo di Imballaggio (Packing Group). L'intersezione di questi due parametri forma 
+	 * l'unica vera "Business Key" in grado di isolare una singola e specifica direttiva di trasporto.
+	 * <p><b>Design Pattern e Robustezza (Null-Safety via Optional):</b></p>
+	 * Il ritorno incapsulato in un {@link java.util.Optional} è una <i>best practice</i> assoluta. 
+	 * Costringe contrattualmente il livello chiamante (il Service) a gestire in modo esplicito 
+	 * lo scenario in cui l'anagrafica non esista nel database. Questo previene il diffondersi 
+	 * di valori {@code null} non tracciati nell'architettura, scongiurando il rischio di 
+	 * fatali {@code NullPointerException} nei layer superiori.
+	 * @param onuCode Il codice numerico a 4 cifre (UN Number) assegnato internazionalmente 
+	 * alla materia (es. "1202", "1965").
+	 * @param packingGroup Il grado di pericolo e relativo gruppo di imballaggio (I, II o III).
+	 * @return Un {@link Optional} contenente l'entità {@code OnuNumber} idratata dal database, 
+	 * oppure {@code Optional.empty()} se la combinazione fornita non produce alcun risultato.
+	 */
+	Optional<OnuNumber> findByOnuCodeAndPackingGroup(String onuCode, PackingGroup packingGroup);
 	/**
 	 * Ricerca e restituisce tutte le istanze e le varianti di Numeri ONU associate a uno specifico codice a 4 cifre.
 	 * <p>

@@ -1,6 +1,8 @@
 package dev.vinciguerra.adrsentinel.web.dto.compatibilityrule;
 
 import dev.vinciguerra.adrsentinel.db.adrclass.AdrClass;
+import dev.vinciguerra.adrsentinel.db.compatibilityrule.CompatibilityRule;
+import dev.vinciguerra.adrsentinel.web.dto.adrclass.AdrClassResponseDTO;
 
 /**
  * Data Transfer Object (DTO) immutabile, implementato come Java Record, utilizzato per 
@@ -37,4 +39,45 @@ import dev.vinciguerra.adrsentinel.db.adrclass.AdrClass;
  * @version 1.0 (Read-Only Immutable View)
  * @since 1.0
  */
-public record CompatibilityRuleResponseDTO(Long id, AdrClass adrClassA, AdrClass adrClassB, boolean isCompatible, String warningNote) {}
+public record CompatibilityRuleResponseDTO(Long id, AdrClassResponseDTO adrClassA, AdrClassResponseDTO adrClassB, boolean isCompatible, String warningNote) {
+	/**
+	 * Factory Method statico per la conversione (Mapping) e l'aggregazione strutturata 
+	 * di un'entità di dominio {@link CompatibilityRule} nel suo corrispondente 
+	 * Data Transfer Object {@link CompatibilityRuleResponseDTO}.
+	 * <p><b>Contesto di Dominio (Regole di Segregazione ADR):</b></p>
+	 * Nel contesto logistico delle merci pericolose, questo oggetto modella le restrizioni 
+	 * di carico in comune (Segregation Rules) tra due classi ADR distinte (es. liquidi 
+	 * infiammabili e sostanze tossiche). Il DTO informa il client se due tipologie di 
+	 * merci possono viaggiare sullo stesso veicolo o all'interno dello stesso container, 
+	 * esponendo il flag di compatibilità ed eventuali deroghe o note di avvertenza legali.
+	 * <p><b>Design Pattern e Composizione (Nested/Delegated Mapping):</b></p>
+	 * Oltre a mappare i tipi primitivi (es. {@code isCompatible}), questo metodo brilla 
+	 * per l'applicazione del pattern di <i>Delegazione</i> per la risoluzione del grafo degli oggetti (Object Graph). 
+	 * Invece di spacchettare e mappare manualmente le classi ADR interne, delega l'operazione ai 
+	 * rispettivi factory method ({@link AdrClassResponseDTO#fromEntity}). Questo approccio 
+	 * modulare rispetta ferreamente il principio DRY (Don't Repeat Yourself) e garantisce una 
+	 * coerenza assoluta nella struttura JSON in tutto l'ecosistema dell'API.
+	 * <p><b>Sicurezza e Robustezza (Guard Clause / Null-Safety):</b></p>
+	 * L'implementazione inizia con una rigorosa clausola di salvaguardia ({@code if(entity == null)}). 
+	 * Questa pratica di programmazione difensiva assicura che le funzioni di ordine superiore 
+	 * (es. mappatura di liste di regole tramite Stream API) non collassino mai a causa di una 
+	 * singola relazione nulla o orfana nel database, prevenendo catastrofiche {@code NullPointerException}.
+	 * @param entity L'istanza dell'entità JPA (Regola di Compatibilità) recuperata dalla base dati. 
+	 * Il parametro ammette e gestisce valori {@code null}.
+	 * @return Una nuova istanza immutabile (Record) di {@link CompatibilityRuleResponseDTO}, 
+	 * completamente idratata con le classi figlie annidate, oppure {@code null} se 
+	 * l'entità sorgente era assente.
+	 */
+	public static CompatibilityRuleResponseDTO fromEntity(CompatibilityRule entity) {
+		if(entity == null)
+			return null;
+		
+		return new CompatibilityRuleResponseDTO(
+			entity.getId(),
+			AdrClassResponseDTO.fromEntity(entity.getAdrClassA()),
+			AdrClassResponseDTO.fromEntity(entity.getAdrClassB()),
+			entity.isCompatible(),
+			entity.getWarningNote()
+		);
+	}
+}

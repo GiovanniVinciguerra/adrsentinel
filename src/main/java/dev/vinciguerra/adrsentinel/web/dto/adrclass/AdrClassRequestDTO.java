@@ -1,7 +1,7 @@
 package dev.vinciguerra.adrsentinel.web.dto.adrclass;
 
+import dev.vinciguerra.adrsentinel.web.annotation.ValidatorRequiredString;
 import dev.vinciguerra.adrsentinel.web.annotation.adrclass.ValidatorAdrClassCode;
-import dev.vinciguerra.adrsentinel.web.annotation.adrclass.ValidatorAdrClassDescription;
 
 /**
  * Data Transfer Object (DTO) in ingresso, dedicato alla deserializzazione e validazione 
@@ -42,4 +42,4 @@ import dev.vinciguerra.adrsentinel.web.annotation.adrclass.ValidatorAdrClassDesc
  * @version 1.0 (Strict Validated Input Payload)
  * @since 1.0
  */
-public record AdrClassRequestDTO(@ValidatorAdrClassCode String classCode, @ValidatorAdrClassDescription String description) {}
+public record AdrClassRequestDTO(@ValidatorAdrClassCode String classCode, @ValidatorRequiredString String description) {}

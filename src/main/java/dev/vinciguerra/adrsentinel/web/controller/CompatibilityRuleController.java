@@ -73,7 +73,7 @@ public class CompatibilityRuleController {
 	@GetMapping("/{adrClassCodeA}")
 	public ResponseEntity<List<CompatibilityRuleResponseDTO>> getAdrClassACompatibilityRule(@PathVariable @ValidatorAdrClassCode String adrClassCodeA) {
 		List<CompatibilityRule> rules = compatibilityRuleService.getByAdrClassA(adrClassCodeA);
-		List<CompatibilityRuleResponseDTO> response = rules.stream().map(this::mapToDTO).toList();
+		List<CompatibilityRuleResponseDTO> response = rules.stream().map(CompatibilityRuleResponseDTO::fromEntity).toList();
 		return ResponseEntity.ok(response);
 	}
 	
@@ -96,26 +96,6 @@ public class CompatibilityRuleController {
 	public ResponseEntity<CompatibilityRuleResponseDTO> create(@RequestBody @Valid CompatibilityRuleRequestDTO compatibilityRuleRequestDTO) {
 		CompatibilityRule compatibilityRuleToSave = compatibilityRuleService.mapToEntity(compatibilityRuleRequestDTO);
 		CompatibilityRule savedCompatibilityRule = compatibilityRuleService.save(compatibilityRuleToSave);
-		return ResponseEntity.status(HttpStatus.CREATED).body(mapToDTO(savedCompatibilityRule));
-	}
-	
-	/**
-	 * Mapper interno per la conversione unidirezionale da Entità di Dominio (JPA) a DTO di Risposta (Projection).
-	 * <p>
-	 * Questa funzione di utilità nasconde i dettagli interni dell'implementazione 
-	 * (es. metadati di Hibernate, proxy transazionali) ed espone al client esclusivamente 
-	 * l'albero di dati previsto dal contratto API, formattato in modo ottimale.
-	 * </p>
-	 * @param entity L'entità {@link CompatibilityRule} recuperata dal DB o appena persistita.
-	 * @return L'oggetto {@link CompatibilityRuleResponseDTO} pronto per la serializzazione Jackson.
-	 */
-	private CompatibilityRuleResponseDTO mapToDTO(CompatibilityRule entity) {
-		return new CompatibilityRuleResponseDTO(
-			entity.getId(),
-			entity.getAdrClassA(),
-			entity.getAdrClassB(),
-			entity.isCompatible(),
-			entity.getWarningNote()
-		);
+		return ResponseEntity.status(HttpStatus.CREATED).body(CompatibilityRuleResponseDTO.fromEntity(savedCompatibilityRule));
 	}
 }

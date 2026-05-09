@@ -1,7 +1,7 @@
 package dev.vinciguerra.adrsentinel.web.dto.compatibilityrule;
 
+import dev.vinciguerra.adrsentinel.web.annotation.ValidatorNotRequiredString;
 import dev.vinciguerra.adrsentinel.web.annotation.adrclass.ValidatorAdrClassCode;
-import dev.vinciguerra.adrsentinel.web.annotation.compatibilityrule.ValidatorWarningNote;
 
 /**
  * Data Transfer Object (DTO) immutabile, implementato nativamente come Java Record, 
@@ -42,4 +42,4 @@ import dev.vinciguerra.adrsentinel.web.annotation.compatibilityrule.ValidatorWar
  * @since 1.0
  */
 public record CompatibilityRuleRequestDTO(@ValidatorAdrClassCode String classCodeA, @ValidatorAdrClassCode String classCodeB, 
-	boolean isCompatible, @ValidatorWarningNote String warningNote) {}
+	boolean isCompatible, @ValidatorNotRequiredString String warningNote) {}

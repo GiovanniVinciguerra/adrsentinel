@@ -8,7 +8,9 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
 import jakarta.validation.Constraint;
 import jakarta.validation.Payload;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PositiveOrZero;
 
 /**
  * Annotazione di validazione custom (Constraint Composition) per la verifica formale 
@@ -38,13 +40,15 @@ import jakarta.validation.constraints.NotNull;
 @Target({ FIELD, PARAMETER })
 @Constraint(validatedBy = {})
 @NotNull(message = "Transport category cannot be null.")
+@PositiveOrZero(message = "Transport category must be strictly positive.")
+@Max(value = 4, message = "Trasport category max value is 4.")
 public @interface ValidatorTransportCategory {
 	/**
 	 * Il messaggio di errore unificato che verrà restituito nel payload di risposta (es. HTTP 400) 
 	 * in caso di fallimento di uno qualsiasi dei vincoli sottostanti.
 	 * @return il messaggio testuale che descrive chiaramente sia l'obbligatorietà che il limite dimensionale.
 	 */
-	String message() default "Transport category cannot be null.";
+	String message() default "Transport category cannot be null or negative.";
 	/**
 	 * Partiziona l'esecuzione del vincolo associandolo a specifici Validation Groups.
 	 * <p>Utile per differenziare i controlli a seconda del contesto (es. Creazione vs Aggiornamento).</p>

@@ -1,9 +1,9 @@
 package dev.vinciguerra.adrsentinel.web.dto.shipment;
 
+import dev.vinciguerra.adrsentinel.web.annotation.ValidatorRequiredNumber;
+import dev.vinciguerra.adrsentinel.web.annotation.ValidatorRequiredString;
 import dev.vinciguerra.adrsentinel.web.annotation.shipment.ValidatorAddress;
 import dev.vinciguerra.adrsentinel.web.annotation.shipment.ValidatorLocalDateTime;
-import dev.vinciguerra.adrsentinel.web.annotation.shipment.ValidatorShipmentDistance;
-import dev.vinciguerra.adrsentinel.web.annotation.shipment.ValidatorShipmentStatus;
 import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorLicensePlate;
 
 /**
@@ -36,6 +36,6 @@ import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorLicensePlate;
  * @version 1.0 (Strict Validated Input Payload)
  * @since 1.0
  */
-public record ShipmentRequestDTO(@ValidatorLocalDateTime String date, @ValidatorShipmentStatus String status,
-	@ValidatorAddress String origin, @ValidatorAddress String destination, @ValidatorShipmentDistance Float distancekm,
+public record ShipmentRequestDTO(@ValidatorLocalDateTime String date, @ValidatorRequiredString String status,
+	@ValidatorAddress String origin, @ValidatorAddress String destination, @ValidatorRequiredNumber Float distancekm,
 	@ValidatorLicensePlate String vehicleLicensePlate) {}

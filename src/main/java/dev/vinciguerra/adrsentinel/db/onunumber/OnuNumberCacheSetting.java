@@ -19,8 +19,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * sola lettura (Read-Only) dal momento dell'avvio dell'applicazione. Nessun componente 
  * di business può alterare le regole di caching a runtime.
  * </p>
- * @param onuCode la policy di cache per l'estrazione puntuale (1-to-1) di una specifica materia 
+ * @param onuCode la policy di cache per l'estrazione di una specifica materia 
  * tramite il suo codice a 4 cifre.
+ * @param onuCodeAndPackingGroup la policy di cache per l'estrazione puntuale (1 to 1) per l'estrazione di una 
+ * specifica materia tramite il suo codice a 4 cifre e il suo codice imballaggio.
  * @param kemlerCode la policy di cache per il raggruppamento (1-to-N) delle materie in base 
  * al loro codice identificativo di pericolo (es. raggruppare i liquidi infiammabili).
  * @param adrClass la policy di cache per il raggruppamento (1-to-N) delle materie appartenenti 
@@ -33,7 +35,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @since 3.0
  */
 @ConfigurationProperties(prefix = "adr-sentinel.cache.onunumber")
-public record OnuNumberCacheSetting(CachePolicy onuCode, CachePolicy kemlerCode, CachePolicy adrClass, CachePolicy allOnuNumber) {
+public record OnuNumberCacheSetting(CachePolicy onuCode, CachePolicy onuCodeAndPackingGroup, CachePolicy kemlerCode, CachePolicy adrClass,
+		CachePolicy allOnuNumber) {
 	/**
 	 * Struttura dati contrattuale che definisce i vincoli fisici di una specifica regione di cache.
 	 * <p>
