@@ -7,10 +7,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-
 import dev.vinciguerra.adrsentinel.db.AbstractGenericService;
 import dev.vinciguerra.adrsentinel.db.CaffeineCacheConfiguration;
+import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle.VehicleCategory;
+import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle.VehicleCategory.LoadType;
+import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle.VehicleCategory.VehicleType;
 import dev.vinciguerra.adrsentinel.exception.ResourceNotFoundException;
+import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleRequestDTO;
 
 /**
  * Strato di Business Logic (Service Layer) per la gestione dell'entità {@link Vehicle}.
@@ -78,7 +81,7 @@ public class VehicleService extends AbstractGenericService {
 	 * @return una lista di veicoli idonei al carico (può essere vuota).
 	 */
 	@Cacheable(value = CaffeineCacheConfiguration.VEHICLE_BY_MAX_USEFUL_WEIGHT_CACHE, key = "#maxUsefulWeightkg")
-	public List<Vehicle> getByMaxUsefulWeight(int maxUsefulWeightkg) {
+	public List<Vehicle> getByMaxUsefulWeight(Integer maxUsefulWeightkg) {
 		logger.info("[DataBase CALL] Searching for the Vehicle by maxUsefulWeightkg: {}", maxUsefulWeightkg);
 		return vehicleRepository.findByMaxUsefulWeightkgGreaterThanEqual(maxUsefulWeightkg);
 	}
@@ -113,7 +116,7 @@ public class VehicleService extends AbstractGenericService {
 		Vehicle savedVehicle = vehicleRepository.save(newVehicle);
 		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
 			@Override
-			public void afterCommit() { writeThroughCacheIntegrityOperation(savedVehicle); }
+			public void afterCommit() { syncCacheAfterInsert(savedVehicle); }
 		});
 		return savedVehicle;
 	}
@@ -157,7 +160,7 @@ public class VehicleService extends AbstractGenericService {
 	 * con successo nel database. L'oggetto deve trovarsi nello stato "Managed" e avere 
 	 * i campi chiave ({@code licensePlate} e {@code maxUsefulWeightkg}) obbligatoriamente valorizzati.
 	 */
-	private void writeThroughCacheIntegrityOperation(Vehicle savedVehicle) {
+	private void syncCacheAfterInsert(Vehicle savedVehicle) {
 		storeInCache(
 			CaffeineCacheConfiguration.VEHICLE_BY_LICENSE_PLATE_CACHE,
 			savedVehicle.getLicensePlate(),
@@ -178,83 +181,21 @@ public class VehicleService extends AbstractGenericService {
 		);
 	}
 	
-	/**
-	 * Rimuove fisicamente un veicolo dal database e invalida le relative entry in cache.
-	 * <p>
-	 * Previene l'effetto "Veicolo Fantasma", assicurandosi che il record rimosso dal database 
-	 * sparisca istantaneamente anche dalle cache delle liste e dalle ricerche per targa.
-	 * </p>
-	 *
-	 * @param vehicleToDelete l'istanza del veicolo da rimuovere definitivamente.
-	 */
-	@Transactional
-	public void delete(Vehicle vehicleToDelete) {
-		logger.info("[DataBase CALL] Deleting Vehicle with licensePlate: {}", vehicleToDelete.getLicensePlate());
-		vehicleRepository.delete(vehicleToDelete);
-		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-			@Override
-			public void afterCommit() { deleteThroughCacheIntegrityOperation(vehicleToDelete); }
-		});
-	}
-	
-	/**
-	 * Esegue l'operazione di pulizia e allineamento della cache applicativa a seguito 
-	 * dell'eliminazione fisica (Hard Delete) di un'entità {@link Vehicle}, implementando 
-	 * il pattern architetturale Delete-Through.
-	 * <p>
-	 * Questo metodo garantisce la totale consistenza tra il database relazionale e la 
-	 * memoria RAM, prevenendo l'insorgenza del cosiddetto "Effetto Veicolo Fantasma" 
-	 * (Ghost Record), ovvero la situazione in cui un mezzo dismesso o rimosso dal sistema 
-	 * continui ad essere visibile nelle liste operative o suggerito per nuove spedizioni.
-	 * </p>
-	 * <p>
-	 * <b>Vincolo Transazionale:</b> Onde evitare di corrompere la cache a fronte di un 
-	 * potenziale Rollback (ad esempio, se l'eliminazione fallisce per una violazione di 
-	 * chiave esterna - Foreign Key Constraint - legata a spedizioni preesistenti), 
-	 * l'invocazione di questo metodo deve avvenire <b>rigorosamente</b> a transazione 
-	 * conclusa con successo, delegandola al blocco {@code afterCommit} del 
-	 * {@code TransactionSynchronizationManager}.
-	 * </p>
-	 * <p>
-	 * <b>Flusso di Rimozione Chirurgica a Triplo Indice:</b>
-	 * Il metodo intercetta ed elimina il veicolo da tutte le dimensioni di caching:
-	 * <ul>
-	 * <li><b>1. Indice Univoco Operativo (Targa):</b> Invalida la entry singola nella 
-	 * cache {@code VEHICLE_BY_LICENSE_PLATE_CACHE}. Questo previene anche eventuali bug di 
-	 * collisione nel caso in cui, in futuro, la stessa targa venga riciclata per un nuovo mezzo.</li>
-	 * <li><b>2. Indice di Capacità Logistica (Portata Massima):</b> Cerca il veicolo all'interno 
-	 * della specifica lista di portata ({@code VEHICLE_BY_MAX_USEFUL_WEIGHT_CACHE}) e lo rimuove 
-	 * puntualmente. L'approccio chirurgico evita di invalidare le liste di mezzi con altre portate.</li>
-	 * <li><b>3. Indice Flotta Globale:</b> Rimuove dinamicamente il mezzo dalla collezione 
-	 * omnicomprensiva ({@code ALL_VEHICLE_CACHE}). Grazie all'operazione {@code LIST_RECORD}, 
-	 * l'intera flotta rimanente viene preservata in RAM, evitando pesanti query di 
-	 * ri-popolamento al successivo accesso alla dashboard del frontend.</li>
-	 * </ul>
-	 * </p>
-	 * @param vehicleToDelete l'istanza dell'entità {@link Vehicle} appena rimossa con successo 
-	 * dal database. È assolutamente cruciale che l'oggetto in input mantenga intatti i 
-	 * propri valori originari (in particolare {@code licensePlate} e {@code maxUsefulWeightkg}), 
-	 * in quanto tali attributi vengono utilizzati dal motore di cache per localizzare 
-	 * e distruggere le esatte occorrenze in RAM basandosi sul metodo {@code equals()}.
-	 */
-	private void deleteThroughCacheIntegrityOperation(Vehicle vehicleToDelete) {
-		deleteFromCache(
-			CaffeineCacheConfiguration.VEHICLE_BY_LICENSE_PLATE_CACHE,
-			vehicleToDelete.getLicensePlate(),
-			vehicleToDelete,
-			CacheOperation.SINGLE_RECORD
-		);
-		deleteFromCache(
-			CaffeineCacheConfiguration.VEHICLE_BY_MAX_USEFUL_WEIGHT_CACHE,
-			vehicleToDelete.getMaxUsefulWeightkg(),
-			vehicleToDelete,
-			CacheOperation.LIST_RECORD
-		);
-		deleteFromCache(
-			CaffeineCacheConfiguration.ALL_VEHICLE_CACHE,
-			CaffeineCacheConfiguration.ALL_VEHICLE_KEY,
-			vehicleToDelete,
-			CacheOperation.LIST_RECORD
-		);
+	public Vehicle mapToEntity(VehicleRequestDTO dto) {
+		Vehicle vehicle = new Vehicle();
+		VehicleCategory category = new VehicleCategory();
+		category.setVehicleType(Enum.valueOf(VehicleType.class, dto.vehicleType()));
+		category.setLoadType(Enum.valueOf(LoadType.class, dto.loadType()));
+		vehicle.setVehicleCategory(category);
+		vehicle.setLicensePlate(dto.licensePlate());
+		vehicle.setMaxWeightkg(dto.maxWeightkg());
+		vehicle.setMaxUsefulWeightkg(dto.maxUsefulWeightkg());
+		vehicle.setHeightcm(dto.heightcm());
+		vehicle.setWidthcm(dto.widthcm());
+		vehicle.setLengthcm(dto.lengthcm());
+		vehicle.setWheelbasecm(dto.wheelbasecm());
+		vehicle.setnAxles(dto.nAxles());
+		vehicle.setAdrCertified(dto.adrCertified());
+		return vehicle;
 	}
 }

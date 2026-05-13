@@ -2,6 +2,7 @@ package dev.vinciguerra.adrsentinel.db.vehicle;
 
 import java.util.Objects;
 import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.SQLRestriction;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 import jakarta.persistence.Embedded;
@@ -52,6 +53,7 @@ import jakarta.validation.constraints.Positive;
 		@UniqueConstraint(name = "uk_license_plate", columnNames = {"license_plate"})
 	}
 )
+@SQLRestriction("deleted = false")
 public class Vehicle {
 	/**
 	 * Value Object (Pattern @Embeddable) che incapsula la tipologia strutturale e di carico del veicolo.
@@ -328,7 +330,7 @@ public class Vehicle {
 	public void setAdrCertified(boolean adrCertified) {
 		this.adrCertified = adrCertified;
 	}
-	
+
 	/** L'uguaglianza logica tra veicoli si basa esclusivamente sulla Business Key (Targa). */
 	@Override
 	public int hashCode() {
