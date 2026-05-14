@@ -30,10 +30,10 @@ import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle;
  * @param vehicleCategory Il DTO annidato contenente la classificazione tecnica ADR (es. FL, AT, OX).
  * @param maxWeightkg La massa massima tecnicamente ammissibile a pieno carico (in kg).
  * @param maxUsefulWeightkg La portata utile effettiva del mezzo (in kg), fondamentale per il calcolo del carico residuo.
- * @param heightcm L'altezza massima del veicolo (in cm), critica per il transito in sottopassi e tunnel.
- * @param widthcm La larghezza massima (in cm), utilizzata per il calcolo degli ingombri in tratte urbane o strette.
- * @param lengthcm La lunghezza totale (in cm), determinante per le manovre e il posizionamento nei punti di carico.
- * @param wheelbasecm Il passo del veicolo (distanza tra gli assi in cm), parametro tecnico per la stabilità e il raggio di sterzata.
+ * @param heightm L'altezza massima del veicolo (in cm), critica per il transito in sottopassi e tunnel.
+ * @param widthm La larghezza massima (in cm), utilizzata per il calcolo degli ingombri in tratte urbane o strette.
+ * @param lengthm La lunghezza totale (in cm), determinante per le manovre e il posizionamento nei punti di carico.
+ * @param wheelbasem Il passo del veicolo (distanza tra gli assi in cm), parametro tecnico per la stabilità e il raggio di sterzata.
  * @param nAxles Il numero totale di assi, variabile chiave per la ripartizione del peso e i costi di pedaggio.
  * @param adrCertified Indica se il veicolo è legalmente certificato e idoneo al trasporto ADR secondo la normativa vigente.
  * @author Giovanni Vinciguerra
@@ -41,7 +41,7 @@ import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle;
  * @since 1.0
  */
 public record VehicleResponseDTO(Long id, String licensePlate, VehicleCategoryResponseDTO vehicleCategory, Integer maxWeightkg,
-		Integer maxUsefulWeightkg, Integer heightcm, Integer widthcm, Integer lengthcm, Integer wheelbasecm, Integer nAxles, boolean adrCertified) {
+		Integer maxUsefulWeightkg, Float heightm, Float widthm, Float lengthm, Float wheelbasem, Integer nAxles, boolean adrCertified) {
 	
 	/**
 	 * Factory Method statico per la conversione (Mapping) e l'aggregazione di un'entità 
@@ -80,10 +80,10 @@ public record VehicleResponseDTO(Long id, String licensePlate, VehicleCategoryRe
 			VehicleCategoryResponseDTO.fromEntity(entity.getVehicleCategory()),
 			entity.getMaxWeightkg(),
 			entity.getMaxUsefulWeightkg(),
-			entity.getHeightcm(),
-			entity.getWidthcm(),
-			entity.getLengthcm(),
-			entity.getWheelbasecm(),
+			entity.getHeightm(),
+			entity.getWidthm(),
+			entity.getLengthm(),
+			entity.getWheelbasem(),
 			entity.getnAxles(),
 			entity.isAdrCertified()
 		);

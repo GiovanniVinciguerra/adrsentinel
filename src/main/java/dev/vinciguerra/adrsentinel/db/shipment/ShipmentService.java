@@ -259,9 +259,10 @@ public class ShipmentService extends AbstractGenericService {
 	 */
 	@Transactional
 	public Shipment updateDetailsByTrackingNumber(String trackingNumber, ShipmentUpdateDTO updateDto) throws ResourceNotFoundException {
+		logger.info("[DataBase CALL] Updating Shipment with trackingNumber: {}", trackingNumber);
 		Shipment shipment = shipmentRepository.findByTrackingNumber(trackingNumber)
 			.orElseThrow(() -> new ResourceNotFoundException("Shipment not found: " + trackingNumber));
-		LocalDate oldDate = shipment.getShipmentDate().toLocalDate();
+		final LocalDate oldDate = shipment.getShipmentDate().toLocalDate();
 		Vehicle vehicle = vehicleService.getByLicensePlate(updateDto.vehicleLicensePlate());
 		shipment.setVehicle(vehicle);
 		shipment.setShipmentDate(LocalDateTime.parse(updateDto.date()));
@@ -304,6 +305,7 @@ public class ShipmentService extends AbstractGenericService {
 	 */
 	@Transactional
 	public Shipment updateStatusByTrackingNumber(String trackingNumber, ShipmentUpdateStatusDTO updateStatusDTO) {
+		logger.info("[DataBase CALL] Updating Shipment status with trackingNumber: {}", trackingNumber);
 		Shipment shipment = shipmentRepository.findByTrackingNumber(trackingNumber)
 			.orElseThrow(() -> new ResourceNotFoundException("Shipment not found: " + trackingNumber));
 		LocalDate oldDate = shipment.getShipmentDate().toLocalDate();

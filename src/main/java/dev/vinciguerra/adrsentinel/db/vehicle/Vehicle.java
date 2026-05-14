@@ -2,7 +2,6 @@ package dev.vinciguerra.adrsentinel.db.vehicle;
 
 import java.util.Objects;
 import org.hibernate.annotations.ColumnDefault;
-import org.hibernate.annotations.SQLRestriction;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 import jakarta.persistence.Embedded;
@@ -18,6 +17,8 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -33,15 +34,16 @@ import jakarta.validation.constraints.Positive;
  * attraverso la "Difesa in Profondità" (Defense in Depth):
  * </p>
  * <ul>
- * <li><b>Design dei Tipi (Wrapper vs Primitivi):</b> Le misurazioni fisiche utilizzano i wrapper (es. {@code Integer}) 
- * in combinazione con {@code @NotNull} e {@code @Positive} per distinguere esplicitamente l'assenza del dato 
- * dall'inserimento di uno zero, migliorando la chiarezza delle API.</li>
+ * <li><b>Design dei Tipi (Wrapper vs Primitivi):</b> Le misurazioni fisiche utilizzano i wrapper (es. {@code Float}) 
+ * in combinazione con {@code @NotNull} e {@code @Min e @Max} per distinguere esplicitamente l'assenza del dato 
+ * dall'inserimento di un valore errato, migliorando la chiarezza delle API.</li>
  * <li><b>Fail-Safe (Principio del Minore Pericolo):</b> Per la certificazione ADR si utilizza il primitivo {@code boolean} 
  * di default a {@code false}. In caso di dato mancante, il sistema assume che il veicolo NON sia certificato per merci pericolose.</li>
- * <li><b>Domain-Driven Constraints:</b> I limiti, come il numero di assi (Max 8), sono calibrati rigorosamente 
- * sui mezzi standard reali del trasporto logistico europeo, escludendo a monte errori di battitura (Fat-Finger).</li>
+ * <li><b>Domain-Driven Constraints:</b> I limiti, come il numero di assi (Max 8) e sulle dimensioni, sono calibrati rigorosamente 
+ * sui mezzi standard reali del trasporto logistico italiano, escludendo a monte errori di battitura (Fat-Finger).</li>
  * </ul>
- *
+ * <li><b>Attenzione</b>: Il valori delle dimensioni (lunghezza, altezza, larghezza e passo) sono in metri. Per i pesi (peso complessivo 
+ * a pieno carico e peso utile trasportabile) invece sono stati adottati i chilogrammi</li>
  * @author Giovanni Vinciguerra
  * @version 2.0 (Refactored with Jakarta Validation)
  * @since 1.0
@@ -53,7 +55,6 @@ import jakarta.validation.constraints.Positive;
 		@UniqueConstraint(name = "uk_license_plate", columnNames = {"license_plate"})
 	}
 )
-@SQLRestriction("deleted = false")
 public class Vehicle {
 	/**
 	 * Value Object (Pattern @Embeddable) che incapsula la tipologia strutturale e di carico del veicolo.
@@ -155,7 +156,8 @@ public class Vehicle {
 	private VehicleCategory vehicleCategory;
 	/** Peso massimo a pieno carico espresso in chilogrammi. */
 	@NotNull(message = "Max weight (kg) cannot be null")
-	@Positive(message = "Max weight (kg) must be strictly positive")
+	@Min(value = 1500, message = "")
+	@Max(value = 44000, message = "")
 	@Column(
 		name = "max_weight_kg",
 		nullable = false
@@ -169,38 +171,42 @@ public class Vehicle {
 		nullable = false
 	)
 	private Integer maxUsefulWeightkg;
-	/** Altezza massima del veicolo in centimetri (Critica per i percorsi con cavalcavia). */
-	@NotNull(message = "Height (cm) cannot be null")
-	@Positive(message = "Height (cm) must be strictly positive")
+	/** Altezza massima del veicolo in metri (Critica per i percorsi con cavalcavia). */
+	@NotNull(message = "Height (m) cannot be null")
+	@DecimalMin(value = "1.7", message = "The minimum allowed height is 1.7 meters")
+	@DecimalMax(value = "4.3", message = "Height cannot exceed the maximum limit of 4.3 meters")
 	@Column(
-		name = "height_cm",
+		name = "height_m",
 		nullable = false
 	)
-	private Integer heightcm;
-	/** Larghezza del veicolo in centimetri. */
-	@NotNull(message = "Width (cm) cannot be null")
-	@Positive(message = "Width (cm) must be strictly positive")
+	private Float heightm;
+	/** Larghezza del veicolo in metri. */
+	@NotNull(message = "Width (m) cannot be null")
+	@DecimalMin(value = "1.5", message = "The minimum allowed width is 1.5 meters")
+	@DecimalMax(value = "2.6", message = "Width cannot exceed the maximum limit of 2.6 meters")
 	@Column(
-		name = "width_cm",
+		name = "width_m",
 		nullable = false
 	)
-	private Integer widthcm;
-	/** Lunghezza complessiva del veicolo in centimetri. */
-	@NotNull(message = "Length (cm) cannot be null")
-	@Positive(message = "Length (cm) must be strictly positive")
+	private Float widthm;
+	/** Lunghezza complessiva del veicolo in metri. */
+	@NotNull(message = "Length (m) cannot be null")
+	@DecimalMin(value = "3.4", message = "The minimum allowed length is 3.4 meters")
+	@DecimalMax(value = "18.75", message = "Length cannot exceed the maximum limit of 18.75 meters")
 	@Column(
-		name = "length_cm",
+		name = "length_m",
 		nullable = false
 	)
-	private Integer lengthcm;
-	/** Interasse (Distanza tra l'asse anteriore e posteriore) in centimetri. */
-	@NotNull(message = "Wheelbase (cm) cannot be null")
-	@Positive(message = "Wheelbase (cm) must be strictly positive")
+	private Float lengthm;
+	/** Interasse (Distanza tra l'asse anteriore e posteriore) in metri. */
+	@NotNull(message = "Wheelbase (m) cannot be null")
+	@DecimalMin(value = "1.9", message = "The minimum allowed wheelbase is 1.9 meters")
+	@DecimalMax(value = "7", message = "Wheelbase cannot exceed the maximum limit of 7 meters")
 	@Column(
-		name = "wheelbase_cm",
+		name = "wheelbase_m",
 		nullable = false
 	)
-	private Integer wheelbasecm;
+	private Float wheelbasem;
 	/**
 	 * Numero di assi fisici del veicolo.
 	 * Limitato a 8 poiché il sistema gestisce trasporti commerciali standard e non veicoli eccezionali modulari.
@@ -283,36 +289,36 @@ public class Vehicle {
 		this.maxUsefulWeightkg = maxUsefulWeightkg;
 	}
 
-	public Integer getHeightcm() {
-		return heightcm;
+	public Float getHeightm() {
+		return heightm;
 	}
 	
-	public void setHeightcm(Integer heightcm) {
-		this.heightcm = heightcm;
+	public void setHeightm(Float heightm) {
+		this.heightm = heightm;
 	}
 	
-	public Integer getWidthcm() {
-		return widthcm;
+	public Float getWidthm() {
+		return widthm;
 	}
 	
-	public void setWidthcm(Integer widthcm) {
-		this.widthcm = widthcm;
+	public void setWidthm(Float widthm) {
+		this.widthm = widthm;
 	}
 	
-	public Integer getLengthcm() {
-		return lengthcm;
+	public Float getLengthm() {
+		return lengthm;
 	}
 	
-	public void setLengthcm(Integer lengthcm) {
-		this.lengthcm = lengthcm;
+	public void setLengthm(Float lengthm) {
+		this.lengthm = lengthm;
 	}
 	
-	public Integer getWheelbasecm() {
-		return wheelbasecm;
+	public Float getWheelbasem() {
+		return wheelbasem;
 	}
 
-	public void setWheelbasecm(Integer wheelbasecm) {
-		this.wheelbasecm = wheelbasecm;
+	public void setWheelbasem(Float wheelbasem) {
+		this.wheelbasem = wheelbasem;
 	}
 
 	public Integer getnAxles() {
@@ -371,9 +377,9 @@ public class Vehicle {
 		StringBuilder builder = new StringBuilder();
 		builder.append("Vehicle [id=").append(id).append(", licensePlate=").append(licensePlate)
 			.append(", vehicleCategory=").append(vehicleCategory).append(", maxWeightkg=").append(maxWeightkg)
-			.append(", maxUsefulWeightkg=").append(maxUsefulWeightkg).append(", heightcm=").append(heightcm)
-			.append(", widthcm=").append(widthcm).append(", lengthcm=").append(lengthcm).append(", wheelbasecm=")
-			.append(wheelbasecm).append(", nAxles=").append(nAxles).append(", adrCertified=").append(adrCertified)
+			.append(", maxUsefulWeightkg=").append(maxUsefulWeightkg).append(", heightm=").append(heightm)
+			.append(", widthm=").append(widthm).append(", lengthm=").append(lengthm).append(", wheelbasem=")
+			.append(wheelbasem).append(", nAxles=").append(nAxles).append(", adrCertified=").append(adrCertified)
 			.append("]");
 		return builder.toString();
 	}
