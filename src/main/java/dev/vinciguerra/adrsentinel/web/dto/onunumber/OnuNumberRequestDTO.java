@@ -1,5 +1,6 @@
 package dev.vinciguerra.adrsentinel.web.dto.onunumber;
 
+import dev.vinciguerra.adrsentinel.web.annotation.ValidatorNotRequiredString;
 import dev.vinciguerra.adrsentinel.web.annotation.ValidatorRequiredString;
 import dev.vinciguerra.adrsentinel.web.annotation.adrclass.ValidatorAdrClassCode;
 import dev.vinciguerra.adrsentinel.web.annotation.onunumber.ValidatorKemlerCode;
@@ -36,9 +37,11 @@ import dev.vinciguerra.adrsentinel.web.annotation.onunumber.ValidatorTransportCa
  * @param kemlerCode Il Numero di Identificazione del Pericolo (Codice Kemler), esposto 
  * nella metà superiore del pannello arancione sui veicoli (es. "33", "X88").
  * @param packingGroup Il Gruppo di Imballaggio (I, II o III) che definisce il grado di 
- * pericolosità della materia ai fini del confezionamento.
+ * pericolosità della materia ai fini del confezionamento. Non è richiesto nella richiesta, 
+ * se assente verrà automaticamente impostato il parametro più stringente {@code I}.
  * @param tunnelRestriction Il codice alfanumerico che disciplina le restrizioni di transito 
- * all'interno delle gallerie stradali (es. "D/E", "B/D").
+ * all'interno delle gallerie stradali (es. "D/E", "B/D"). Non è richiesto nella richiesta, 
+ * se assente verrà automaticamente impostato il parametro più stringente {@code B}.
  * @param transportCategory La categoria di trasporto ADR (da 0 a 4), parametro cruciale per 
  * il calcolo delle esenzioni parziali (es. calcolo del limite di 1000 punti).
  * @param adrClassCode La chiave logica (Foreign Key di business) necessaria per risolvere 
@@ -49,5 +52,5 @@ import dev.vinciguerra.adrsentinel.web.annotation.onunumber.ValidatorTransportCa
  */
 public record OnuNumberRequestDTO(@ValidatorOnuNumberCode String onuCode, @ValidatorRequiredString String name,
 	@ValidatorRequiredString String physicalState, @ValidatorKemlerCode String kemlerCode,
-	@ValidatorRequiredString String packingGroup, @ValidatorRequiredString String tunnelRestriction,
+	@ValidatorNotRequiredString String packingGroup, @ValidatorNotRequiredString String tunnelRestriction,
 	@ValidatorTransportCategory Integer transportCategory, @ValidatorAdrClassCode String adrClassCode) {}

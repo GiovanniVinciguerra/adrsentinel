@@ -158,23 +158,29 @@ public class OnuNumber {
 	)
 	@ColumnDefault("'NONE'")
 	private String kemlerCode;
-	/** Il grado di pericolo associato a questo record. */
-	@NotNull(message = "Packing group cannot be null")
+	/** 
+	 * Il grado di pericolo associato a questo record.
+	 * Se null verrà associato il grado massimo {@code I}
+	 */
 	@Enumerated(EnumType.STRING)
     @Column(
     	name = "packing_group",
     	nullable = false,
     	length = 255
     )
+	@ColumnDefault("'I'")
     private PackingGroup packingGroup;
-	/** Il divieto di transito in determinate gallerie. */
-	@NotNull(message = "Tunnel restriction cannot be null")
+	/**
+	 * Il divieto di transito in determinate gallerie. 
+	 * Se null verrà associato il grado massimo {@code B}
+	 */
 	@Enumerated(EnumType.STRING)
     @Column(
     	name = "tunnel_restriction",
     	nullable = false,
     	length = 255
     )
+	@ColumnDefault("'B'")
     private TunnelRestriction tunnelRestriction;
 	/**
 	 * Categoria di trasporto ai fini dell'esenzione ADR 1.1.3.6 (Regola dei 1000 punti).
@@ -229,6 +235,10 @@ public class OnuNumber {
 			kemlerCode = "NONE";
 		else
 			kemlerCode = kemlerCode.trim().toUpperCase();
+		if(packingGroup == null)
+			packingGroup = PackingGroup.I;
+		if(tunnelRestriction == null)
+			tunnelRestriction = TunnelRestriction.B;
 	}
 	
 	public Long getId() {

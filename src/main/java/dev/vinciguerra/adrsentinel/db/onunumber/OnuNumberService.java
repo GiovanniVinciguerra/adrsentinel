@@ -361,8 +361,14 @@ public class OnuNumberService extends AbstractGenericService {
 		number.setName(dto.name());
 		number.setPhysicalState(Enum.valueOf(PhysicalState.class, dto.physicalState()));
 		number.setKemlerCode(dto.kemlerCode());
-		number.setPackingGroup(Enum.valueOf(PackingGroup.class, dto.packingGroup()));
-		number.setTunnelRestriction(Enum.valueOf(TunnelRestriction.class, dto.tunnelRestriction()));
+		if(dto.packingGroup() == null)
+			number.setPackingGroup(null);
+		else
+			number.setPackingGroup(Enum.valueOf(PackingGroup.class, dto.packingGroup()));
+		if(dto.tunnelRestriction() == null)
+			number.setTunnelRestriction(null);
+		else
+			number.setTunnelRestriction(Enum.valueOf(TunnelRestriction.class, dto.tunnelRestriction()));
 		number.setTransportCategory(dto.transportCategory());
 		return number;
 	}
