@@ -6,10 +6,9 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 import java.lang.annotation.Documented;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
+import dev.vinciguerra.adrsentinel.web.annotation.validator.UUIDValidator;
 import jakarta.validation.Constraint;
 import jakarta.validation.Payload;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
 
 /**
  * Vincolo di validazione perimetrale (Edge Validation) per l'Identificatore Univoco Universale 
@@ -43,19 +42,14 @@ import jakarta.validation.constraints.Pattern;
 @Documented
 @Retention(RUNTIME)
 @Target({ FIELD, PARAMETER })
-@Constraint(validatedBy = {})
-@NotNull(message = "Shipment item UUID cannot be null.")
-@Pattern(
-	regexp = "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-	message = "Wrong Shipment item UUID format."
-)
+@Constraint(validatedBy = { UUIDValidator.class })
 public @interface ValidatorUUID {
 	/**
 	 * Il messaggio di errore unificato che verrà restituito nel payload di risposta (es. HTTP 400) 
 	 * in caso di fallimento di uno qualsiasi dei vincoli sottostanti.
 	 * @return il messaggio testuale che descrive chiaramente sia l'obbligatorietà che il limite dimensionale.
 	 */
-	String message() default "Invalid Shipment item UUID format or missing.";
+	String message() default "Malformed payload: the required identifier is missing or invalid.";
 	/**
 	 * Partiziona l'esecuzione del vincolo associandolo a specifici Validation Groups.
 	 * <p>Utile per differenziare i controlli a seconda del contesto (es. Creazione vs Aggiornamento).</p>

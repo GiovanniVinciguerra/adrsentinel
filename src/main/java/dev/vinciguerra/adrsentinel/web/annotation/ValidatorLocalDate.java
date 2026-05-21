@@ -1,4 +1,4 @@
-package dev.vinciguerra.adrsentinel.web.annotation.shipment;
+package dev.vinciguerra.adrsentinel.web.annotation;
 
 import static java.lang.annotation.ElementType.FIELD;
 import static java.lang.annotation.ElementType.PARAMETER;
@@ -6,10 +6,9 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 import java.lang.annotation.Documented;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
+import dev.vinciguerra.adrsentinel.web.annotation.validator.LocalDateValidator;
 import jakarta.validation.Constraint;
 import jakarta.validation.Payload;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
 
 /**
  * Vincolo di validazione perimetrale (Edge Validation) per le date di spedizione 
@@ -52,19 +51,14 @@ import jakarta.validation.constraints.Pattern;
 @Documented
 @Retention(RUNTIME)
 @Target({ FIELD, PARAMETER })
-@Constraint(validatedBy = {})
-@NotNull(message = "Shipment date cannot be null")
-@Pattern(
-	regexp = "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$",
-	message = "Wrong date format. Correct: yyyy-mm-gg"
-)
+@Constraint(validatedBy = { LocalDateValidator.class })
 public @interface ValidatorLocalDate {
 	/**
 	 * Il messaggio di errore unificato che verrà restituito nel payload di risposta (es. HTTP 400) 
 	 * in caso di fallimento di uno qualsiasi dei vincoli sottostanti.
 	 * @return il messaggio testuale che descrive chiaramente sia l'obbligatorietà che il limite dimensionale.
 	 */
-	String message() default "Wrong format or missing date.";
+	String message() default "Malformed payload: the required date is missing or invalid (expected format: YYYY-MM-DD).";
 	/**
 	 * Partiziona l'esecuzione del vincolo associandolo a specifici Validation Groups.
 	 * <p>Utile per differenziare i controlli a seconda del contesto (es. Creazione vs Aggiornamento).</p>

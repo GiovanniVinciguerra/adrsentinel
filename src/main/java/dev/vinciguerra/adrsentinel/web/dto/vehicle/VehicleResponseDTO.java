@@ -41,7 +41,7 @@ import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle;
  * @since 1.0
  */
 public record VehicleResponseDTO(Long id, String licensePlate, VehicleCategoryResponseDTO vehicleCategory, Integer maxWeightkg,
-		Integer maxUsefulWeightkg, Float heightm, Float widthm, Float lengthm, Float wheelbasem, Integer nAxles, boolean adrCertified) {
+		Integer maxUsefulWeightkg, Float heightm, Float widthm, Float lengthm, Float wheelbasem, Integer nAxles) {
 	
 	/**
 	 * Factory Method statico per la conversione (Mapping) e l'aggregazione di un'entità 
@@ -84,8 +84,7 @@ public record VehicleResponseDTO(Long id, String licensePlate, VehicleCategoryRe
 			entity.getWidthm(),
 			entity.getLengthm(),
 			entity.getWheelbasem(),
-			entity.getnAxles(),
-			entity.isAdrCertified()
+			entity.getnAxles()
 		);
 	}
 }

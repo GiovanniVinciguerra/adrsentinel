@@ -8,70 +8,78 @@ skinparam class {
     BorderColor Black
 }
 
-entity "adr_classes" as Classes {
+entity "adr_class" as Classes {
   * id : Long <<PK>>
   --
   * class_code : String <<UQ>>
-  * base_risk_factor: Integer
   * description : String
 }
 
-entity "un_numbers" as UN {
+entity "onu_number" as UN {
   * id : Long <<PK>>
   --
   * onu_code : String <<UQ>>
   * name : String
   * physical_state : String
   * kemler_code : String
-  * packing_group : String
-  * tunnel_restriction : String
+  * packing_group : enum
+  * physical_state : enum
+  * tunnel_restriction : enum
   * transport_category : Integer
   * adr_class_id : Long <<FK>>
 }
 
-entity "compatibility_rules" as Rules {
+entity "compatibility_rule" as Rules {
   * id : Long <<PK>>
   --
-  * class_a_id : Long <<FK>>
-  * class_b_id : Long <<FK>>
+  * adr_class_a_id : Long <<FK>>
+  * adr_class_b_id : Long <<FK>>
   * is_compatible : Boolean
-  * warning_notes : String
+  * warning_note : String
 }
 
-entity "vehicles" as Vehicles {
+entity "vehicle" as Vehicles {
   * id : Long <<PK>>
   --
   * license_plate : String <<UQ>>
   * vehicle_type : enum
   * physical_state : enum
   * max_weight_kg : Integer
-  * height_cm : Integer
-  * width_cm : Integer
-  * length_cm : Integer
-  * wheelbase : Integer
+  * max_useful_weight_kg : Integer
+  * height_m : Float
+  * width_m : Float
+  * length_m : Float
+  * wheelbase_m : Float
   * n_axles : Integer
-  * adr_certified : Boolean
+  * load_type : enum
 }
 
-entity "shipments" as Shipments {
+entity "adr_vehicle_approval" as Approval {
+	--
+	* vehicle_id : Long <<FK>>
+	* vehicle_approval : enum
+}
+
+entity "shipment" as Shipments {
   * id : Long <<PK>>
   --
   * tracking_number : String <<UQ>>
   * shipment_date : Timestamp
-  * status : String
+  * status : enum
   * origin_address : String
   * destination_address : String
-  * distance_km : Double
+  * distance_km : Float
   * vehicle_id : Long <<FK>>
 }
 
-entity "shipment_lines" as Lines {
+entity "shipment_item" as Items {
   * id : Long <<PK>>
   --
-  * quantity : Double
-  * unit_of_measure : String
+  * item_uuid : String
+  * quantity : Float
+  * unit_of_measure : enum
   * shipment_id : Long <<FK>>
-  * un_number_id : Long <<FK>>
+  * onu_number_id : Long <<FK>>
 }
 
 ' Relazioni Dominio Normativo
@@ -81,7 +89,8 @@ Classes ||..o{ Rules : "Classe B"
 
 ' Relazioni Dominio Logistico
 Vehicles ||..o{ Shipments : "1 a N"
-Shipments ||..|{ Lines : "1 a N (Cascade)"
-UN ||..o{ Lines : "1 a N"
+Vehicles ||..o{ Approval: "1 a N"
+Shipments ||..|{ Items : "1 a N (Cascade)"
+UN ||..o{ Items : "1 a N"
 
 @enduml

@@ -1,6 +1,6 @@
 package dev.vinciguerra.adrsentinel.web.dto.shipment;
 
-import dev.vinciguerra.adrsentinel.web.annotation.ValidatorRequiredString;
+import dev.vinciguerra.adrsentinel.web.annotation.shipment.ValidatorShipmentStatus;
 
 /**
  * Data Transfer Object (DTO) in ingresso (Request Payload) ultra-specializzato, 
@@ -33,4 +33,4 @@ import dev.vinciguerra.adrsentinel.web.annotation.ValidatorRequiredString;
  * @version 1.0 (Strict Validated Input Payload)
  * @since 1.0
  */
-public record ShipmentUpdateStatusDTO(@ValidatorRequiredString String status) {}
+public record ShipmentUpdateStatusDTO(@ValidatorShipmentStatus String status) {}

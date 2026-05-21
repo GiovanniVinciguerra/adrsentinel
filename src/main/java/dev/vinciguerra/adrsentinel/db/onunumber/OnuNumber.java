@@ -14,16 +14,9 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.PostLoad;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
 
 /**
  * Entità JPA che rappresenta un Numero ONU (UN Number) secondo la normativa ADR.
@@ -102,8 +95,6 @@ public class OnuNumber {
 	 * <b>Vincoli:</b> Non può essere vuoto e deve essere composto da esattamente 4 cifre.
 	 * </p>
 	 */
-	@NotBlank(message = "ONU code cannot be empty or blank")
-	@Pattern(regexp = "^\\d{4}$", message = "Invalid ONU code format: must be exactly 4 digits")
 	@Column(
 		name = "onu_code",
 		nullable = false,
@@ -116,12 +107,6 @@ public class OnuNumber {
 	 * <b>Vincoli:</b> Non vuota con lunghezza tra 3 e 255 caratteri.
 	 * </p>
 	 */
-	@NotBlank(message = "Proper Shipping Name cannot be empty or blank")
-	@Size(
-		min = 3,
-		max = 255,
-		message = "Proper Shipping Name must be at least 3 characters and not exceeds the maximum allowed length of 255 characters"
-	)
 	@Column(
 		name = "name",
 		nullable = false,
@@ -132,7 +117,6 @@ public class OnuNumber {
 	 * Stato fisico della materia. Salvato come stringa nel database. 
 	 * Essendo un'enum, la validazione strutturale è intrinseca in Java.
 	 */
-	@NotNull(message = "Physical state cannot be null")
 	@Enumerated(EnumType.STRING)
     @Column(
     	name = "physical_state",
@@ -147,10 +131,6 @@ public class OnuNumber {
 	 * Se presente, deve essere di 2 o 3 cifre, eventualmente preceduto dalla lettera 'X' (divieto uso acqua).
 	 * </p>
 	 */
-	@Pattern(
-		regexp = "^(NONE|X?\\d{2,3})$",
-		message = "Invalid Kemler code format. Must be 2 or 3 digits, optionally prefixed by 'X'"
-	)
 	@Column(
 		name = "kemler_code",
 		nullable = false,
@@ -190,16 +170,12 @@ public class OnuNumber {
 	 * di default pari a 0 (che in ADR significa "Rischio Massimo senza esenzioni").
 	 * </p>
 	 */
-	@NotNull(message = "Transport category is mandatory")
-	@Min(value = 0, message = "Transport category must be at least 0")
-	@Max(value = 4, message = "Transport category cannot be greater than 4")
 	@Column(
 		name = "transport_category",
 		nullable = false
 	)
 	private Integer transportCategory;
 	/** La classe di pericolo principale. Essenziale per il calcolo delle compatibilità (Matrice di segregazione). */
-	@NotNull(message = "Adr Class cannot be null")
 	@ManyToOne(fetch = FetchType.EAGER)
 	@JoinColumn(
 		name = "adr_class_id",
@@ -222,7 +198,6 @@ public class OnuNumber {
 	 */
 	@PrePersist
 	@PreUpdate
-	@PostLoad
 	private void normalize() {
 		if(onuCode != null)
 			onuCode = onuCode.trim();

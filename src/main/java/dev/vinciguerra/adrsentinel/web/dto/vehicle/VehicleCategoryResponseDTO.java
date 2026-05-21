@@ -1,6 +1,8 @@
 package dev.vinciguerra.adrsentinel.web.dto.vehicle;
 
+import java.util.Set;
 import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle.VehicleCategory;
+import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle.VehicleCategory.VehicleApproval;
 
 /**
  * Data Transfer Object (DTO) in uscita (Response Payload) che modella la classificazione 
@@ -25,11 +27,13 @@ import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle.VehicleCategory;
  * di calcolo della compatibilità e per la generazione dei documenti di viaggio legali.
  * @param vehicleType La codifica testuale della categoria tecnica ADR (es. "TANKER", "CURTAINSIDE").
  * @param loadType La descrizione testuale della tipologia di carico supportata (es. "SOLID", "LIQUID").
+ * @param vehicleApprovals Certificati adr presenti per il veicolo in questione, può essere null nel qual caso 
+ * verrà inserito un empty set che nel dominio significa nessuna certificazione adr.
  * @author Giovanni Vinciguerra
  * @version 1.0 (Strict Validated Output Payload)
  * @since 1.0
  */
-public record VehicleCategoryResponseDTO(String vehicleType, String loadType) {
+public record VehicleCategoryResponseDTO(String vehicleType, String loadType, Set<VehicleApproval> vehicleApprovals) {
 	/**
 	 * Factory Method statico per la conversione (Mapping) di un'entità di dominio 
 	 * {@link VehicleCategory} nel suo corrispondente Data Transfer Object in uscita 
@@ -63,7 +67,8 @@ public record VehicleCategoryResponseDTO(String vehicleType, String loadType) {
 		
 		return new VehicleCategoryResponseDTO(
 			entity.getVehicleType().name(),
-			entity.getLoadType().name()
+			entity.getLoadType().name(),
+			entity.getVehicleApprovals()
 		);
 	}
 }

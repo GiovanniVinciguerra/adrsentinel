@@ -11,9 +11,6 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
 
 /**
  * Entità JPA che rappresenta una Classe di Pericolo secondo la normativa internazionale ADR.
@@ -63,11 +60,6 @@ public class AdrClass implements Comparable<AdrClass> {
 	 * Questo campo è la vera Business Key dell'entità.
 	 * </p>
 	 */
-	@NotBlank(message = "Adr class code cannot be empty or blank")
-	@Pattern(
-		regexp = "^(?=.{1,4}$)\\d(\\.\\d+)?[a-zA-Z]?$",
-		message = "Invalid: max 4 chars. Format: 1 digit + optional '.numbers' + optional letter."
-	)
 	@Column(
 		name = "class_code",
 		nullable = false,
@@ -80,11 +72,9 @@ public class AdrClass implements Comparable<AdrClass> {
 	 * <b>Nota sulla Validazione:</b> Non ammette valori nulli, vuoti o composti da soli spazi.
 	 * La lunghezza minima di 3 caratteri accoglie la classe con la descrizione più corta in assoluto ("Gas").
 	 * I tentativi di inserire ritorni a capo (\n, \r) o tabulazioni (\t) verranno intercettati e corretti 
-	 * in fase di normalizzazione prima di arrivare al validatore.
+	 * in fase di normalizzazione.
 	 * </p>
 	 */
-	@NotBlank(message = "Description cannot be empty or blank")
-	@Size(min = 3, max = 255, message = "Class description must be between 3 and 255 characters")
 	@Column(
 		name = "description",
 		nullable = false,

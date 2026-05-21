@@ -6,11 +6,9 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 import java.lang.annotation.Documented;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
+import dev.vinciguerra.adrsentinel.web.annotation.shipment.validator.AddressValidator;
 import jakarta.validation.Constraint;
 import jakarta.validation.Payload;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
 
 /**
  * Vincolo di validazione perimetrale (Edge Validation) e sanificazione per i campi 
@@ -49,23 +47,14 @@ import jakarta.validation.constraints.Size;
 @Documented
 @Retention(RUNTIME)
 @Target({ FIELD, PARAMETER })
-@Constraint(validatedBy = {})
-@NotNull(message = "Address cannot be null")
-@Pattern(
-	regexp = "^[^<>%&$#@!^*]+$",
-	message = "Address contains invalid or unsafe characters"
-)
-@Size(
-	max = 255,
-	message = "Address must not exceeds the maximum allowed length of 255 characters"
-)
+@Constraint(validatedBy = { AddressValidator.class })
 public @interface ValidatorAddress {
 	/**
 	 * Il messaggio di errore unificato che verrà restituito nel payload di risposta (es. HTTP 400) 
 	 * in caso di fallimento di uno qualsiasi dei vincoli sottostanti.
 	 * @return il messaggio testuale che descrive chiaramente sia l'obbligatorietà che il limite dimensionale.
 	 */
-	String message() default "Invalid Address format or missing.";
+	String message() default "Malformed payload: the required address is missing or invalid (expected 20-255 characters, no special symbols allowed).";
 	/**
 	 * Partiziona l'esecuzione del vincolo associandolo a specifici Validation Groups.
 	 * <p>Utile per differenziare i controlli a seconda del contesto (es. Creazione vs Aggiornamento).</p>

@@ -6,10 +6,9 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 import java.lang.annotation.Documented;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
+import dev.vinciguerra.adrsentinel.web.annotation.onunumber.validator.OnuNumberCodeValidator;
 import jakarta.validation.Constraint;
 import jakarta.validation.Payload;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
 
 /**
  * Vincolo di validazione perimetrale (Edge Validation) per il Numero ONU (UN Number).
@@ -37,23 +36,19 @@ import jakarta.validation.constraints.Pattern;
  * @author Giovanni Vinciguerra
  * @version 1.0 (ADR Domain Validator)
  * @since 1.0
+ * @see OnuNumberCodeValidator
  */
 @Documented
 @Retention(RUNTIME)
 @Target({ FIELD, PARAMETER })
-@Constraint(validatedBy = {})
-@NotNull(message = "Onu number code cannot be null")
-@Pattern(
-	regexp = "^\\d{4}$",
-	message = "Invalid ONU code format: must be exactly 4 digits"
-)
+@Constraint(validatedBy = { OnuNumberCodeValidator.class })
 public @interface ValidatorOnuNumberCode {
 	/**
 	 * Il messaggio di errore unificato che verrà restituito nel payload di risposta (es. HTTP 400) 
 	 * in caso di fallimento di uno qualsiasi dei vincoli sottostanti.
 	 * @return il messaggio testuale che descrive chiaramente sia l'obbligatorietà che il limite dimensionale.
 	 */
-	String message() default "Invalid Onu number code format or missing code.";
+	String message() default "Malformed payload: ONU number code is missing or invalid.";
 	/**
 	 * Partiziona l'esecuzione del vincolo associandolo a specifici Validation Groups.
 	 * <p>Utile per differenziare i controlli a seconda del contesto (es. Creazione vs Aggiornamento).</p>

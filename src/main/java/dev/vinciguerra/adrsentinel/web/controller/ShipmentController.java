@@ -17,9 +17,9 @@ import org.springframework.web.bind.annotation.RestController;
 import dev.vinciguerra.adrsentinel.db.shipment.Shipment;
 import dev.vinciguerra.adrsentinel.db.shipment.ShipmentService;
 import dev.vinciguerra.adrsentinel.db.shipment.Shipment.ShipmentStatus;
-import dev.vinciguerra.adrsentinel.web.annotation.ValidatorRequiredString;
+import dev.vinciguerra.adrsentinel.web.annotation.ValidatorLocalDate;
 import dev.vinciguerra.adrsentinel.web.annotation.ValidatorUUID;
-import dev.vinciguerra.adrsentinel.web.annotation.shipment.ValidatorLocalDate;
+import dev.vinciguerra.adrsentinel.web.annotation.shipment.ValidatorShipmentStatus;
 import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorLicensePlate;
 import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentRequestDTO;
 import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentResponseDTO;
@@ -89,7 +89,7 @@ public class ShipmentController {
 	 * @return Un payload HTTP 200 (OK) contenente i risultati filtrati.
 	 */
 	@GetMapping("/status/{status}")
-	public ResponseEntity<Page<ShipmentResponseDTO>> getByStatus(@PathVariable @ValidatorRequiredString String status, Pageable pageable) {
+	public ResponseEntity<Page<ShipmentResponseDTO>> getByStatus(@PathVariable @ValidatorShipmentStatus String status, Pageable pageable) {
 		Page<Shipment> page = shipmentService.getByShipmentStatus(Enum.valueOf(ShipmentStatus.class, status), pageable);
 		Page<ShipmentResponseDTO> response = page.map(ShipmentResponseDTO::fromEntity);
 		return ResponseEntity.ok(response);
@@ -116,7 +116,7 @@ public class ShipmentController {
 	 * @return Un payload HTTP 200 (OK) con il DTO della spedizione richiesta.
 	 */
 	@GetMapping("/{tracking}")
-	public ResponseEntity<ShipmentResponseDTO> getByTrackingNumber(@PathVariable @ValidatorRequiredString String tracking) {
+	public ResponseEntity<ShipmentResponseDTO> getByTrackingNumber(@PathVariable @ValidatorUUID String tracking) {
 		Shipment shipment = shipmentService.getByTrackingNumber(tracking);
 		return ResponseEntity.ok(ShipmentResponseDTO.fromEntity(shipment));
 	}

@@ -1,6 +1,8 @@
 package dev.vinciguerra.adrsentinel.db.vehicle;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -11,10 +13,11 @@ import dev.vinciguerra.adrsentinel.db.AbstractGenericService;
 import dev.vinciguerra.adrsentinel.db.CaffeineCacheConfiguration;
 import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle.VehicleCategory;
 import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle.VehicleCategory.LoadType;
+import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle.VehicleCategory.VehicleApproval;
 import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle.VehicleCategory.VehicleType;
 import dev.vinciguerra.adrsentinel.exception.ResourceNotFoundException;
 import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleRequestDTO;
-import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleUpdateAdrCertifiedDTO;
+import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleUpdateAdrApprovalDTO;
 import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleUpdateDTO;
 
 /**
@@ -194,18 +197,17 @@ public class VehicleService extends AbstractGenericService {
 	 * L'aggiornamento della RAM è delegato al {@link TransactionSynchronizationManager} per 
 	 * avvenire rigorosamente <b>solo dopo</b> il commit effettivo su disco.
 	 * @param licensePlate La Business Key (Targa) del veicolo, utilizzata per la risoluzione univoca.
-	 * @param updateDto Il payload in ingresso, contenente esclusivamente il nuovo stato booleano 
-	 * della certificazione ADR ({@code true} = Abilitato, {@code false} = Disabilitato/Revocato).
+	 * @param updateDto Il payload in ingresso, contenente esclusivamente il certificato adr del veicolo.
 	 * @return L'entità {@link Vehicle} persistita, riflettente il nuovo stato legale.
 	 * @throws ResourceNotFoundException Se la targa fornita non è censita all'interno del database.
 	 */
 	@Transactional
-	public Vehicle updateAdrCertifiedByLicensePlate(String licensePlate, VehicleUpdateAdrCertifiedDTO updateDto) throws ResourceNotFoundException {
+	public Vehicle updateAdrCertifiedByLicensePlate(String licensePlate, VehicleUpdateAdrApprovalDTO updateDto) throws ResourceNotFoundException {
 		logger.info("[DataBase CALL] Updating Vehicle adrCertified with licensePlate: {}", licensePlate);
 		Vehicle vehicle = vehicleRepository.findByLicensePlate(licensePlate)
 			.orElseThrow(() -> new ResourceNotFoundException("Vehicle not found: " + licensePlate));
 		final Integer oldMaxUsefulWeight = vehicle.getMaxUsefulWeightkg();
-		vehicle.setAdrCertified(updateDto.adrCertified());
+		vehicle.getVehicleCategory().getVehicleApprovals().add(Enum.valueOf(VehicleApproval.class, updateDto.approval()));
 		Vehicle updatedVehicle = vehicleRepository.save(vehicle);
 		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
 			@Override
@@ -351,6 +353,13 @@ public class VehicleService extends AbstractGenericService {
 		VehicleCategory category = new VehicleCategory();
 		category.setVehicleType(Enum.valueOf(VehicleType.class, dto.vehicleType()));
 		category.setLoadType(Enum.valueOf(LoadType.class, dto.loadType()));
+		if(dto.vehicleApprovals() != null) {
+			Set<VehicleApproval> approvals = new HashSet<VehicleApproval>();
+			for(String approval : dto.vehicleApprovals())
+				approvals.add(Enum.valueOf(VehicleApproval.class, approval));
+			category.setVehicleApprovals(approvals);
+		} else
+			category.setVehicleApprovals(new HashSet<VehicleApproval>());
 		vehicle.setVehicleCategory(category);
 		vehicle.setLicensePlate(dto.licensePlate());
 		vehicle.setMaxWeightkg(dto.maxWeightkg());
@@ -360,7 +369,6 @@ public class VehicleService extends AbstractGenericService {
 		vehicle.setLengthm(dto.lengthm());
 		vehicle.setWheelbasem(dto.wheelbasem());
 		vehicle.setnAxles(dto.nAxles());
-		vehicle.setAdrCertified(dto.adrCertified());
 		return vehicle;
 	}
 }

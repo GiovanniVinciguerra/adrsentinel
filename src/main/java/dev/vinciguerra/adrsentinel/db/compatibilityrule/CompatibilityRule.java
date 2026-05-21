@@ -13,13 +13,10 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.PostLoad;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
 
 /**
  * Entità JPA che rappresenta una Regola di Compatibilità (Matrice di Segregazione) tra due Classi ADR.
@@ -60,7 +57,6 @@ public class CompatibilityRule {
 	 * rispetto ad {@code adrClassB}.
 	 * </p>
 	 */
-	@NotNull(message = "ADR Class A cannot be null")
 	@ManyToOne(fetch = FetchType.EAGER)
 	@JoinColumn(
 		name = "adr_class_a_id", 
@@ -75,7 +71,6 @@ public class CompatibilityRule {
 	 * con il {@code classCode} alfanumericamente superiore rispetto ad {@code adrClassA}.
 	 * </p>
 	 */
-	@NotNull(message = "ADR Class B cannot be null")
 	@ManyToOne(fetch = FetchType.EAGER)
 	@JoinColumn(
 		name = "adr_class_b_id", 
@@ -104,11 +99,6 @@ public class CompatibilityRule {
 	 * garantire la perfetta impaginazione dei documenti di viaggio (CMR).
 	 * </p>
 	 */
-	@Size(
-		min = 3,
-		max = 255,
-		message = "Compatibility rule warning note must be at least 14 characters and not exceeds the maximum allowed length of 255 characters"
-	)
 	@Column(
 		name = "warning_note",
 		nullable = false,
@@ -168,12 +158,7 @@ public class CompatibilityRule {
 	 * <li><b>Fallback di Sicurezza:</b> Se il dato letto (o impostato a runtime) risulta nullo 
 	 * o composto da soli spazi, applica istantaneamente il valore di default operativo.</li>
 	 * </ul>
-	 * <p>
-	 * Nota: Viene innescato automaticamente in lettura da {@code @PostLoad}, mentre in scrittura 
-	 * è pilotato dal metodo orchestratore {@link #onBeforeSaveOrUpdate()}.
-	 * </p>
 	 */
-	@PostLoad
 	private void normalize() {
 		if(warningNote == null || warningNote.isBlank())
 			warningNote = WARNING_NOTE_GENERAL;

@@ -6,10 +6,9 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 import java.lang.annotation.Documented;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
+import dev.vinciguerra.adrsentinel.web.annotation.vehicle.validator.LicensePlateValidator;
 import jakarta.validation.Constraint;
 import jakarta.validation.Payload;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
 
 /**
  * Vincolo di validazione perimetrale (Edge Validation) per la Targa del Veicolo 
@@ -50,19 +49,14 @@ import jakarta.validation.constraints.Pattern;
 @Documented
 @Retention(RUNTIME)
 @Target({ FIELD, PARAMETER })
-@Constraint(validatedBy = {})
-@NotNull(message = "License plate cannot be null.")
-@Pattern(
-	regexp = "^[A-Z0-9]{4,10}$",
-	message = "License plate must be between 4 and 10 characters and contain only uppercase letters and numbers"
-)
+@Constraint(validatedBy = { LicensePlateValidator.class })
 public @interface ValidatorLicensePlate {
 	/**
 	 * Il messaggio di errore unificato che verrà restituito nel payload di risposta (es. HTTP 400) 
 	 * in caso di fallimento di uno qualsiasi dei vincoli sottostanti.
 	 * @return il messaggio testuale che descrive chiaramente sia l'obbligatorietà che il limite dimensionale.
 	 */
-	String message() default "License plate number code format or missing code.";
+	String message() default "Malformed payload: the required license plate is missing or invalid (expected 4-10 alphanumeric characters).";
 	/**
 	 * Partiziona l'esecuzione del vincolo associandolo a specifici Validation Groups.
 	 * <p>Utile per differenziare i controlli a seconda del contesto (es. Creazione vs Aggiornamento).</p>

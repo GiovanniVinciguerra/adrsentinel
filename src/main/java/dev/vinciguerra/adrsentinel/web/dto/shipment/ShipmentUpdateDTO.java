@@ -1,7 +1,7 @@
 package dev.vinciguerra.adrsentinel.web.dto.shipment;
 
+import dev.vinciguerra.adrsentinel.web.annotation.ValidatorLocalDateTime;
 import dev.vinciguerra.adrsentinel.web.annotation.shipment.ValidatorAddress;
-import dev.vinciguerra.adrsentinel.web.annotation.shipment.ValidatorLocalDateTime;
 import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorLicensePlate;
 
 /**

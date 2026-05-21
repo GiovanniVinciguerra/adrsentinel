@@ -6,8 +6,9 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 import java.lang.annotation.Documented;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
+import dev.vinciguerra.adrsentinel.web.annotation.onunumber.validator.KemlerCodeValidator;
+import jakarta.validation.Constraint;
 import jakarta.validation.Payload;
-import jakarta.validation.constraints.Pattern;
 
 /**
  * Vincolo di validazione perimetrale (Edge Validation) per il Codice Kemler (Hazard Identification Number).
@@ -40,10 +41,7 @@ import jakarta.validation.constraints.Pattern;
 @Documented
 @Retention(RUNTIME)
 @Target({ FIELD, PARAMETER })
-@Pattern(
-	regexp = "^(X?\\d{2,3})$",
-	message = "Invalid Kemler code format. Must be 2 or 3 digits, optionally prefixed by 'X'"
-)
+@Constraint(validatedBy = { KemlerCodeValidator.class })
 public @interface ValidatorKemlerCode {
 	/**
 	 * Definisce il messaggio di errore predefinito che verrà restituito al client 
@@ -60,7 +58,7 @@ public @interface ValidatorKemlerCode {
 	 * </p>
 	 * @return il messaggio testuale che descrive la violazione del vincolo.
 	 */
-	String message() default "Invalid Kemler code format. Must be 2 or 3 digits, optionally prefixed by 'X'";
+	String message() default "Malformed payload: invalid format for the provided Kemler code. Must be 2 or 3 digits, optionally prefixed by 'X'";
 	/**
 	 * Permette di partizionare l'esecuzione di questa validazione raggruppandola logicamente 
 	 * (Validation Groups).

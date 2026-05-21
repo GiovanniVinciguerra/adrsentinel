@@ -1,8 +1,17 @@
 package dev.vinciguerra.adrsentinel.web.dto.vehicle;
 
-import dev.vinciguerra.adrsentinel.web.annotation.ValidatorRequiredNumber;
-import dev.vinciguerra.adrsentinel.web.annotation.ValidatorRequiredString;
+import java.util.Set;
+import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorAxlesNumber;
+import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorHeight;
+import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorLength;
 import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorLicensePlate;
+import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorLoadType;
+import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorMaxUsefulWeight;
+import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorMaxWeight;
+import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorVehicleApprovals;
+import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorVehicleType;
+import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorWheelbase;
+import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorWidth;
 
 /**
  * Data Transfer Object (DTO) in ingresso (Request Payload) progettato per il censimento 
@@ -39,8 +48,7 @@ import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorLicensePlate;
  * @version 1.0 (Strict Validated Input Payload)
  * @since 1.0
  */
-public record VehicleRequestDTO(@ValidatorLicensePlate String licensePlate, @ValidatorRequiredString String vehicleType,
-	@ValidatorRequiredString String loadType, @ValidatorRequiredNumber Integer maxWeightkg,
-	@ValidatorRequiredNumber Integer maxUsefulWeightkg, @ValidatorRequiredNumber Float heightm,
-	@ValidatorRequiredNumber Float widthm, @ValidatorRequiredNumber Float lengthm,
-	@ValidatorRequiredNumber Float wheelbasem, @ValidatorRequiredNumber Integer nAxles, boolean adrCertified) {}
+public record VehicleRequestDTO(@ValidatorLicensePlate String licensePlate, @ValidatorVehicleType String vehicleType,
+	@ValidatorLoadType String loadType, @ValidatorVehicleApprovals Set<String> vehicleApprovals, @ValidatorMaxWeight Integer maxWeightkg,
+	@ValidatorMaxUsefulWeight Integer maxUsefulWeightkg, @ValidatorHeight Float heightm,@ValidatorWidth Float widthm,
+	@ValidatorLength Float lengthm, @ValidatorWheelbase Float wheelbasem, @ValidatorAxlesNumber Integer nAxles) {}

@@ -1,30 +1,25 @@
 package dev.vinciguerra.adrsentinel.db.vehicle;
 
+import java.util.HashSet;
 import java.util.Objects;
-import org.hibernate.annotations.ColumnDefault;
+import java.util.Set;
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Embeddable;
 import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.PostLoad;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.DecimalMax;
-import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Positive;
 
 /**
  * Entità JPA che rappresenta un Veicolo commerciale all'interno del dominio logistico ADR Sentinel.
@@ -45,7 +40,7 @@ import jakarta.validation.constraints.Positive;
  * <li><b>Attenzione</b>: Il valori delle dimensioni (lunghezza, altezza, larghezza e passo) sono in metri. Per i pesi (peso complessivo 
  * a pieno carico e peso utile trasportabile) invece sono stati adottati i chilogrammi</li>
  * @author Giovanni Vinciguerra
- * @version 2.0 (Refactored with Jakarta Validation)
+ * @version 3.0 (Migliorata la gestione delle approvazioni adr)
  * @since 1.0
  */
 @Entity
@@ -67,7 +62,10 @@ public class Vehicle {
 			CURTAINSIDE,
 			REEFER,
 			VAN,
-			FLATBED
+			FLATBED,
+			TIPPER,
+			CHASSIS,
+			ISOTANK
 		}
 		
 		public enum LoadType {
@@ -80,7 +78,14 @@ public class Vehicle {
 			ALL
 		}
 		
-		@NotNull(message = "Vehicle type cannot be null")
+		public enum VehicleApproval {
+			FL,
+			AT,
+			EX_II,
+			EX_III,
+			MEMU
+		}
+		
 		@Enumerated(EnumType.STRING)
 		@Column(
 			name = "vehicle_type",
@@ -88,7 +93,6 @@ public class Vehicle {
 			length = 255
 		)
 		private VehicleType vehicleType;
-		@NotNull(message = "Load type cannot be null")
 		@Enumerated(EnumType.STRING)
         @Column(
         	name = "load_type",
@@ -96,6 +100,17 @@ public class Vehicle {
         	length = 255
         )
 		private LoadType loadType;
+		@ElementCollection(targetClass = VehicleApproval.class, fetch = FetchType.EAGER)
+		@Enumerated(EnumType.STRING)
+		@CollectionTable(
+			name = "adr_vehicle_approval",
+			joinColumns = @JoinColumn(name = "vehicle_id")
+		)
+		@Column(
+			name = "vehicle_approval",
+			nullable = false
+		)
+		private Set<VehicleApproval> vehicleApprovals;
 
 		public VehicleType getVehicleType() {
 			return vehicleType;
@@ -112,12 +127,20 @@ public class Vehicle {
 		public void setLoadType(LoadType loadType) {
 			this.loadType = loadType;
 		}
+		
+		public Set<VehicleApproval> getVehicleApprovals() {
+			return vehicleApprovals;
+		}
+		
+		public void setVehicleApprovals(Set<VehicleApproval> vehicleApprovals) {
+			this.vehicleApprovals = vehicleApprovals;
+		}
 
 		@Override
 		public String toString() {
 			StringBuilder builder = new StringBuilder();
 			builder.append("VehicleCategory [vehicleType=").append(vehicleType).append(", loadType=")
-				.append(loadType).append("]");
+				.append(loadType).append(", vehicleApprovals=").append(vehicleApprovals).append("]");
 			return builder.toString();
 		}
 	}
@@ -134,11 +157,6 @@ public class Vehicle {
 	 * (univocità e lunghezza fissa massima) sono invece imposti al database.
 	 * </p>
 	 */
-	@NotBlank(message = "License plate cannot be empty or blank")
-	@Pattern(
-		regexp = "^[A-Z0-9]{4,10}$",
-		message = "License plate must be between 4 and 10 characters and contain only uppercase letters and numbers"
-	)
 	@Column(
 		name = "license_plate",
 		unique = true,
@@ -150,58 +168,39 @@ public class Vehicle {
 	 * Struttura del veicolo (Tipo di mezzo e stato fisico del carico supportato).
 	 * {@code @Valid} assicura che il validatore ispezioni anche le annotazioni interne alla classe embeddata.
 	 */
-	@Valid
-	@NotNull(message = "Vehicle category information is mandatory")
 	@Embedded
 	private VehicleCategory vehicleCategory;
 	/** Peso massimo a pieno carico espresso in chilogrammi. */
-	@NotNull(message = "Max weight (kg) cannot be null")
-	@Min(value = 1500, message = "")
-	@Max(value = 44000, message = "")
 	@Column(
 		name = "max_weight_kg",
 		nullable = false
 	)
 	private Integer maxWeightkg;
 	/** Portata utile (peso massimo della merce trasportabile) espressa in chilogrammi. */
-	@NotNull(message = "Max useful weight (kg) cannot be null")
-	@Positive(message = "Max useful weight (kg) must be strictly positive")
 	@Column(
 		name = "max_useful_weight_kg",
 		nullable = false
 	)
 	private Integer maxUsefulWeightkg;
 	/** Altezza massima del veicolo in metri (Critica per i percorsi con cavalcavia). */
-	@NotNull(message = "Height (m) cannot be null")
-	@DecimalMin(value = "1.7", message = "The minimum allowed height is 1.7 meters")
-	@DecimalMax(value = "4.3", message = "Height cannot exceed the maximum limit of 4.3 meters")
 	@Column(
 		name = "height_m",
 		nullable = false
 	)
 	private Float heightm;
 	/** Larghezza del veicolo in metri. */
-	@NotNull(message = "Width (m) cannot be null")
-	@DecimalMin(value = "1.5", message = "The minimum allowed width is 1.5 meters")
-	@DecimalMax(value = "2.6", message = "Width cannot exceed the maximum limit of 2.6 meters")
 	@Column(
 		name = "width_m",
 		nullable = false
 	)
 	private Float widthm;
 	/** Lunghezza complessiva del veicolo in metri. */
-	@NotNull(message = "Length (m) cannot be null")
-	@DecimalMin(value = "3.4", message = "The minimum allowed length is 3.4 meters")
-	@DecimalMax(value = "18.75", message = "Length cannot exceed the maximum limit of 18.75 meters")
 	@Column(
 		name = "length_m",
 		nullable = false
 	)
 	private Float lengthm;
 	/** Interasse (Distanza tra l'asse anteriore e posteriore) in metri. */
-	@NotNull(message = "Wheelbase (m) cannot be null")
-	@DecimalMin(value = "1.9", message = "The minimum allowed wheelbase is 1.9 meters")
-	@DecimalMax(value = "7", message = "Wheelbase cannot exceed the maximum limit of 7 meters")
 	@Column(
 		name = "wheelbase_m",
 		nullable = false
@@ -211,42 +210,31 @@ public class Vehicle {
 	 * Numero di assi fisici del veicolo.
 	 * Limitato a 8 poiché il sistema gestisce trasporti commerciali standard e non veicoli eccezionali modulari.
 	 */
-	@NotNull(message = "Number of axles cannot be null")
-	@Min(value = 2, message = "Number of axles must be at least 2")
-	@Max(value = 8, message = "Number of axles exceeds standard ADR transport limits (Max 8 axles)")
 	@Column(
 		name = "n_axles",
 		nullable = false
 	)
 	private Integer nAxles;
-	/**
-	 * Indicatore di conformità al trasporto di Merci Pericolose (Accordo ADR).
-	 * Utilizza il tipo primitivo per innescare un fallback sicuro (false) in caso di omissione del dato.
-	 */
-	@Column(
-		name = "adr_certified",
-		nullable = false
-	)
-	@ColumnDefault("false")
-	private boolean adrCertified = false;
 	
 	/**
-	 * Lifecycle Hook (Tolerant Reader) eseguito prima di interagire con il database e dopo il caricamento in memoria.
+	 * Lifecycle Hook (Tolerant Reader) eseguito prima di interagire con il database.
 	 * <p>
 	 * Intercetta input formattati male dall'utente (es. " AB - 123 CD ") e li pulisce brutalmente 
 	 * rimuovendo newline, tabulazioni, spazi intermedi e trattini, forzando l'uppercase. 
-	 * Garantisce che nel database entri ed esca solo la stringa essenziale (es. "AB123CD").
+	 * Garantisce che nel database entri solo la stringa essenziale (es. "AB123CD").
+	 * Inoltre verifica anche che il set associato alle approvazioni adr del veicolo non sia mai null ma al più empty.
 	 * </p>
 	 */
 	@PrePersist
 	@PreUpdate
-	@PostLoad
 	private void normalize() {
 		if(licensePlate != null) {
 			licensePlate = licensePlate.replaceAll("[\\r\\n\\t]+", " ");
 			licensePlate = licensePlate.replaceAll("[\\s\\-]+", "");
 			licensePlate = licensePlate.trim().toUpperCase();
 		}
+		if(vehicleCategory.vehicleApprovals == null)
+			vehicleCategory.vehicleApprovals = new HashSet<Vehicle.VehicleCategory.VehicleApproval>();
 	}
 	
 	public Long getId() {
@@ -329,14 +317,6 @@ public class Vehicle {
 		this.nAxles = nAxles;
 	}
 
-	public boolean isAdrCertified() {
-		return adrCertified;
-	}
-	
-	public void setAdrCertified(boolean adrCertified) {
-		this.adrCertified = adrCertified;
-	}
-
 	/** L'uguaglianza logica tra veicoli si basa esclusivamente sulla Business Key (Targa). */
 	@Override
 	public int hashCode() {
@@ -379,8 +359,7 @@ public class Vehicle {
 			.append(", vehicleCategory=").append(vehicleCategory).append(", maxWeightkg=").append(maxWeightkg)
 			.append(", maxUsefulWeightkg=").append(maxUsefulWeightkg).append(", heightm=").append(heightm)
 			.append(", widthm=").append(widthm).append(", lengthm=").append(lengthm).append(", wheelbasem=")
-			.append(wheelbasem).append(", nAxles=").append(nAxles).append(", adrCertified=").append(adrCertified)
-			.append("]");
+			.append(wheelbasem).append(", nAxles=").append(nAxles).append("]");
 		return builder.toString();
 	}
 }

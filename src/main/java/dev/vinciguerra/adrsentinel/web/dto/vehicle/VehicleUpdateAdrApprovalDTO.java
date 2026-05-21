@@ -18,10 +18,9 @@ package dev.vinciguerra.adrsentinel.web.dto.vehicle;
  * Questo approccio previene in modo assoluto le {@code NullPointerException} a runtime 
  * e implementa il principio del <i>Secure by Default</i> (un veicolo non è mai considerato 
  * certificato per merci pericolose a meno di una dichiarazione esplicita e positiva).
- * @param adrCertified Il nuovo stato legale desiderato ({@code true} = abilitato al 
- * trasporto di merci pericolose, {@code false} = non abilitato o certificazione sospesa).
+ * @param approval La nuova certificazione adr del veicolo.
  * @author Giovanni Vinciguerra
  * @version 1.0 (Strict Validated Input Payload)
  * @since 1.0
  */
-public record VehicleUpdateAdrCertifiedDTO(boolean adrCertified) {}
+public record VehicleUpdateAdrApprovalDTO(String approval) {}

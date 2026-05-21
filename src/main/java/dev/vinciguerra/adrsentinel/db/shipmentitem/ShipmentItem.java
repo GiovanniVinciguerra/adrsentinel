@@ -17,8 +17,6 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
 
 /**
  * Entità che modella una singola riga di carico (Dettaglio Merce Pericolosa) all'interno 
@@ -89,8 +87,6 @@ public class ShipmentItem {
 	)
 	private String itemUUID = UUID.randomUUID().toString();
 	/** Quantità trasportata. */
-	@NotNull(message = "Quantity cannot be null")
-	@Positive(message = "Quantity must be strictly greater than zero")
 	@Column(
 		name = "quantity",
 		nullable = false,
@@ -101,7 +97,6 @@ public class ShipmentItem {
 	 * Unità di misura della quantità. Salvata come stringa sul database per prevenire 
 	 * la corruzione dei dati in caso di alterazione dell'ordine dell'Enum.
 	 */
-	@NotNull(message = "Unit of measure cannot be null")
 	@Enumerated(EnumType.STRING)
 	@Column(
 		name = "unit_of_measure",
@@ -113,8 +108,7 @@ public class ShipmentItem {
 	 * Riferimento al "Padre" (la Spedizione).
 	 * La Foreign Key è esplicitamente nominata per garantire la leggibilità dei log di schema.
 	 */
-	@NotNull(message = "Shipment cannot be null")
-	@ManyToOne(fetch = FetchType.LAZY)
+	@ManyToOne(fetch = FetchType.EAGER)
 	@JoinColumn(
 		name = "shipment_id",
 		nullable = false,
@@ -125,8 +119,7 @@ public class ShipmentItem {
 	 * Riferimento alla natura della merce (Numero ONU).
 	 * Determina le regole chimiche e i limiti quantitativi applicabili.
 	 */
-	@NotNull(message = "OnuNumber cannot be null")
-	@ManyToOne(fetch = FetchType.LAZY)
+	@ManyToOne(fetch = FetchType.EAGER)
 	@JoinColumn(
 		name = "onu_number_id",
 		nullable = false,

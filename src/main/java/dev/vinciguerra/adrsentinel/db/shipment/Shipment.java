@@ -17,16 +17,10 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.PostLoad;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Positive;
-import jakarta.validation.constraints.Size;
 
 /**
  * Entità JPA che rappresenta una Spedizione logistica (Viaggio).
@@ -96,7 +90,6 @@ public class Shipment {
 	 * La data e l'ora in cui la spedizione è programmata per la partenza (se {@code PLANNED}) 
 	 * o in cui è effettivamente partita.
 	 */
-	@NotNull(message = "Shipment date cannot be null")
 	@Column(
 		name = "shipment_date",
 		nullable = false
@@ -110,7 +103,6 @@ public class Shipment {
 	 * la retrocompatibilità qualora vengano aggiunti nuovi stati all'enumerazione in futuro.
 	 * </p>
 	 */
-	@NotNull(message = "Shipping status cannot be null")
 	@Enumerated(EnumType.STRING)
 	@Column(
 		name = "status",
@@ -126,16 +118,6 @@ public class Shipment {
 	 * spuri vengono neutralizzati dall'hook {@link #normalize()}.
 	 * </p>
 	 */
-	@NotBlank(message = "Origin Address cannot be empty or blank")
-	@Pattern(
-		regexp = "^[^<>%&$#@!^*]+$",
-		message = "Shipping Origin Address contains invalid or unsafe characters"
-	)
-	@Size(
-		min = 20,
-		max = 255,
-		message = "Shipping Origin Address must be at least 20 characters and not exceeds the maximum allowed length of 255 characters"
-	)
 	@Column(
 		name = "origin_address",
 		nullable = false,
@@ -146,16 +128,6 @@ public class Shipment {
 	 * Indirizzo fisico di arrivo (Hub logistico o destinatario finale).
 	 * <p>Condivide le medesime logiche di validazione e normalizzazione dell'indirizzo di origine.</p>
 	 */
-	@NotBlank(message = "Destination Address cannot be empty or blank")
-	@Pattern(
-		regexp = "^[^<>%&$#@!^*]+$",
-		message = "Shipping Destination Address contains invalid or unsafe characters"
-	)
-	@Size(
-		min = 20,
-		max = 255,
-		message = "Shipping Destination Address must be at least 20 characters and not exceeds the maximum allowed length of 255 characters"
-	)
 	@Column(
 		name = "destination_address",
 		nullable = false,
@@ -171,8 +143,6 @@ public class Shipment {
 	 * precisione associata è di tre valori decimali dopo la virgola
 	 * </p>
 	 */
-	@NotNull(message = "Distance cannot be null. Route calculation is mandatory.")
-	@Positive(message = "Distance must be strictly greater than zero")
 	@Column(
 		name = "distance_km",
 		nullable = false,
@@ -186,8 +156,7 @@ public class Shipment {
 	 * delle spedizioni dal database.
 	 * </p>
 	 */
-	@NotNull(message = "Vehicle cannot be null")
-	@ManyToOne(fetch = FetchType.LAZY)
+	@ManyToOne(fetch = FetchType.EAGER)
 	@JoinColumn(
 		name = "vehicle_id",
 		nullable = false,
@@ -237,7 +206,7 @@ public class Shipment {
 		if(shipmentStatus == ShipmentStatus.PLANNED) {
 			LocalDateTime toleranceLimit = LocalDateTime.now().minusDays(2);
 			if(shipmentDate.isBefore(toleranceLimit))
-				throw new BadRequestException("A planned shipment cannot be scheduled more than 24 hours in the past");
+				throw new BadRequestException("A planned shipment cannot be scheduled more than 48 hours in the past");
 		}
 	}
 	
@@ -258,7 +227,6 @@ public class Shipment {
 	 * presenti nel database. In scrittura, l'invocazione è demandata a {@link #onBeforeSaveOrUpdate()}.
 	 * </p>
 	 */
-	@PostLoad
 	private void normalize() {
 		if(originAddress != null) {
 			originAddress = originAddress.replaceAll("[\\r\\n\\t]+", " ");

@@ -1,7 +1,12 @@
 package dev.vinciguerra.adrsentinel.web.dto.vehicle;
 
-import dev.vinciguerra.adrsentinel.web.annotation.ValidatorRequiredNumber;
-import dev.vinciguerra.adrsentinel.web.annotation.ValidatorRequiredString;
+import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorHeight;
+import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorLength;
+import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorLoadType;
+import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorMaxUsefulWeight;
+import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorMaxWeight;
+import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorVehicleType;
+import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorWidth;
 
 /**
  * Data Transfer Object (DTO) in ingresso (Request Payload) dedicato alla mutazione 
@@ -34,6 +39,6 @@ import dev.vinciguerra.adrsentinel.web.annotation.ValidatorRequiredString;
  * @version 1.0 (Strict Validated Input Payload)
  * @since 1.0
  */
-public record VehicleUpdateDTO(@ValidatorRequiredString String vehicleType, @ValidatorRequiredString String loadType,
-	@ValidatorRequiredNumber Integer maxWeightkg, @ValidatorRequiredNumber Integer maxUsefulWeightkg,
-	@ValidatorRequiredNumber Float heightm, @ValidatorRequiredNumber Float widthm, @ValidatorRequiredNumber Float lengthm) {}
+public record VehicleUpdateDTO(@ValidatorVehicleType String vehicleType, @ValidatorLoadType String loadType,
+	@ValidatorMaxWeight Integer maxWeightkg, @ValidatorMaxUsefulWeight Integer maxUsefulWeightkg,
+	@ValidatorHeight Float heightm, @ValidatorWidth Float widthm, @ValidatorLength Float lengthm) {}

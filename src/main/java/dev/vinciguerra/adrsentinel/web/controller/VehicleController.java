@@ -13,11 +13,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle;
 import dev.vinciguerra.adrsentinel.db.vehicle.VehicleService;
-import dev.vinciguerra.adrsentinel.web.annotation.ValidatorRequiredNumber;
 import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorLicensePlate;
+import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorMaxUsefulWeight;
 import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleRequestDTO;
 import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleResponseDTO;
-import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleUpdateAdrCertifiedDTO;
+import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleUpdateAdrApprovalDTO;
 import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleUpdateDTO;
 import jakarta.validation.Valid;
 
@@ -91,7 +91,7 @@ public class VehicleController {
 	 * @return HTTP {@code 200 OK} contenente i veicoli idonei al carico.
 	 */
 	@GetMapping("/weight/{maxUsefulWeight}")
-	public ResponseEntity<List<VehicleResponseDTO>> getByMaxUsefulWeight(@PathVariable @ValidatorRequiredNumber Integer maxUsefulWeight) {
+	public ResponseEntity<List<VehicleResponseDTO>> getByMaxUsefulWeight(@PathVariable @ValidatorMaxUsefulWeight Integer maxUsefulWeight) {
 		List<Vehicle> vehicles = vehicleService.getByMaxUsefulWeight(maxUsefulWeight);
 		List<VehicleResponseDTO> response = vehicles.stream().map(VehicleResponseDTO::fromEntity).toList();
 		return ResponseEntity.ok(response);
@@ -139,7 +139,7 @@ public class VehicleController {
 	 * @return HTTP {@code 200 OK} con l'oggetto veicolo aggiornato.
 	 */
 	@PutMapping("/adr-certified/{licensePlate}")
-	public ResponseEntity<VehicleResponseDTO> updateVehicleAdrCertified(@PathVariable @ValidatorLicensePlate String licensePlate, @RequestBody VehicleUpdateAdrCertifiedDTO updateDto) {
+	public ResponseEntity<VehicleResponseDTO> updateVehicleAdrCertified(@PathVariable @ValidatorLicensePlate String licensePlate, @RequestBody VehicleUpdateAdrApprovalDTO updateDto) {
 		Vehicle updatedVehicle = vehicleService.updateAdrCertifiedByLicensePlate(licensePlate, updateDto);
 		return ResponseEntity.ok(VehicleResponseDTO.fromEntity(updatedVehicle));
 	}
