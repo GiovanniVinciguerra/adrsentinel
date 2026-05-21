@@ -16,10 +16,13 @@
 Nel mondo della logistica, il trasporto di Merci Pericolose (sottoposto alla rigida normativa europea ADR) è un vero e proprio campo minato. Un singolo errore di carico, o la scelta di un percorso sbagliato (es. attraversare una galleria non autorizzata), può portare a **sanzioni penali, disastri ambientali e perdite economiche devastanti**.
 
 Le aziende di trasporto si trovano quotidianamente davanti a un bivio: 
-1. Essere eccessivamente prudenti (facendo viaggiare mezzi mezzi vuoti e perdendo marginalità).
+1. Essere eccessivamente prudenti (facendo viaggiare veicoli mezzi vuoti e perdendo marginalità).
 2. Rischiare per ottimizzare i costi, esponendosi a sanzioni.
 
 **AdrSentinel nasce per risolvere definitivamente questo conflitto.**
+
+AdrSentinel non si premura solo delle aziende, ma anche dell'autista di mezzi pesanti:
+1. La scelta del percorso migliore e del percorso consentito per il trasporto può essere un incubo, soprattutto per chi ha poca esperienza.
 
 ---
 
@@ -28,24 +31,25 @@ AdrSentinel non è un semplice gestionale dati, ma un vero e proprio **motore de
 
 * **Load Optimization (Cost Reduction):** Un algoritmo che assiste nella scelta del mezzo di trasporto perfetto. Ottimizza lo spazio e il peso delle merci, garantendo al contempo che sostanze chimicamente incompatibili (es. infiammabili ed esplosivi) non vengano mai caricate sullo stesso veicolo, rispettando i limiti normativi (es. regola dei 1000 punti).
 * **Gestione e Tracciabilità Immutabile:** Uno storico completo, cachato e ultra-performante di ogni spedizione, veicolo e singola riga di carico. Essenziale per la reportistica e per superare brillantemente gli audit normativi aziendali.
+* **Scelta del Percorso Migliore:** Un algoritmo che cuce il percorso sulla tipologia di merce trasportata e sul veicolo che la trasporta, tenendo anche conto dei tempi di riposo, per legge, dell'autista di mezzi pesanti.
 
 ---
 
 ## Architettura del Dominio: La Legge diventa Codice
-Il cuore pulsante di AdrSentinel è il suo Database, progettato secondo i principi del **Domain-Driven Design (DDD)**. Le complesse leggi del trasporto europeo non sono state affrontate con semplici controlli "If/Else" nel codice, ma sono state modellate intrinsecamente nella struttura relazionale dei dati su **PostgreSQL**.
+Il cuore pulsante di AdrSentinel è il suo Database, progettato secondo i principi del **Domain-Driven Design (DDD)**. Le complesse leggi del trasporto italiano non sono state affrontate con semplici controlli "If/Else" nel codice, ma sono state modellate intrinsecamente nella struttura relazionale dei dati su **PostgreSQL**.
 
-* **Il Dominio Normativo:** Le entità `un_numbers` (sostanze chimiche) e `adr_classes` sono collegate da una matrice di compatibilità (`compatibility_rules`). Il database stesso "sa" se la Classe A può viaggiare con la Classe B, bloccando alla radice inserimenti illegali.
-* **Il Dominio Logistico:** L'entità `shipment` funge da anello di congiunzione tra le regole chimiche (`shipment_item`) e i vincoli fisici del camion (`vehicle`).
+* **Il Dominio Normativo:** Le entità `onu_numbers` (sostanze chimiche) e `adr_classes` sono collegate da una matrice di compatibilità (`compatibility_rules`). Il database stesso "sa" se la Classe A può viaggiare con la Classe B, bloccando alla radice inserimenti illegali.
+* **Il Dominio Logistico:** L'entità `shipment` funge da anello di congiunzione tra le regole chimiche (`shipment_item`) e i vincoli fisici del del veicolo (`vehicle`).
 
 ---
 
 ## Qualità del Codice e Pattern Architetturali
 Questo backend è stato sviluppato ponendo un'attenzione maniacale alla qualità, alle performance e alla manutenibilità a lungo termine:
 
-* **Enterprise Documentation:** Nessuna classe è lasciata al caso. L'intero codice sorgente è documentato con **Javadoc dettagliatissimi** che spiegano non solo il *cosa*, ma il *perché* (Design Pattern utilizzati, scelte architetturali, flussi di transazione).
+* **Enterprise Documentation:** Nessuna classe è lasciata al caso. L'intero codice sorgente è documentato con **Javadoc dettagliatissimi** che spiegano non solo il *cosa*, ma il *perché* (Design Pattern utilizzati, scelte architetturali).
 * **Pattern Applicati:** Fail-Fast Validation (Custom Annotations), Surrogate Business Keys (UUID) per blindare l'integrità dei dati in memoria e prevenire *Ghost Records*.
 * **Caching Ibrido (Write-Through):** Implementazione di strategie avanzate di manipolazione diretta della cache (Caffeine) per abbattere i tempi di risposta senza incappare in dati obsoleti, mantenendo la coerenza transazionale.
-* **JPA/Hibernate Tuning:** Prevenzione proattiva di N+1 queries e `LazyInitializationException` tramite un uso consapevole del *Dirty Checking* e del *Read-Only Defaulting*.
+* **Gestione della sicurezza (Input Validation e SQL Injection)**: Implementazione dei comuni pattern di sicurezza. Tutte le richieste vengono filtrate da un **Firewall di livello Application** che valida costantemente l'input proveniente dal client, questo per evitare di distruggere la solidità relazionale del DataBase e per prevenire i comuni attacchi di **SQL Injection** e **Parameter Pollution**.
 
 ---
 
@@ -62,3 +66,4 @@ L'obiettivo di questa architettura software non è solo "eseguire istruzioni", m
 - **Riduzione drastica dell'errore umano** nella pianificazione dei carichi ADR.
 - **Risparmio economico (Carburante/Pedaggi)** grazie all'ottimizzazione del riempimento dei mezzi.
 - **Zero sanzioni** e totale sicurezza legale per gli autisti e il management.
+- **Zero stress** per gli autisti di mezzi pesanti.
