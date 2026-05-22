@@ -1,5 +1,6 @@
 package dev.vinciguerra.adrsentinel.web.annotation.compatibilityrules.validator;
 
+import java.util.regex.Pattern;
 import dev.vinciguerra.adrsentinel.web.annotation.compatibilityrules.ValidatorWarningNote;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
@@ -21,6 +22,23 @@ import jakarta.validation.ConstraintValidatorContext;
  */
 public class WarningNoteValidator implements ConstraintValidator<ValidatorWarningNote, String> {
 	/**
+	 * Whitelist di sicurezza per il campo warningNote di CompatibilityRule:
+	 * <ul>
+	 * <li><b>\p{L}:</b> Qualsiasi lettera (inclusi accenti) </li>
+	 * <li><b>0-9:</b> Numeri </li>
+	 * <li><b>\s:</b> Spazi, tab, ritorni a capo </li>
+	 * <li><b>\-',.;:!?:</b> Punteggiatura base per frasi di senso compiuto </li>
+	 * <li><b>/()</b> Alternative e precisazioni </li>
+	 * <li><b>°%+&</b> Gradi, percentuali, addizioni (es. 1.4+1.5) e congiunzioni </li>
+	 * <li><b>Esclusi:</b> <, >, =, {, }, $, [, ], * </li>
+	 * </ul>
+	 * <p>
+	 * <b>N.B</b> la stringa è valida esclusivamente se possiede solo e solo questi caratteri consentiti.
+	 * </p>
+	 */
+	Pattern WHITELIST_WARNING_NOTE_PATTERN = Pattern.compile("^[\\p{L}0-9\\s\\-',.;:!?/()°%+&]+$");
+	
+	/**
 	 * Esegue l'ispezione della stringa in ingresso per certificarne l'allineamento ai limiti di archiviazione.
 	 * <p><b>Flusso di Esecuzione (Fail-Fast & Optionality):</b></p>
 	 * <ol>
@@ -32,6 +50,8 @@ public class WarningNoteValidator implements ConstraintValidator<ValidatorWarnin
 	 * il motore di validazione verifica che la sua lunghezza sia matematicamente compresa 
 	 * nel range prestabilito [3, 255]. Questo assicura che il payload non provochi troncamenti 
 	 * o errori di overflow durante la scrittura sul database (es. colonna VARCHAR).</li>
+	 * <li><b>Whitelisting</b>: Intercetta e respinge qualunque stringa che non corrisponde al pattern del campo 
+	 * warningNote di una regola di compatibilità ADR.
 	 * </ol>
 	 * @param value La nota di avvertenza estratta dal Data Transfer Object (Request Payload).
 	 * @param context Il contesto di validazione iniettato dal framework (Spring/Hibernate Validator).
@@ -43,6 +63,8 @@ public class WarningNoteValidator implements ConstraintValidator<ValidatorWarnin
 	public boolean isValid(String value, ConstraintValidatorContext context) {
 		if(value == null || value.isBlank())
 			return true;
-		return value.length() >= 3 && value.length() <= 255;
+		if(value.length() < 3 || value.length() > 255)
+			return false;
+		return WHITELIST_WARNING_NOTE_PATTERN.matcher(value).matches();
 	}
 }

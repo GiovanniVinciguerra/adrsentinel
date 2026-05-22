@@ -1,5 +1,6 @@
 package dev.vinciguerra.adrsentinel.web.annotation.onunumber.validator;
 
+import java.util.regex.Pattern;
 import dev.vinciguerra.adrsentinel.web.annotation.onunumber.ValidatorOnuNumberName;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
@@ -22,6 +23,20 @@ import jakarta.validation.ConstraintValidatorContext;
  */
 public class OnuNumberNameValidator implements ConstraintValidator<ValidatorOnuNumberName, String> {
 	/**
+	 * Whitelist di sicurezza per il campo name di OnuNumber:
+	 * <ul>
+	 * <li><b>\p{L}:</b> Qualsiasi lettera (inclusi accenti) </li>
+	 * <li><b>0-9:</b> Numeri (fondamentali per l'identificazione chimica, es. 1,2-dicloroetano) </li>
+	 * <li><b>\s:</b> Spazi, tab, ritorni a capo </li>
+	 * <li><b>\-',.()°:</b> Trattini, apostrofi, virgole, punti (es. per N.A.S.), parentesi e gradi. </li>
+	 * </ul>
+	 * <p>
+	 * <b>N.B</b> la stringa è valida esclusivamente se possiede solo e solo questi caratteri consentiti.
+	 * </p>
+	 */
+	private final static Pattern WHITELIST_NAME_PATTERN = Pattern.compile("^[\\p{L}0-9\\s\\-',.()°]+$");
+	
+	/**
 	 * Esegue l'ispezione della stringa in ingresso per certificarne la validità strutturale e dimensionale.
 	 * <p><b>Flusso di Esecuzione (Fail-Fast):</b></p>
 	 * <ol>
@@ -33,6 +48,8 @@ public class OnuNumberNameValidator implements ConstraintValidator<ValidatorOnuN
 	 * stringa fornita sia matematicamente compresa nel range prestabilito [3, 255]. 
 	 * Questo step previene eccezioni SQL o errori di troncamento (Data Truncation) 
 	 * durante la persistenza (es. su colonna VARCHAR).</li>
+	 * <li><b>Whitelisting</b>: Intercetta e respinge qualunque stringa che non corrisponde al pattern del campo 
+	 * name di una classe onu.
 	 * </ol>
 	 * @param value La denominazione tecnica ONU estratta dal Request Payload.
 	 * @param context Il contesto di validazione iniettato dal framework (Spring/Hibernate Validator).
@@ -44,6 +61,8 @@ public class OnuNumberNameValidator implements ConstraintValidator<ValidatorOnuN
 	public boolean isValid(String value, ConstraintValidatorContext context) {
 		if(value == null || value.isBlank())
 			return false;
-		return value.length() >= 3 && value.length() <= 255;
+		if(value.length() < 3 || value.length() > 255)
+			return false;
+		return WHITELIST_NAME_PATTERN.matcher(value).matches();
 	}
 }

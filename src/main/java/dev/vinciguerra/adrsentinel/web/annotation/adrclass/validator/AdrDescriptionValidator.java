@@ -1,5 +1,6 @@
 package dev.vinciguerra.adrsentinel.web.annotation.adrclass.validator;
 
+import java.util.regex.Pattern;
 import dev.vinciguerra.adrsentinel.web.annotation.adrclass.ValidatorAdrDescription;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
@@ -20,6 +21,21 @@ import jakarta.validation.ConstraintValidatorContext;
  */
 public class AdrDescriptionValidator implements ConstraintValidator<ValidatorAdrDescription, String> {
 	/**
+	 * Whitelist di sicurezza per il campo description di AdrClass:
+	 * <ul>
+	 * <li><b>\p{L}:</b> Qualsiasi lettera (inclusi accenti) </li>
+	 * <li><b>0-9:</b> Numeri </li>
+	 * <li><b>\s:</b> Spazi, tab, ritorni a capo </li>
+	 * <li><b>\-',.():</b> Trattini, apostrofi, virgole, punti e parentesi tonde </li>
+	 * <li><b>+:</b> Almeno un carattere di questi </li>
+	 * </ul>
+	 * <p>
+	 * <b>N.B</b> la stringa è valida esclusivamente se possiede solo e solo questi caratteri consentiti.
+	 * </p>
+	 */
+	private final static Pattern WHITELIST_DESCRITION_PATTERN = Pattern.compile("^[\\p{L}0-9\\s\\-',.()]+$");
+	
+	/**
 	 * Esegue l'ispezione della stringa in ingresso per certificarne la validità strutturale e dimensionale.
 	 * <p><b>Flusso di Esecuzione (Fail-Fast):</b></p>
 	 * <ol>
@@ -29,6 +45,8 @@ public class AdrDescriptionValidator implements ConstraintValidator<ValidatorAdr
 	 * sia matematicamente compresa nel range prestabilito [3, 255]. Questo garantisce la 
 	 * perfetta compatibilità e sicurezza nell'inserimento all'interno della relativa colonna 
 	 * (es. VARCHAR) sul database.</li>
+	 * <li><b>Whitelisting</b>: Intercetta e respinge qualunque stringa che non corrisponde al pattern del campo 
+	 * description di una classe ADR.
 	 * </ol>
 	 * @param value La stringa descrittiva estratta dal Request Payload.
 	 * @param context Il contesto di validazione fornito dal framework (Spring/Hibernate Validator).
@@ -39,6 +57,8 @@ public class AdrDescriptionValidator implements ConstraintValidator<ValidatorAdr
 	public boolean isValid(String value, ConstraintValidatorContext context) {
 		if(value == null || value.isBlank())
 			return false;
-		return value.length() >= 3 && value.length() <= 255;
+		if(value.length() < 3 || value.length() > 255)
+			return false;
+		return WHITELIST_DESCRITION_PATTERN.matcher(value).matches();
 	}
 }
