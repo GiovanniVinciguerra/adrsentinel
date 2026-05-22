@@ -49,7 +49,7 @@ Questo backend è stato sviluppato ponendo un'attenzione maniacale alla qualità
 * **Enterprise Documentation:** Nessuna classe è lasciata al caso. L'intero codice sorgente è documentato con **Javadoc dettagliatissimi** che spiegano non solo il *cosa*, ma il *perché* (Design Pattern utilizzati, scelte architetturali).
 * **Pattern Applicati:** Fail-Fast Validation (Custom Annotations), Surrogate Business Keys (UUID) per blindare l'integrità dei dati in memoria e prevenire *Ghost Records*.
 * **Caching Ibrido (Write-Through):** Implementazione di strategie avanzate di manipolazione diretta della cache (Caffeine) per abbattere i tempi di risposta senza incappare in dati obsoleti, mantenendo la coerenza transazionale.
-* **Gestione della sicurezza (Input Validation e SQL Injection)**: Implementazione dei comuni pattern di sicurezza. Tutte le richieste vengono filtrate da un **Firewall di livello Application** che valida costantemente l'input proveniente dal client, questo per evitare di distruggere la solidità relazionale del DataBase e per prevenire i comuni attacchi di **SQL Injection** e **Parameter Pollution**.
+* **Gestione della sicurezza (Input Validation e SQL Injection)**: Implementazione dei comuni pattern di sicurezza per evitare problemi di **SQL Injection** (PreparedStatement) e **Parameter Pollution** (fail-on-reading-dup-tree-key); inoltre tutte le richieste vengono filtrate da un **Firewall di livello Application** che valida costantemente l'input proveniente dal client, questo per evitare di distruggere la solidità relazionale del DataBase.
 
 ---
 
