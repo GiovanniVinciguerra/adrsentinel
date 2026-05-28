@@ -66,6 +66,11 @@ public class DispatchService {
 	private final OnuNumberService onuNumberService;
 	private final VehicleService vehicleService;
 	/**
+	 * Set immutabile contenente i codici ONU di Categoria di Trasporto 1 
+	 * che richiedono un moltiplicatore normativo eccezionale (x50).
+	 */
+	private static final Set<String> SPECIAL_MULTIPLIER_ONU = Set.of("0081", "0082", "0084", "0241", "0331", "0332", "0482", "1005", "1053");
+	/**
 	 * Inietta i servizi necessari per l'accesso ai dati anagrafici e logistici.
 	 * @param compatibilityRuleService Servizio per la lettura delle matrici di compatibilità tra classi ADR.
 	 * @param onuNumberService Servizio per la validazione e il recupero dei numeri ONU tramite chiave naturale.
@@ -138,7 +143,7 @@ public class DispatchService {
 			boolean isExempt = (totalAdrPoints <= 1000.0f);
 			List<Vehicle> vehiclesToAssign = vehicleService.getByMaxUsefulWeight(clusterTotalWeight_kg);
 			if(vehiclesToAssign == null || vehiclesToAssign.isEmpty())
-				throw new ResourceNotFoundException("Nessun veicolo trovato con questo peso utile: " + clusterTotalWeight_kg);
+				throw new ResourceNotFoundException("No vehicle found with payload capacity: " + clusterTotalWeight_kg);
 			if(!alreadyAssignedVehicles.isEmpty()) {
 				for(int i=0; i<vehiclesToAssign.size(); i++) {
 					if(alreadyAssignedVehicles.contains(vehiclesToAssign.get(i))) {
@@ -148,10 +153,10 @@ public class DispatchService {
 				}
 			}
 			if(vehiclesToAssign == null || vehiclesToAssign.isEmpty()) // Ricontrollo perchè la lista potrebbe essere vuota dopo il ciclo
-				throw new ResourceNotFoundException("Tutte le sostanze non possono essere assegnate, non si possiedono sufficienti veicoli adatti. Dettaglio: " + cluster);
+				throw new ResourceNotFoundException("Insufficient fleet capacity for cluster: " + cluster);
 			Vehicle selectedVehicle = selectBestMatchingVehicle(cluster, vehiclesToAssign, isExempt);
 			if(selectedVehicle == null)
-				throw new ResourceNotFoundException("Nessun veicolo idoneo trovato per il carico.");
+				throw new ResourceNotFoundException("No suitable vehicle found for payload.");
 			dispatchResults.add(
 				new VehicleDispatchResponseDTO(
 					VehicleResponseDTO.fromEntity(selectedVehicle),
@@ -188,14 +193,37 @@ public class DispatchService {
 	}
 	
 	/**
-	 * Calcola il coefficiente di rischio (Punti ADR) basato sulla Categoria di Trasporto
-	 * come definito dal capitolo 1.1.3.6 dell'accordo ADR.
-	 * @param onu L'entità rappresentante il numero ONU (che definisce il moltiplicatore base).
-	 * @param netWeight_kg La quantità netta della merce in chilogrammi.
-	 * @return I punti ADR calcolati per il singolo collo.
+	 * Calcola il punteggio ADR per un singolo articolo logistico ai fini dell'applicazione 
+	 * dell'esenzione parziale per quantità trasportate per unità di trasporto (Regola dei 1000 punti).
+	 * <p>
+	 * L'algoritmo implementa rigorosamente la tabella del <b>Capitolo 1.1.3.6.4 dell'Accordo ADR</b>,
+	 * associando a ciascuna Categoria di Trasporto il rispettivo fattore di moltiplicazione.
+	 * </p>
+	 * * <b>Regole di Moltiplicazione Applicate:</b>
+	 * <ul>
+	 * <li><b>Categoria 0:</b> Esenzione MAI consentita. Il metodo satura artificialmente il calcolo restituendo 9999, invalidando all'istante la soglia limite.</li>
+	 * <li><b>Categoria 1:</b> Moltiplicatore <b>x50</b> per sostanze ad altissimo rischio (es. UN 1005 Ammoniaca anidra, esplosivi specifici), <b>x20</b> per tutte le altre.</li>
+	 * <li><b>Categoria 2:</b> Moltiplicatore <b>x3</b> (es. gas infiammabili, corrosivi forti).</li>
+	 * <li><b>Categoria 3:</b> Moltiplicatore <b>x1</b> (es. liquidi infiammabili standard, vernici).</li>
+	 * <li><b>Categoria 4:</b> Moltiplicatore <b>x0</b>. La merce non concorre al conteggio dei punti (es. batterie scariche).</li>
+	 * </ul>
+	 * @param onu L'entità anagrafica {@link OnuNumber} che definisce la categoria di trasporto e il codice identificativo della sostanza.
+	 * @param netWeight_kg La quantità netta della sostanza trasportata, espressa in chilogrammi o litri.
+	 * @return I punti ADR calcolati per la quantità specificata. Se la merce appartiene alla categoria 0, restituisce 9999.
+	 * @throws IllegalArgumentException Se il database contiene un valore di categoria di trasporto non previsto dalla norma (diverso da 0, 1, 2, 3, 4).
 	 */
-	private int calculateAdrPoints(OnuNumber onu, int netWeight_kg) {
-		return onu.getTransportCategory() * netWeight_kg;
+	private int calculateAdrPoints(OnuNumber onu, int netWeight_kg) throws IllegalArgumentException {
+		int category = onu.getTransportCategory();
+		if(category == 0)
+			return 9999;
+		int multiplier = switch(category) {
+			case 1 -> SPECIAL_MULTIPLIER_ONU.contains(onu.getOnuCode()) ? 50 : 20;
+			case 2 -> 3;
+			case 3 -> 1;
+			case 4 -> 0;
+			default -> throw new IllegalArgumentException("Invalid transport category for ONU " + onu.getOnuCode() + ": " + category);
+		};
+		return multiplier * netWeight_kg;
 	}
 	
 	/**
