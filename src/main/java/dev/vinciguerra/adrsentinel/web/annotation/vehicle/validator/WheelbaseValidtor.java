@@ -34,7 +34,7 @@ public class WheelbaseValidtor implements ConstraintValidator<ValidatorWheelbase
 	 * <li><b>Sanitizzazione Algebrica (Finite Math Check):</b> Verifica che il numero sia 
 	 * finito e reale. Intercettando {@code Float.isNaN()} e {@code Float.isInfinite()}, 
 	 * respinge payload ingannevoli che innescherebbero difetti di calcolo fatali nel Service Layer.</li>
-	 * <li><b>Boundary Check (Range [1.9, 7.0]):</b> Come ultimo step, impone che il valore 
+	 * <li><b>Boundary Check (Range [1.9, 9.0]):</b> Come ultimo step, impone che il valore 
 	 * rientri nel range ingegneristico consentito. Questo sbarramento previene alla radice errori 
 	 * di inserimento della magnitudo (es. millimetri al posto di metri) che falserebbero 
 	 * completamente la fisica del veicolo simulato a sistema.</li>
@@ -51,6 +51,6 @@ public class WheelbaseValidtor implements ConstraintValidator<ValidatorWheelbase
 			return false;
 		if(value.isInfinite() || value.isNaN())
 			return false;
-		return value >= 1.9f && value <= 7;
+		return value >= 1.9f && value <= 9.0f;
 	}
 }

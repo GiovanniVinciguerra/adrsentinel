@@ -41,7 +41,7 @@ public @interface ValidatorWheelbase {
 	 * qualora la collezione contenga almeno un elemento vuoto, nullo o non riconosciuto a dizionario.
 	 * @return la stringa contenente il messaggio in standard Minimalist REST (es. HTTP 400).
 	 */
-	String message() default "Malformed payload: the required numeric value is missing, invalid, or out of bounds (expected a finite float between 1.9 and 7.0).";
+	String message() default "Malformed payload: the required numeric value is missing, invalid, or out of bounds (expected a Integer between 2 and 8).";
 	/**
 	 * Partiziona l'esecuzione del vincolo associandolo a specifici gruppi di validazione 
 	 * (Validation Groups).

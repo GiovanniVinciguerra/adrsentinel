@@ -175,7 +175,11 @@ public class ShipmentItemService extends AbstractGenericService {
 		ShipmentItem item = shipmentItemRepository.findByItemUUID(itemUUID)
 			.orElseThrow(() -> new ResourceNotFoundException("ShipmentItem not found: " + itemUUID));
 		final String shipmentTrackingNumber = item.getShipment().getTrackingNumber();
-		OnuNumber number = onuNumberService.getByOnuCodeAndPackingGroup(updateDto.onuCode(), Enum.valueOf(PackingGroup.class, updateDto.packingGroup()));
+		OnuNumber number = onuNumberService.getByOnuCodeAndPackingGroupAndName(
+			updateDto.onuCode(),
+			Enum.valueOf(PackingGroup.class, updateDto.packingGroup()),
+			updateDto.name()
+		);
 		item.setOnuNumber(number);
 		item.setQuantity(updateDto.quantity());
 		item.setUnitOfMeasure(Enum.valueOf(UnitOfMeasure.class, updateDto.unitOfMeasure()));
@@ -262,7 +266,11 @@ public class ShipmentItemService extends AbstractGenericService {
 	public ShipmentItem mapToEntity(ShipmentItemRequestDTO dto) {
 		ShipmentItem item = new ShipmentItem();
 		Shipment shipment = shipmentService.getByTrackingNumber(dto.shipmentTrackingNumber());
-		OnuNumber onuNumber = onuNumberService.getByOnuCodeAndPackingGroup(dto.onuNumberCode(), Enum.valueOf(PackingGroup.class, dto.packingGroup()));
+		OnuNumber onuNumber = onuNumberService.getByOnuCodeAndPackingGroupAndName(
+			dto.onuNumberCode(),
+			Enum.valueOf(PackingGroup.class, dto.packingGroup()),
+			dto.name()
+		);
 		item.setShipment(shipment);
 		item.setOnuNumber(onuNumber);
 		item.setQuantity(dto.quantity());

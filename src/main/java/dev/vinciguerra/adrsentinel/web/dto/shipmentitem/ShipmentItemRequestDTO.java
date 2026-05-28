@@ -2,6 +2,7 @@ package dev.vinciguerra.adrsentinel.web.dto.shipmentitem;
 
 import dev.vinciguerra.adrsentinel.web.annotation.ValidatorUUID;
 import dev.vinciguerra.adrsentinel.web.annotation.onunumber.ValidatorOnuNumberCode;
+import dev.vinciguerra.adrsentinel.web.annotation.onunumber.ValidatorOnuNumberName;
 import dev.vinciguerra.adrsentinel.web.annotation.onunumber.ValidatorPackingGroup;
 import dev.vinciguerra.adrsentinel.web.annotation.shipmentitem.ValidatorQuantity;
 import dev.vinciguerra.adrsentinel.web.annotation.shipmentitem.ValidatorUnitOfMeasure;
@@ -32,11 +33,13 @@ import dev.vinciguerra.adrsentinel.web.annotation.shipmentitem.ValidatorUnitOfMe
  * @param quantity La quantità fisica della materia trasportata (deve essere rigorosamente > 0).
  * @param unitOfMeasure L'unità di misura associata alla quantità (es. "KG", "L", "FUSTI").
  * @param shipmentTrackingNumber La Business Key primaria della spedizione "padre" a cui questo articolo appartiene.
- * @param onuNumberCode Il codice ONU a 4 cifre esatte, prima metà della chiave di lookup normativo.
- * @param packingGroup Il gruppo di imballaggio (es. "I", "II", "III"), seconda metà della chiave di lookup ADR.
+ * @param onuNumberCode Il codice ONU a 4 cifre esatte, prima parte della chiave di lookup normativo.
+ * @param packingGroup Il gruppo di imballaggio (es. "I", "II", "III"), seconda parte della chiave di lookup ADR.
+ * @param name Il nome della materia Onu, terza parte della chiave di lookup ADR.
  * @author Giovanni Vinciguerra
  * @version 1.0 (Strict Validated Input Payload)
  * @since 1.0
  */
 public record ShipmentItemRequestDTO(@ValidatorUUID String uuid, @ValidatorQuantity Float quantity, @ValidatorUnitOfMeasure String unitOfMeasure,
-	@ValidatorUUID String shipmentTrackingNumber, @ValidatorOnuNumberCode String onuNumberCode, @ValidatorPackingGroup String packingGroup) {}
+	@ValidatorUUID String shipmentTrackingNumber, @ValidatorOnuNumberCode String onuNumberCode, @ValidatorPackingGroup String packingGroup,
+	@ValidatorOnuNumberName String name) {}

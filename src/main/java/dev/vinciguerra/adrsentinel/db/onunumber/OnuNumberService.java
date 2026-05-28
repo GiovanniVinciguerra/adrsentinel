@@ -102,21 +102,11 @@ public class OnuNumberService extends AbstractGenericService {
 	 * @throws ResourceNotFoundException Se nessuna materia attiva corrisponde all'accoppiata fornita, 
 	 * interrompendo immediatamente il flusso di esecuzione (Fail-Fast).
 	 */
-	@Cacheable(value = CaffeineCacheConfiguration.ONU_NUMBER_BY_ONU_CODE_AND_PACKING_GROUP_CACHE, key = "#onuCode + '-' + #packingGroup.name()")
-	public OnuNumber getByOnuCodeAndPackingGroup(String onuCode, PackingGroup packingGroup) throws ResourceNotFoundException {
-		logger.info("[DataBase CALL] Searching for the OnuNumber by onuCode and packingGroup: {} {}", onuCode, packingGroup);
-		return onuNumberRepository.findByOnuCodeAndPackingGroup(onuCode, packingGroup)
-			.orElseThrow(
-				() -> new ResourceNotFoundException(
-					new StringBuilder()
-						.append("OnuNumber not found: {")
-						.append(onuCode)
-						.append(", ")
-						.append(packingGroup)
-						.append("}")
-						.toString()
-				)
-			);
+	@Cacheable(value = CaffeineCacheConfiguration.ONU_NUMBER_BY_ONU_CODE_AND_PACKING_GROUP_AND_NAME_CACHE, key = "#onuCode + '-' + #packingGroup.name() + '-' + #name")
+	public OnuNumber getByOnuCodeAndPackingGroupAndName(String onuCode, PackingGroup packingGroup, String name) throws ResourceNotFoundException {
+		logger.info("[DataBase CALL] Searching for the OnuNumber by onuCode, packingGroup and name: {} {} {}", onuCode, packingGroup, name);
+		return onuNumberRepository.findByOnuCodeAndPackingGroupAndName(onuCode, packingGroup, name)
+			.orElseThrow(() -> new ResourceNotFoundException("OnuNumber not found: {" + onuCode + ", " + packingGroup + "," + name + "}"));
 	}
 	
 	/**
@@ -293,8 +283,8 @@ public class OnuNumberService extends AbstractGenericService {
 	 */
 	private void syncCacheAfterInsert(OnuNumber savedOnuNumber, String adrClassCode) {
 		storeInCache(
-			CaffeineCacheConfiguration.ONU_NUMBER_BY_ONU_CODE_AND_PACKING_GROUP_CACHE,
-			savedOnuNumber.getOnuCode() + "'-'" + savedOnuNumber.getPackingGroup().name(),
+			CaffeineCacheConfiguration.ONU_NUMBER_BY_ONU_CODE_AND_PACKING_GROUP_AND_NAME_CACHE,
+			savedOnuNumber.getOnuCode() + "'-'" + savedOnuNumber.getPackingGroup().name() + "'-'" + savedOnuNumber.getName(),
 			savedOnuNumber,
 			CacheOperation.SINGLE_RECORD
 		);

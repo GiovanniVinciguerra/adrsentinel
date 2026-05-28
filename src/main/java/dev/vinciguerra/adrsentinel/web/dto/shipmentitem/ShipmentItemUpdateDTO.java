@@ -1,6 +1,7 @@
 package dev.vinciguerra.adrsentinel.web.dto.shipmentitem;
 
 import dev.vinciguerra.adrsentinel.web.annotation.onunumber.ValidatorOnuNumberCode;
+import dev.vinciguerra.adrsentinel.web.annotation.onunumber.ValidatorOnuNumberName;
 import dev.vinciguerra.adrsentinel.web.annotation.onunumber.ValidatorPackingGroup;
 import dev.vinciguerra.adrsentinel.web.annotation.shipmentitem.ValidatorQuantity;
 import dev.vinciguerra.adrsentinel.web.annotation.shipmentitem.ValidatorUnitOfMeasure;
@@ -28,12 +29,15 @@ import dev.vinciguerra.adrsentinel.web.annotation.shipmentitem.ValidatorUnitOfMe
  * </ul>
  * @param quantity La nuova quantità della materia caricata (deve essere rigorosamente > 0).
  * @param unitOfMeasure La nuova unità di misura associata alla quantità (es. "KG", "L").
- * @param onuCode Il codice ONU a 4 cifre esatte, utilizzato come prima chiave per il lookup normativo.
+ * @param onuCode Il codice ONU a 4 cifre esatte, utilizzato come prima chiave insieme a 
+ * packingGroup e name per il lookup normativo.
  * @param packingGroup Il gruppo di imballaggio (es. "I", "II", "III"), utilizzato in combinazione 
- * con il codice ONU per isolare l'esatta direttiva ADR nel database.
+ * con il codice ONU e il name per isolare l'esatta direttiva ADR nel database.
+ * @param name Il nome della materia Onu utilizzata in combinazione con onuCode e packingGroup per isolare 
+ * l'esatta direttiva ADR nel database.
  * @author Giovanni Vinciguerra
  * @version 1.0 (Strict Validated Input Payload)
  * @since 1.0
  */
 public record ShipmentItemUpdateDTO(@ValidatorQuantity Float quantity, @ValidatorUnitOfMeasure String unitOfMeasure,
-	@ValidatorOnuNumberCode String onuCode, @ValidatorPackingGroup String packingGroup) {}
+	@ValidatorOnuNumberCode String onuCode, @ValidatorPackingGroup String packingGroup, @ValidatorOnuNumberName String name) {}

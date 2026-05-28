@@ -45,7 +45,7 @@ public interface OnuNumberRepository extends JpaRepository<OnuNumber, Long> {
 	 * Nel dominio dei trasporti pericolosi, l'identità legale e normativa di una sostanza 
 	 * è raramente definita dal solo Codice ONU. Sostanze con lo stesso codice possono avere 
 	 * restrizioni totalmente diverse in base al loro grado di pericolo, rappresentato dal 
-	 * Gruppo di Imballaggio (Packing Group). L'intersezione di questi due parametri forma 
+	 * Gruppo di Imballaggio (Packing Group) e dal nome. L'intersezione di questi tre parametri forma 
 	 * l'unica vera "Business Key" in grado di isolare una singola e specifica direttiva di trasporto.
 	 * <p><b>Design Pattern e Robustezza (Null-Safety via Optional):</b></p>
 	 * Il ritorno incapsulato in un {@link java.util.Optional} è una <i>best practice</i> assoluta. 
@@ -56,10 +56,11 @@ public interface OnuNumberRepository extends JpaRepository<OnuNumber, Long> {
 	 * @param onuCode Il codice numerico a 4 cifre (UN Number) assegnato internazionalmente 
 	 * alla materia (es. "1202", "1965").
 	 * @param packingGroup Il grado di pericolo e relativo gruppo di imballaggio (I, II o III).
+	 * @param name Il nome di questa OnuNumber.
 	 * @return Un {@link Optional} contenente l'entità {@code OnuNumber} idratata dal database, 
 	 * oppure {@code Optional.empty()} se la combinazione fornita non produce alcun risultato.
 	 */
-	Optional<OnuNumber> findByOnuCodeAndPackingGroup(String onuCode, PackingGroup packingGroup);
+	Optional<OnuNumber> findByOnuCodeAndPackingGroupAndName(String onuCode, PackingGroup packingGroup, String name);
 	/**
 	 * Ricerca e restituisce tutte le istanze e le varianti di Numeri ONU associate a uno specifico codice a 4 cifre.
 	 * <p>

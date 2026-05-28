@@ -293,14 +293,14 @@ public class OnuNumber {
      */
 	@Override
 	public int hashCode() {
-		return Objects.hash(onuCode, packingGroup);
+		return Objects.hash(onuCode, packingGroup, name);
 	}
 	
 	/**
      * Verifica l'uguaglianza tra due numeri ONU.
      * <p>
      * L'uguaglianza forte è definita dalla coincidenza sia del codice ONU (es. 1230) 
-     * sia del Gruppo di Imballaggio (es. PG II), poiché la stessa materia chimica 
+     * sia del Gruppo di Imballaggio (es. PG II) che del name, poiché la stessa materia chimica 
      * può esistere con gradi di pericolo (e quindi regolamentazioni) differenti.
      * </p>
      */
@@ -313,7 +313,7 @@ public class OnuNumber {
 		if (getClass() != obj.getClass())
 			return false;
 		OnuNumber other = (OnuNumber) obj;
-		return Objects.equals(onuCode, other.onuCode) && packingGroup == other.packingGroup;
+		return Objects.equals(onuCode, other.onuCode) && packingGroup == other.packingGroup && Objects.equals(name, other.name);
 	}
 
 	@Override
