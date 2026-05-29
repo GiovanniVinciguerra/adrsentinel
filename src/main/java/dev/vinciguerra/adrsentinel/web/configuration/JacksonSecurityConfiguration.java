@@ -68,7 +68,7 @@ public class JacksonSecurityConfiguration {
 				StreamReadConstraints
 					.builder()
 					.maxNestingDepth(6)
-					.maxStringLength(510)
+					.maxStringLength(1000000)
 					.build()
 				)
 			.build();

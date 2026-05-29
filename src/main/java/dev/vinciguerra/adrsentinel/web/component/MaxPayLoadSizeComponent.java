@@ -36,10 +36,10 @@ import jakarta.servlet.http.HttpServletResponse;
 public class MaxPayLoadSizeComponent extends OncePerRequestFilter {
 	/**
 	 * Limite massimo tollerato per il payload di una singola richiesta HTTP.
-	 * Impostato a 32 Kilobytes (32 * 1024 bytes). Questo valore è frutto di un rigoroso 
+	 * Impostato a 2 Megabytes (2 * 1024 * 1024 bytes). Questo valore è frutto di un rigoroso 
 	 * Capacity Planning sulle dimensioni massime (Worst-Case Scenario) dei DTO in ingresso.
 	 */
-	private static final long MAX_PAYLOAD_BYTES = 32 * 1024;
+	private static final long MAX_PAYLOAD_BYTES = 2 * 1024 * 1024;
 	/** Logger dinamico dedicato al tracciamento degli eventi di sicurezza di questo componente. */
 	private final Logger logger = LoggerFactory.getLogger(MaxPayLoadSizeComponent.class);
 	
