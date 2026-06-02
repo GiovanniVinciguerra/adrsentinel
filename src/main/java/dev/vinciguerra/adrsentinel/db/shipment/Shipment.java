@@ -135,21 +135,6 @@ public class Shipment {
 	)
 	private String destinationAddress;
 	/**
-	 * Distanza calcolata del tragitto, espressa in chilometri.
-	 * <p>
-	 * Essenziale per la fatturazione e le normative sul trasporto. L'uso della classe wrapper 
-	 * {@code Float} permette di intercettare l'assenza del dato tramite {@code @NotNull}, 
-	 * mentre {@code @Positive} funge da guardia contro percorsi negativi o pari a zero. La 
-	 * precisione associata è di tre valori decimali dopo la virgola
-	 * </p>
-	 */
-	@Column(
-		name = "distance_km",
-		nullable = false,
-		scale = 3
-	)
-	private Float distancekm;
-	/**
 	 * Il mezzo di trasporto assegnato a questa specifica spedizione.
 	 * <p>
 	 * Relazione caricata in modo pigro ({@code LAZY}) per ottimizzare le performance di estrazione 
@@ -284,14 +269,6 @@ public class Shipment {
 		this.destinationAddress = destinationAddress;
 	}
 	
-	public Float getDistancekm() {
-		return distancekm;
-	}
-	
-	public void setDistancekm(Float distancekm) {
-		this.distancekm = distancekm;
-	}
-	
 	public Vehicle getVehicle() {
 		return vehicle;
 	}
@@ -325,7 +302,7 @@ public class Shipment {
 		builder.append("Shipment [id=").append(id).append(", trackingNumber=").append(trackingNumber)
 			.append(", shipmentDate=").append(shipmentDate).append(", shipmentStatus=").append(shipmentStatus)
 			.append(", originAddress=").append(originAddress).append(", destinationAddress=")
-			.append(destinationAddress).append(", distancekm=").append(distancekm).append("]");
+			.append(destinationAddress).append("]");
 		return builder.toString();
 	}
 }

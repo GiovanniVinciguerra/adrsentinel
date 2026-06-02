@@ -40,6 +40,6 @@ import dev.vinciguerra.adrsentinel.web.annotation.shipmentitem.ValidatorUnitOfMe
  * @version 1.0 (Strict Validated Input Payload)
  * @since 1.0
  */
-public record ShipmentItemRequestDTO(@ValidatorUUID String uuid, @ValidatorQuantity Float quantity, @ValidatorUnitOfMeasure String unitOfMeasure,
+public record ShipmentItemRequestDTO(@ValidatorQuantity Float quantity, @ValidatorUnitOfMeasure String unitOfMeasure,
 	@ValidatorUUID String shipmentTrackingNumber, @ValidatorOnuNumberCode String onuNumberCode, @ValidatorPackingGroup String packingGroup,
 	@ValidatorOnuNumberName String name) {}

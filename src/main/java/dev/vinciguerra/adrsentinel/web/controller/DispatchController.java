@@ -7,8 +7,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import dev.vinciguerra.adrsentinel.db.dispatch.DispatchService;
-import dev.vinciguerra.adrsentinel.web.dto.adrdispatch.DispatchRequestDTO;
-import dev.vinciguerra.adrsentinel.web.dto.adrdispatch.DispatchResponseDTO;
+import dev.vinciguerra.adrsentinel.web.dto.dispatch.DispatchRequestDTO;
+import dev.vinciguerra.adrsentinel.web.dto.dispatch.DispatchResponseDTO;
 import jakarta.validation.Valid;
 
 /**

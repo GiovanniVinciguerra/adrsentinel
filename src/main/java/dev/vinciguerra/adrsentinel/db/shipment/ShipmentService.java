@@ -45,7 +45,6 @@ import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentUpdateStatusDTO;
  * sia del database fisico che delle regioni di memoria in RAM, prevenendo letture 
  * di dati obsoleti (Stale Data).
  * </p>
- *
  * @author Giovanni Vinciguerra
  * @version 3.0 (Paginazione Veicoli Inclusa)
  * @since 1.0
@@ -416,7 +415,6 @@ public class ShipmentService extends AbstractGenericService {
 		shipment.setShipmentStatus(Enum.valueOf(ShipmentStatus.class, dto.status()));
 		shipment.setOriginAddress(dto.origin());
 		shipment.setDestinationAddress(dto.destination());
-		shipment.setDistancekm(dto.distancekm());
 		return shipment;
 	}
 }

@@ -2,9 +2,7 @@ package dev.vinciguerra.adrsentinel.db.adrclass.shipmentroute;
 
 import java.util.Objects;
 import java.util.UUID;
-
 import org.hibernate.annotations.ColumnDefault;
-
 import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumber.TunnelRestriction;
 import dev.vinciguerra.adrsentinel.db.shipment.Shipment;
 import jakarta.persistence.Column;
@@ -71,30 +69,43 @@ public class ShipmentRoute {
 	)
 	private String routeUUID = UUID.randomUUID().toString();
 	/** Latitudine esatta del punto di partenza elaborata dal Geocoder. */
-	@Column(name = "origin_latitude", nullable = false)
+	@Column(
+		name = "origin_latitude",
+		nullable = false
+	)
 	private Double originLat;
 	/** Longitudine esatta del punto di partenza elaborata dal Geocoder. */
-	@Column(name = "origin_longitude", nullable = false)
+	@Column(
+		name = "origin_longitude",
+		nullable = false
+	)
 	private Double originLng;
 	/** Latitudine esatta del punto di arrivo elaborata dal Geocoder. */
-	@Column(name = "destination_latitude", nullable = false)
+	@Column(
+		name = "destination_latitude",
+		nullable = false
+	)
 	private Double destLat;
 	/** Longitudine esatta del punto di arrivo elaborata dal Geocoder. */
-	@Column(name = "destination_longitude", nullable = false)
+	@Column(
+		name = "destination_longitude",
+		nullable = false
+	)
 	private Double destLng;
 	/** Distanza effettiva del tragitto su strada (non in linea d'aria), espressa in chilometri. */
-	@Column(name = "distance_km", nullable = false, scale = 3)
+	@Column(
+		name = "distance_km",
+		nullable = false,
+		scale = 3
+	)
 	private Float distanceKm;
-	/**
-	 * Tempo di Arrivo Stimato (Estimated Time of Arrival), espresso in minuti.
-	 * Calcolato tenendo conto dei limiti di velocità per i mezzi pesanti.
-	 */
-	@Column(name = "eta_minutes", nullable = false)
+	/** Tempo di Arrivo Stimato (Estimated Time of Arrival), espresso in minuti. Calcolato tenendo conto dei limiti di velocità per i mezzi pesanti. */
+	@Column(
+		name = "eta_minutes",
+		nullable = false
+	)
 	private Integer etaMinutes;
-	/**
-	 * Il divieto di transito in determinate gallerie. 
-	 * Se null verrà associato il grado massimo {@code B}
-	 */
+	/** Il divieto di transito in determinate gallerie. Se null verrà associato il grado massimo {@code B} */
 	@Enumerated(EnumType.STRING)
     @Column(
     	name = "tunnel_restriction",
@@ -112,7 +123,11 @@ public class ShipmentRoute {
 	 * </p>
 	 */
 	@Lob
-	@Column(name = "geometry", nullable = false, columnDefinition = "TEXT")
+	@Column(
+		name = "geometry",
+		nullable = false,
+		columnDefinition = "TEXT"
+	)
 	private String geometry;
 	/**
 	 * Relazione Uno-a-Uno con la spedizione.
@@ -135,7 +150,7 @@ public class ShipmentRoute {
 	 * prima di ogni inserimento ({@code @PrePersist}) o aggiornamento ({@code @PreUpdate}) nel database.
 	 * <p>
 	 * Questo metodo agisce da coordinatore per le operazioni di pre-salvataggio, garantendo 
-	 * l'integrità dei dati geospaziali e la conformità normativa attraverso due fasi:
+	 * l'integrità dei dati:
 	 * </p>
 	 * <ul>
 	 * <li>
@@ -148,24 +163,13 @@ public class ShipmentRoute {
 	 * dei tunnel (Categorie B, C, D ed E). Ciò previene alla radice il rischio di violazioni 
 	 * del Codice della Strada e massimizza la sicurezza pubblica durante il trasporto ADR.
 	 * </li>
-	 * <li>
-	 * <b>Sincronizzazione dello Stato Relazionale (Chilometraggio):</b><br>
-	 * Propaga istantaneamente la distanza su strada calcolata ({@code distanceKm}) 
-	 * all'interno dell'entità padre ({@link Shipment}). Eseguendo questa operazione 
-	 * una frazione di secondo prima del commit transazionale, il sistema assicura che 
-	 * la spedizione possegga sempre il dato metrico reale ed esatto, fondamentale per 
-	 * i calcoli di fatturazione, le stime di consumo carburante e i report logistici, 
-	 * mantenendo una perfetta coerenza tra le due tabelle.
-	 * </li>
 	 * </ul>
 	 */
 	@PrePersist
 	@PreUpdate
-	private void syncShipmentDistanceAndNormalize() {
+	private void Normalize() {
 		if(tunnelRestriction == null)
 			tunnelRestriction = TunnelRestriction.B;
-		if(shipment != null)
-			shipment.setDistancekm(distanceKm);
 	}
 
 	public Long getId() {
@@ -178,10 +182,6 @@ public class ShipmentRoute {
 
 	public String getRouteUUID() {
 		return routeUUID;
-	}
-
-	public void setRouteUUID(String routeUUID) {
-		this.routeUUID = routeUUID;
 	}
 
 	public Double getOriginLat() {

@@ -1,5 +1,6 @@
 package dev.vinciguerra.adrsentinel.web.dto.shipmentroute;
 
+import dev.vinciguerra.adrsentinel.web.annotation.ValidatorUUID;
 import dev.vinciguerra.adrsentinel.web.annotation.onunumber.ValidatorTunnelRestriction;
 import dev.vinciguerra.adrsentinel.web.annotation.shipment.ValidatorDistance;
 import dev.vinciguerra.adrsentinel.web.annotation.shipmentroute.ValidatorETA;
@@ -24,6 +25,9 @@ import dev.vinciguerra.adrsentinel.web.annotation.shipmentroute.ValidatorLongitu
  * percorrenza irragionevole o geometria malevola possa mai raggiungere il Service Layer 
  * o corrompere il database relazionale.
  * </p>
+ * @param routeUUID Il codice univoco che identifica la ShipmentRoute. In questo caso serve perchè l'algoritmo di 
+ * routing ritorna al client un oggetto ShipmentRoute con UUID già formato ma non lo salva aspettando che sia il client 
+ * a inviare una nuova richiesta (proprio questo record) per la memoriazzazione.
  * @param originLat La latitudine esatta del punto di partenza. Il vincolo {@code @ValidatorLatitude} 
  * assicura che il valore sia compreso tra -90.0 e 90.0 e previene anomalie matematiche (NaN/Infinity).
  * @param originLng La longitudine esatta del punto di partenza. Il vincolo {@code @ValidatorLongitude} 
@@ -41,7 +45,8 @@ import dev.vinciguerra.adrsentinel.web.annotation.shipmentroute.ValidatorLongitu
  * @param geometry La stringa vettoriale compressa che rappresenta il tracciato su mappa. 
  * Il vincolo {@code @ValidatorGeometry} agisce da scudo crittografico e dimensionale, 
  * verificando l'aderenza all'algoritmo <i>Encoded Polyline</i> e bloccando attacchi DoS o Injection.
+ * @param shipmentTrackingNumber Il tracking number della spedizione a cui è collegata questa ShipmentRoute
  */
-public record ShipmentRouteRequestDTO(@ValidatorLatitude Double originLat, @ValidatorLongitude Double originLng, @ValidatorLatitude Double destLat,
+public record ShipmentRouteRequestDTO(@ValidatorUUID String routeUUID, @ValidatorLatitude Double originLat, @ValidatorLongitude Double originLng, @ValidatorLatitude Double destLat,
 	@ValidatorLongitude Double destLng, @ValidatorDistance Float distancekm, @ValidatorETA Integer etaMins, @ValidatorTunnelRestriction String tunnelRestriction,
-	@ValidatorGeometry String geometry) {}
+	@ValidatorGeometry String geometry, @ValidatorUUID String shipmentTrackingNumber) {}

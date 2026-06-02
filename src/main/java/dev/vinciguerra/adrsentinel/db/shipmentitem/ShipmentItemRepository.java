@@ -63,5 +63,5 @@ public interface ShipmentItemRepository extends JpaRepository<ShipmentItem, Long
 	 * @return Una {@link List} contenente tutti i {@link ShipmentItem} collegati alla spedizione. 
 	 * Ritorna una lista vuota (e mai {@code null}) qualora la spedizione non contenga alcun articolo.
 	 */
-	List<ShipmentItem> findByShipment(String shipmentTrackingNumber);
+	List<ShipmentItem> findByShipmentTrackingNumber(String shipmentTrackingNumber);
 }

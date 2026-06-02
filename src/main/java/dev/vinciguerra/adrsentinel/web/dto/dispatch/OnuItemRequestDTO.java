@@ -1,4 +1,4 @@
-package dev.vinciguerra.adrsentinel.web.dto.adrdispatch;
+package dev.vinciguerra.adrsentinel.web.dto.dispatch;
 
 import dev.vinciguerra.adrsentinel.web.annotation.ValidatorTransportMode;
 import dev.vinciguerra.adrsentinel.web.annotation.dispatch.ValidatorNetWeight;

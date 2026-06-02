@@ -24,10 +24,10 @@ import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle.VehicleCategory.VehicleApp
 import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle.VehicleCategory.VehicleType;
 import dev.vinciguerra.adrsentinel.db.vehicle.VehicleService;
 import dev.vinciguerra.adrsentinel.exception.ResourceNotFoundException;
-import dev.vinciguerra.adrsentinel.web.dto.adrdispatch.DispatchRequestDTO;
-import dev.vinciguerra.adrsentinel.web.dto.adrdispatch.DispatchResponseDTO;
-import dev.vinciguerra.adrsentinel.web.dto.adrdispatch.OnuItemRequestDTO;
-import dev.vinciguerra.adrsentinel.web.dto.adrdispatch.VehicleDispatchResponseDTO;
+import dev.vinciguerra.adrsentinel.web.dto.dispatch.DispatchRequestDTO;
+import dev.vinciguerra.adrsentinel.web.dto.dispatch.DispatchResponseDTO;
+import dev.vinciguerra.adrsentinel.web.dto.dispatch.OnuItemRequestDTO;
+import dev.vinciguerra.adrsentinel.web.dto.dispatch.VehicleDispatchResponseDTO;
 import dev.vinciguerra.adrsentinel.web.dto.onunumber.OnuNumberResponseDTO;
 import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleResponseDTO;
 

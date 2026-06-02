@@ -95,7 +95,7 @@ public class ShipmentItemService extends AbstractGenericService {
 	@Cacheable(value = CaffeineCacheConfiguration.SHIPMENT_ITEM_BY_SHIPMENT_CACHE, key = "#shipmentTrackingNumber")
 	public List<ShipmentItem> getByShipment(String shipmentTrackingNumber) {
 		logger.info("[DataBase CALL] Searching for the ShipmentItem by Shipment trackingNumber: {}", shipmentTrackingNumber);
-		return shipmentItemRepository.findByShipment(shipmentTrackingNumber);
+		return shipmentItemRepository.findByShipmentTrackingNumber(shipmentTrackingNumber);
 	}
 	
 	/**

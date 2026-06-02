@@ -35,7 +35,7 @@ import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleResponseDTO;
  * @since 1.0
  */
 public record ShipmentResponseDTO(Long id, String trackingNumber, String shipmentDate, String shipmentStatus,
-		String originAddress, String destinationAddress, Float distancekm, VehicleResponseDTO vehicle) {
+		String originAddress, String destinationAddress, VehicleResponseDTO vehicle) {
 	
 	/**
 	 * Factory Method statico per la conversione (Mapping) e l'aggregazione strutturata 
@@ -81,7 +81,6 @@ public record ShipmentResponseDTO(Long id, String trackingNumber, String shipmen
 			entity.getShipmentStatus().name(),
 			entity.getOriginAddress(),
 			entity.getDestinationAddress(),
-			entity.getDistancekm(),
 			VehicleResponseDTO.fromEntity(entity.getVehicle())
 		);
 	}

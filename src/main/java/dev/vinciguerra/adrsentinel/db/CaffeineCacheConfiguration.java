@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import dev.vinciguerra.adrsentinel.db.adrclass.AdrClassCacheSetting;
+import dev.vinciguerra.adrsentinel.db.adrclass.shipmentroute.ShipmentRouteCacheSetting;
 import dev.vinciguerra.adrsentinel.db.compatibilityrule.CompatibilityRuleCacheSetting;
 import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumberCacheSetting;
 import dev.vinciguerra.adrsentinel.db.shipment.ShipmentCacheSetting;
@@ -43,7 +44,8 @@ import dev.vinciguerra.adrsentinel.db.vehicle.VehicleCacheSetting;
 	OnuNumberCacheSetting.class,
 	ShipmentCacheSetting.class,
 	ShipmentItemCacheSetting.class,
-	VehicleCacheSetting.class
+	VehicleCacheSetting.class,
+	ShipmentRouteCacheSetting.class
 })
 public class CaffeineCacheConfiguration {
 	/** Identificatore della regione di memoria per la ricerca di una macro-classe ADR (es. Classe 3). */
@@ -85,6 +87,7 @@ public class CaffeineCacheConfiguration {
 	public static final String ALL_VEHICLE_CACHE = "all_vehicle";
 	/** Chiave statica globale per l'estrazione dalla cache dell'intera flotta veicoli. */
 	public static final String ALL_VEHICLE_KEY = "all_vehicle_key";
+	public static final String SHIPMENT_ROUTE_BY_ROUTE_UUID_CACHE = "shipment_route_by_route_uuid";
 	
 	/**
 	 * Fabbrica e registra nel container di Spring il gestore centrale delle cache (CacheManager).
@@ -99,11 +102,13 @@ public class CaffeineCacheConfiguration {
 	 * @param onuNumberCacheSetting le property di capacity planning per il catalogo delle merci pericolose.
 	 * @param shipmentCacheSetting le property di capacity planning per i dati transazionali (viaggi).
 	 * @param vehicleCacheSetting le property di capacity planning per la flotta aziendale.
+	 * @param shipmentRouteCacheSetting le property di capacity planning per le rotte seguite dai veicoli.
 	 * @return l'istanza di {@link CacheManager} pronta per essere utilizzata dai proxy di Spring.
 	 */
 	@Bean
 	public CacheManager cacheManager(AdrClassCacheSetting adrClassSetting, CompatibilityRuleCacheSetting compatibilityRuleCacheSetting, 
-			OnuNumberCacheSetting onuNumberCacheSetting, ShipmentCacheSetting shipmentCacheSetting, VehicleCacheSetting vehicleCacheSetting) {
+			OnuNumberCacheSetting onuNumberCacheSetting, ShipmentCacheSetting shipmentCacheSetting, ShipmentItemCacheSetting shipmentItemCacheSetting,
+			VehicleCacheSetting vehicleCacheSetting, ShipmentRouteCacheSetting shipmentRouteCacheSetting) {
 		SimpleCacheManager cacheManager = new SimpleCacheManager();
 		CaffeineCache adrClassClassCodeCache = buildCache(
 			ADR_CLASS_BY_CLASS_CODE_CACHE,
@@ -145,6 +150,14 @@ public class CaffeineCacheConfiguration {
 			SHIPMENT_BY_SHIPMENT_DATE_CACHE,
 			shipmentCacheSetting.period().maxSize()
 		);
+		CaffeineCache shipmentItemByItemUUIDCache = buildCache(
+			SHIPMENT_ITEM_BY_ITEM_UUID_CACHE,
+			shipmentItemCacheSetting.itemUUID().maxSize()
+		);
+		CaffeineCache shipmentItemByShipmentCache = buildCache(
+			SHIPMENT_ITEM_BY_SHIPMENT_CACHE,
+			shipmentItemCacheSetting.shipment().maxSize()
+		);
 		CaffeineCache vehicleLicensePlateCache = buildCache(
 			VEHICLE_BY_LICENSE_PLATE_CACHE,
 			vehicleCacheSetting.licensePlate().maxSize()
@@ -156,6 +169,10 @@ public class CaffeineCacheConfiguration {
 		CaffeineCache vehicleAllCache = buildCache(
 			ALL_VEHICLE_CACHE,
 			vehicleCacheSetting.allVehicle().maxSize()
+		);
+		CaffeineCache shipmentRouteByRouteUUIDCache = buildCache(
+			SHIPMENT_ROUTE_BY_ROUTE_UUID_CACHE,
+			shipmentRouteCacheSetting.routeUUID().maxSize()
 		);
 		cacheManager.setCaches(
 			Arrays.asList(
@@ -169,9 +186,12 @@ public class CaffeineCacheConfiguration {
 				onuNumberAllCache,
 				shipmentTrackingCache,
 				shipmentVehicleCache,
+				shipmentItemByItemUUIDCache,
+				shipmentItemByShipmentCache,
 				vehicleLicensePlateCache,
 				vehicleMaxUsefulWeightCache,
-				vehicleAllCache
+				vehicleAllCache,
+				shipmentRouteByRouteUUIDCache
 			)
 		);
 		return cacheManager;

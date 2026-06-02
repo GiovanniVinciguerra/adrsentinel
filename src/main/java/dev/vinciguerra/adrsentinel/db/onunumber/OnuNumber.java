@@ -61,19 +61,29 @@ public class OnuNumber {
 	
 	/**
      * Enum che definisce le restrizioni per il transito nelle gallerie stradali.
-     * Le lettere (B, C, D, E) indicano il tipo di galleria interdetta.
+     * Le lettere (B, C, D, E) indicano il tipo di galleria interdetta mentre il valore intero indica il grado di severità.
      */
 	public enum TunnelRestriction {
-		B,
-		C,
-		D,
-		E,
-		B_D,
-		B_E,
-		C_D,
-		C_E,
-		D_E,
-		NONE
+		B(4),
+		C(3),
+		D(2),
+		E(1),
+		B_D(4),
+		B_E(4),
+		C_D(3),
+		C_E(3),
+		D_E(2),
+		NONE(0);
+		
+		private final int severityWeight;
+		
+		TunnelRestriction(int severityWeight) {
+			this.severityWeight = severityWeight;
+		}
+		
+		public int getSeverityWeight() {
+			return severityWeight;
+		}
 	}
 	
 	/**

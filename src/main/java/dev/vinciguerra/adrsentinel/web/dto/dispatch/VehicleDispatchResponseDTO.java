@@ -1,4 +1,4 @@
-package dev.vinciguerra.adrsentinel.web.dto.adrdispatch;
+package dev.vinciguerra.adrsentinel.web.dto.dispatch;
 
 import java.util.List;
 
