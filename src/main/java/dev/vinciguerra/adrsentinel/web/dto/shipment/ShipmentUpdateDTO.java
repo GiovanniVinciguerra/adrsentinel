@@ -1,8 +1,10 @@
 package dev.vinciguerra.adrsentinel.web.dto.shipment;
 
+import java.util.List;
 import dev.vinciguerra.adrsentinel.web.annotation.ValidatorLocalDateTime;
 import dev.vinciguerra.adrsentinel.web.annotation.shipment.ValidatorAddress;
 import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorLicensePlate;
+import jakarta.validation.constraints.NotEmpty;
 
 /**
  * Data Transfer Object (DTO) in ingresso (Request Payload) progettato per la mutazione 
@@ -27,11 +29,11 @@ import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorLicensePlate;
  * al Service in uno stato di totale immutabilità e Thread-Safety.
  * @param date Il nuovo marcatore temporale per la riprogrammazione della spedizione.
  * (Nota tecnica: assicurarsi che il tipo di dato supporti la validazione tramite espressioni regolari).
- * @param destination Il nuovo indirizzo toponomastico di consegna (sanificato contro i metacaratteri).
+ * @param destinations I nuovi indirizzi toponomastici di consegna (sanificati contro i metacaratteri).
  * @param vehicleLicensePlate La targa alfanumerica del nuovo veicolo assegnato al trasporto ADR.
  * @author Giovanni Vinciguerra
  * @version 1.0 (Strict Validated Input Payload)
  * @since 1.0
  */
-public record ShipmentUpdateDTO(@ValidatorLocalDateTime String date, @ValidatorAddress String destination,
-	@ValidatorLicensePlate String vehicleLicensePlate) {}
+public record ShipmentUpdateDTO(@ValidatorLocalDateTime String date, 
+	@NotEmpty(message = "Malformed payload: Destinations list is required") List<@ValidatorAddress String> destinations, @ValidatorLicensePlate String vehicleLicensePlate) {}

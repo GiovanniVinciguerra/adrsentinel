@@ -1,9 +1,11 @@
 package dev.vinciguerra.adrsentinel.web.dto.shipment;
 
+import java.util.List;
 import dev.vinciguerra.adrsentinel.web.annotation.ValidatorLocalDateTime;
 import dev.vinciguerra.adrsentinel.web.annotation.shipment.ValidatorAddress;
 import dev.vinciguerra.adrsentinel.web.annotation.shipment.ValidatorShipmentStatus;
 import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorLicensePlate;
+import jakarta.validation.constraints.NotEmpty;
 
 /**
  * Data Transfer Object (DTO) in ingresso (Request Payload) per l'istanziazione 
@@ -26,7 +28,7 @@ import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorLicensePlate;
  * Protetto contro l'overflow (Data Truncation) dalla base dati.
  * @param origin L'indirizzo toponomastico del sito di carico. Sottoposto a sanificazione 
  * anti-XSS e blocco di caratteri speciali non ammessi.
- * @param destination L'indirizzo toponomastico del sito di scarico. Sanificato analogamente all'origine.
+ * @param destinations Gli indirizzi toponomastici dei siti di scarico. Sanificati analogamente all'origine.
  * @param distancekm Il calcolo telemetrico del routing spaziale espresso in chilometri. 
  * Vincolato a essere strettamente positivo per garantire coerenza fisica nel mondo reale.
  * @param vehicleLicensePlate L'identificativo legale del mezzo assegnato. Sottoposto a 
@@ -35,5 +37,5 @@ import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorLicensePlate;
  * @version 1.0 (Strict Validated Input Payload)
  * @since 1.0
  */
-public record ShipmentRequestDTO(@ValidatorLocalDateTime String date, @ValidatorShipmentStatus String status,
-	@ValidatorAddress String origin, @ValidatorAddress String destination, @ValidatorLicensePlate String vehicleLicensePlate) {}
+public record ShipmentRequestDTO(@ValidatorLocalDateTime String date, @ValidatorShipmentStatus String status, @ValidatorAddress String origin, 
+	@NotEmpty(message = "Malformed payload: Destinations list is required") List<@ValidatorAddress String> destinations, @ValidatorLicensePlate String vehicleLicensePlate) {}

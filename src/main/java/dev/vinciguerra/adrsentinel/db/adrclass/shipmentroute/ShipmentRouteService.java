@@ -1,5 +1,6 @@
 package dev.vinciguerra.adrsentinel.db.adrclass.shipmentroute;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
@@ -103,60 +104,111 @@ public class ShipmentRouteService extends AbstractGenericService {
 	}
 	
 	/**
-	 * Motore principale di calcolo (Routing Engine) per la determinazione del percorso ottimale.
+	 * Calcola, orchestra e genera la rotta stradale multi-tappa ottimizzata per veicoli pesanti (HGV), 
+	 * integrando i vincoli di transito per le merci pericolose (ADR) e la gestione delle gallerie.
 	 * <p>
-	 * <b>Flusso di Orchestrazione:</b>
+	 * <b>Logica di Business e Algoritmo Multi-Stop (Segment-Splitting):</b><br>
+	 * Il metodo supera il vincolo del routing Punto-Punto (A-B) introducendo un'architettura a segmenti 
+	 * sequenziali (Legs). Dato un punto di origine e una lista ordinata di destinazioni, l'algoritmo 
+	 * scompone il viaggio in {@code N} tratte indipendenti. Per ciascuna tratta, interroga il motore 
+	 * cartografico esterno applicando in modo uniforme la restrizione ADR più severa calcolata 
+	 * sull'intera spedizione.
+	 * </p>
+	 * <p>
+	 * <b>Flusso di Esecuzione Tecnico:</b>
 	 * <ol>
-	 * <li><b>Geocoding Sequenziale:</b> Risolve asincronamente (tramite provider) gli indirizzi di origine e destinazione.</li>
-	 * <li><b>Valutazione ADR:</b> Analizza la distinta di carico per determinare il divieto di transito in galleria più restrittivo.</li>
-	 * <li><b>Marshalling:</b> Costruisce il payload JSON strutturato secondo le rigide gerarchie attese dall'API di OSR.</li>
-	 * <li><b>Integrazione Esterna:</b> Esegue una chiamata REST POST per l'elaborazione vettoriale del tracciato.</li>
-	 * <li><b>Elaborazione Risultati:</b> Converte i dati grezzi (metri e secondi) in metriche di business (Km e Minuti arrotondati) 
-	 * tramite operazioni matematiche (es. {@link Math#ceilDiv}).</li>
-	 * <li><b>Creazione Entità:</b> Idrata un nuovo oggetto di dominio {@link ShipmentRoute} con geometria e statistiche.</li>
+	 * <li><b>Geocoding Preventivo (Fail-Fast):</b> Traduce l'indirizzo di partenza e, tramite un ciclo 
+	 * for lineare, tutti gli indirizzi delle tappe intermedie/finali in coordinate geografiche 
+	 * ({@link GeoCoordinateResponseDTO}). Se un solo indirizzo fallisce la geolocalizzazione, il processo 
+	 * si interrompe immediatamente per preservare risorse.</li>
+	 * <li><b>Valutazione ADR Centralizzata:</b> Invoca {@link #calculateMaxTunnelRestriction} per determinare 
+	 * la classe di severità delle gallerie (es. B, D/E) valida per l'intero viaggio.</li>
+	 * <li><b>Ciclo di Calcolo dei Segmenti (Look-Ahead Loop):</b> Calcola il numero totale di tratte 
+	 * ({@code totalSegments = waypoints.size() - 1}). Tramite un indice incrementale, estrae la coppia 
+	 * di coordinate correnti (indice {@code i} come origine e {@code i + 1} come destinazione).</li>
+	 * <li><b>Integrazione REST:</b> Marshalla la richiesta tramite {@link #buildOrsRequest} e interroga l'endpoint 
+	 * {@code /v2/directions/driving-hgv} di OpenRouteService tramite {@link RestClient}.</li>
+	 * <li><b>Normalizzazione delle Metriche:</b> Elabora la risposta JSON (Unmarshalling fluente tramite Stream/Optional), 
+	 * converte la distanza in chilometri e applica l'arrotondamento all'intero superiore per i minuti 
+	 * di percorrenza tramite {@link Math#ceilDiv(int, int)}.</li>
+	 * <li><b>Persistenza Temporanea e Mapping:</b> Alimenta una collezione di entità {@link ShipmentRoute} (una per segmento), 
+	 * mantenendo il legame di Foreign Key con lo {@code Shipment} padre.</li>
 	 * </ol>
 	 * </p>
-	 * @param shipment L'entità Spedizione contenente le informazioni spaziali e il veicolo assegnato.
-	 * @return Il DTO di risposta popolato con la geometria (Polyline) e i dati di tracciamento.
-	 * @throws GeocodingApiException In caso di errori di comunicazione HTTP o se l'API non trova percorsi (es. isola irraggiungibile).
+	 * <p>
+	 * <b>Gestione della Variable Capture nelle Lambda:</b><br>
+	 * Poiché il ciclo for incrementa la variabile locale {@code i}, quest'ultima non è considerata <i>effectively final</i> 
+	 * e non può essere catturata dalle espressioni lambda interne (nel {@code .map()} e nell'{@code .orElseThrow()}). 
+	 * Il metodo risolve questo vincolo allocando ad ogni iterazione una costante di blocco immutabile 
+	 * {@code final int currentStage = i + 1}, garantendo la thread-safety e la conformità al compilatore Java.
+	 * </p>
+	 * @param shipment L'entità di dominio {@link Shipment} contenente l'indirizzo di partenza, 
+	 * la lista ordinata delle tappe di destinazione e i dettagli strutturali del veicolo (assi, peso, sagoma).
+	 * @return Un {@link ShipmentRouteResponseDTO} completo, idratato tramite la factory statica cumulativa, 
+	 * contenente l'elenco ordinato dei segmenti calcolati (completi di polilinee e telemetria) e i dati dello shipment.
+	 * @throws GeocodingApiException Se si verifica un errore fatale di comunicazione HTTP/REST con il provider 
+	 * OpenRouteService (es. timeout, credenziali errate, servizio 503).
+	 * @throws AddressNotResolvableException Se il provider esterno non riesce a determinare una rotta stradale 
+	 * valida per un determinato segmento a causa dei vincoli fisici del mezzo 
+	 * o delle restrizioni sul trasporto hazmat (strada sbarrata o senza alternative legali).
 	 */
 	public ShipmentRouteResponseDTO routing(Shipment shipment) throws GeocodingApiException {
 		logger.info("HGV route orchestration start for Shipment Tracking: [{}]", shipment.getTrackingNumber());
-		logger.info("Geocoding addresses in progress...");
-		GeoCoordinateResponseDTO origin = orsGeocodingService.geocodeAddress(shipment.getOriginAddress());
-		GeoCoordinateResponseDTO destination = orsGeocodingService.geocodeAddress(shipment.getDestinationAddress());
+		List<GeoCoordinateResponseDTO> waypoints = new ArrayList<GeoCoordinateResponseDTO>();
+		logger.info("Geocoding origin address: [{}]", shipment.getOriginAddress());
+		waypoints.add(orsGeocodingService.geocodeAddress(shipment.getOriginAddress()));
+		for (int i = 0; i < shipment.getDestinationAddresses().size(); i++) {
+			String stageAddress = shipment.getDestinationAddresses().get(i);
+			logger.info("Geocoding destination stage {}/[{}]: [{}]", (i + 1), shipment.getDestinationAddresses().size(), stageAddress);
+			waypoints.add(orsGeocodingService.geocodeAddress(stageAddress));
+		}
 		TunnelRestriction tunnelRestriction = calculateMaxTunnelRestriction(shipment);
-		OrsRouteRequestDTO orsRequestDTO = buildOrsRequest(origin, destination, shipment.getVehicle(), tunnelRestriction);
+		List<ShipmentRoute> routeStages = new ArrayList<ShipmentRoute>();
 		try {
-			logger.info("Sending a routing request to the ORS engine (Profile: driving-hgv)...");
-			OrsRouteResponseDTO response = restClient.post()
-				.uri("/v2/directions/driving-hgv")
-				.header("Authorization", apiKey)
-				.header("Content-Type", "application/json; charset=utf-8")
-				.body(orsRequestDTO)
-				.retrieve()
-				.body(OrsRouteResponseDTO.class);
-			return Optional.ofNullable(response)
-				.filter(res -> res.routes() != null && !res.routes().isEmpty())
-				.map(res -> res.routes().get(0))
-				.map(route -> {
-					float distancekm = route.summary().distance() / 1000.0f;
-					int etaMinutes = Math.ceilDiv(route.summary().duration().intValue(), 60);
-					logger.info("Route calculation completed successfully. Distance: {} km, ETA: {} min.", String.format("%.2f", distancekm), etaMinutes);
-					ShipmentRoute entity = new ShipmentRoute();
-					entity.setOriginLat(origin.latitude());
-					entity.setOriginLng(origin.longitude());
-					entity.setDestLat(destination.latitude());
-					entity.setDestLng(destination.longitude());
-					entity.setDistanceKm(distancekm);
-					entity.setEtaMinutes(etaMinutes);
-					entity.setTunnelRestriction(tunnelRestriction);
-					entity.setGeometry(route.geometry());
-					entity.setShipment(shipment);
-					logger.info("Shipment Route object creation completed. With route UUID: [{}]", entity.getRouteUUID());
-					return ShipmentRouteResponseDTO.fromEntity(entity);
-				})
-				.orElseThrow(() -> new AddressNotResolvableException("Map API returned zero routes due to imposed restrictions."));
+			int totalSegments = waypoints.size() - 1;
+			for(int i=0; i<totalSegments; i++) {
+				int currentStage = i + 1;
+				GeoCoordinateResponseDTO currentOrigin = waypoints.get(i);
+				GeoCoordinateResponseDTO currentDest = waypoints.get(i + 1);
+				logger.info("Sending routing request to ORS for segment {}/{}...", (i + 1), totalSegments);
+				OrsRouteRequestDTO orsRequestDTO = buildOrsRequest(currentOrigin, currentDest, shipment.getVehicle(), tunnelRestriction);
+				OrsRouteResponseDTO response = restClient.post()
+					.uri("/v2/directions/driving-hgv")
+					.header("Authorization", apiKey)
+					.header("Content-Type", "application/json; charset=utf-8")
+					.body(orsRequestDTO)
+					.retrieve()
+					.body(OrsRouteResponseDTO.class);
+				ShipmentRoute stageEntity = Optional.ofNullable(response)
+					.filter(res -> res.routes() != null && !res.routes().isEmpty())
+					.map(res -> res.routes().get(0))
+					.map(route -> {
+						float distancekm = route.summary().distance() / 1000.0f;
+						int etaMinutes = Math.ceilDiv(route.summary().duration().intValue(), 60);
+						logger.info(
+							"Segment {}/{} calculated. Distance: {} km, ETA: {} min.",
+							currentStage,
+							totalSegments,
+							String.format("%.2f", distancekm),
+							etaMinutes
+						);
+						ShipmentRoute entity = new ShipmentRoute();
+						entity.setOriginLat(currentOrigin.latitude());
+						entity.setOriginLng(currentOrigin.longitude());
+						entity.setDestLat(currentDest.latitude());
+						entity.setDestLng(currentDest.longitude());
+						entity.setDistanceKm(distancekm);
+						entity.setEtaMinutes(etaMinutes);
+						entity.setTunnelRestriction(tunnelRestriction);
+						entity.setGeometry(route.geometry());
+						entity.setShipment(shipment);
+						return entity;
+					})
+					.orElseThrow(() -> new AddressNotResolvableException("Map API returned zero routes for segment " + currentStage));
+				routeStages.add(stageEntity);
+			}
+			logger.info("Multi-stop orchestration completed successfully. Total processed stages: {}", routeStages.size());
+			return ShipmentRouteResponseDTO.fromEntity(routeStages, shipment);
 		} catch (RestClientException error) {
 			logger.error("Fatal communication error with ORS during route calculation: {}", error.getMessage());
 			throw new GeocodingApiException("Navigation service temporarily unavailable.", error);
@@ -182,7 +234,7 @@ public class ShipmentRouteService extends AbstractGenericService {
 		TunnelRestriction maxTunnelRestriction = items.stream()
 			.map(item -> item.getOnuNumber().getTunnelRestriction())
 			.max(Comparator.comparingInt(TunnelRestriction::getSeverityWeight)).orElse(TunnelRestriction.B);
-		logger.info("Restrictions calculation completed for Shipping [{}]. Restrizione calcolata: [{}]", shipment.getTrackingNumber(), maxTunnelRestriction);
+		logger.info("Restrictions calculation completed for Shipping [{}]. Calculated restriction: [{}]", shipment.getTrackingNumber(), maxTunnelRestriction);
 		return maxTunnelRestriction;
 	}
 	

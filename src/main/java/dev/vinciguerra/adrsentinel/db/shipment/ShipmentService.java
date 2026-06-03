@@ -265,7 +265,7 @@ public class ShipmentService extends AbstractGenericService {
 		Vehicle vehicle = vehicleService.getByLicensePlate(updateDto.vehicleLicensePlate());
 		shipment.setVehicle(vehicle);
 		shipment.setShipmentDate(LocalDateTime.parse(updateDto.date()));
-		shipment.setDestinationAddress(updateDto.destination());
+		shipment.setDestinationAddresses(updateDto.destinations());
 		Shipment updatedShipment = shipmentRepository.save(shipment);
 		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
 			@Override
@@ -414,7 +414,7 @@ public class ShipmentService extends AbstractGenericService {
 		shipment.setShipmentDate(LocalDateTime.parse(dto.date()));
 		shipment.setShipmentStatus(Enum.valueOf(ShipmentStatus.class, dto.status()));
 		shipment.setOriginAddress(dto.origin());
-		shipment.setDestinationAddress(dto.destination());
+		shipment.setDestinationAddresses(dto.destinations());
 		return shipment;
 	}
 }

@@ -1,5 +1,7 @@
 package dev.vinciguerra.adrsentinel.web.dto.shipment;
 
+import java.util.List;
+
 import dev.vinciguerra.adrsentinel.db.shipment.Shipment;
 import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleResponseDTO;
 
@@ -27,7 +29,7 @@ import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleResponseDTO;
  * @param shipmentStatus Lo stato corrente della spedizione all'interno del suo ciclo di vita 
  * (Macchina a Stati). Viene serializzato in stringa in modo nativo dall'Enum.
  * @param originAddress L'indirizzo toponomastico del sito di prelievo del carico ADR.
- * @param destinationAddress L'indirizzo toponomastico del sito di consegna.
+ * @param destinationAddresses Gli indirizzi toponomastici dei siti di consegna.
  * @param distancekm La distanza calcolata in chilometri della rotta logistica.
  * @param vehicle L'oggetto rappresentante il mezzo della flotta assegnato a questo trasporto.
  * @author Giovanni Vinciguerra
@@ -35,7 +37,7 @@ import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleResponseDTO;
  * @since 1.0
  */
 public record ShipmentResponseDTO(Long id, String trackingNumber, String shipmentDate, String shipmentStatus,
-		String originAddress, String destinationAddress, VehicleResponseDTO vehicle) {
+		String originAddress, List<String> destinationAddresses, VehicleResponseDTO vehicle) {
 	
 	/**
 	 * Factory Method statico per la conversione (Mapping) e l'aggregazione strutturata 
@@ -80,7 +82,7 @@ public record ShipmentResponseDTO(Long id, String trackingNumber, String shipmen
 			entity.getShipmentDate().toString(),
 			entity.getShipmentStatus().name(),
 			entity.getOriginAddress(),
-			entity.getDestinationAddress(),
+			entity.getDestinationAddresses(),
 			VehicleResponseDTO.fromEntity(entity.getVehicle())
 		);
 	}

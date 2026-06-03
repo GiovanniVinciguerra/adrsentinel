@@ -1,12 +1,16 @@
 package dev.vinciguerra.adrsentinel.db.shipment;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.hibernate.annotations.ColumnDefault;
 import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle;
 import dev.vinciguerra.adrsentinel.exception.BadRequestException;
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -17,6 +21,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OrderColumn;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -125,15 +130,32 @@ public class Shipment {
 	)
 	private String originAddress;
 	/**
-	 * Indirizzo fisico di arrivo (Hub logistico o destinatario finale).
-	 * <p>Condivide le medesime logiche di validazione e normalizzazione dell'indirizzo di origine.</p>
+	 * Lista ordinata delle tappe di consegna (Multi-Stop Routing).
+	 * <p>
+	 * <b>Scelta Architetturale (Element Collection):</b><br>
+	 * Essendo una semplice lista di stringhe (Value Objects) e non di vere e proprie Entità, 
+	 * si utilizza @ElementCollection. Hibernate creerà automaticamente una tabella ausiliaria 
+	 * chiamata 'shipment_destination' legata da Foreign Key.
+	 * </p>
+	 * <p>
+	 * <b>Importanza di @OrderColumn:</b><br>
+	 * Nel routing logistico l'ordine delle tappe è tassativo. Questa annotazione forza 
+	 * Hibernate a creare una colonna aggiuntiva ('stop_index') nel database per memorizzare 
+	 * e ripristinare l'esatto ordine sequenziale degli indirizzi forniti dal client.
+	 * </p>
 	 */
+	@ElementCollection(fetch = FetchType.EAGER)
+	@CollectionTable(
+		name = "shipment_stage",
+		joinColumns = @JoinColumn(name = "shipment_id")
+	)
 	@Column(
-		name = "destination_address",
+		name = "destination_stage",
 		nullable = false,
 		length = 255
 	)
-	private String destinationAddress;
+	@OrderColumn(name = "shipment_stage_index")
+	private List<String> destinationAddresses = new ArrayList<String>();
 	/**
 	 * Il mezzo di trasporto assegnato a questa specifica spedizione.
 	 * <p>
@@ -206,22 +228,20 @@ public class Shipment {
 	 * ritorni a capo ({@code \n}, {@code \r}), tabulazioni ({@code \t}) e spazi multipli, 
 	 * compattando tutto in una stringa pulita su singola riga.
 	 * </p>
-	 * <p>
-	 * Nota: L'annotazione {@code @PostLoad} assicura che il dato venga ripulito in memoria anche 
-	 * durante le letture, fungendo da scudo contro eventuali dati storici "sporchi" già 
-	 * presenti nel database. In scrittura, l'invocazione è demandata a {@link #onBeforeSaveOrUpdate()}.
-	 * </p>
 	 */
 	private void normalize() {
 		if(originAddress != null) {
-			originAddress = originAddress.replaceAll("[\\r\\n\\t]+", " ");
-			originAddress = originAddress.replaceAll(" {2,}", " ");
-			originAddress = originAddress.trim();
+			originAddress = originAddress
+				.replaceAll("[\\r\\n\\t]+", " ")
+				.replaceAll(" {2,}", " ")
+				.trim();
 		}
-		if(destinationAddress != null) {
-			destinationAddress = destinationAddress.replaceAll("[\\r\\n\\t]+", " ");
-			destinationAddress = destinationAddress.replaceAll(" {2,}", " ");
-			destinationAddress = destinationAddress.trim();
+		if(destinationAddresses != null) {
+			destinationAddresses.replaceAll(address -> address
+				.replaceAll("[\\r\\n\\t]+", " ")
+				.replaceAll(" {2,}", " ")
+				.trim()
+			);
 		}
 	}
 	
@@ -261,12 +281,12 @@ public class Shipment {
 		this.originAddress = originAddress;
 	}
 	
-	public String getDestinationAddress() {
-		return destinationAddress;
+	public List<String> getDestinationAddresses() {
+		return destinationAddresses;
 	}
 	
-	public void setDestinationAddress(String destinationAddress) {
-		this.destinationAddress = destinationAddress;
+	public void setDestinationAddresses(List<String> destinationAddresses) {
+		this.destinationAddresses = destinationAddresses;
 	}
 	
 	public Vehicle getVehicle() {
@@ -301,8 +321,8 @@ public class Shipment {
 		StringBuilder builder = new StringBuilder();
 		builder.append("Shipment [id=").append(id).append(", trackingNumber=").append(trackingNumber)
 			.append(", shipmentDate=").append(shipmentDate).append(", shipmentStatus=").append(shipmentStatus)
-			.append(", originAddress=").append(originAddress).append(", destinationAddress=")
-			.append(destinationAddress).append("]");
+			.append(", originAddress=").append(originAddress).append(", destinationAddresses=")
+			.append(destinationAddresses).append("]");
 		return builder.toString();
 	}
 }

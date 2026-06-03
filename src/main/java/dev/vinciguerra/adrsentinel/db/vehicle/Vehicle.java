@@ -108,7 +108,8 @@ public class Vehicle {
 		)
 		@Column(
 			name = "vehicle_approval",
-			nullable = false
+			nullable = false,
+			length = 255
 		)
 		private Set<VehicleApproval> vehicleApprovals;
 
