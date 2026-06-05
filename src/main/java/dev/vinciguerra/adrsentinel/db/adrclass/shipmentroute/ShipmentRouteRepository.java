@@ -1,5 +1,6 @@
 package dev.vinciguerra.adrsentinel.db.adrclass.shipmentroute;
 
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -57,4 +58,39 @@ public interface ShipmentRouteRepository extends JpaRepository<ShipmentRoute, Lo
 	 * {@link Optional#empty()} se nessun record nel database corrisponde all'UUID passato.
 	 */
 	Optional<ShipmentRoute> findByRouteUUID(String routeUUID);
+	/**
+	 * Recupera l'intera sequenza di segmenti stradali (Legs/Tratte) associati a una specifica 
+	 * spedizione, interrogando il database tramite l'identificativo pubblico univoco (Tracking Number).
+	 * <p>
+	 * <b>Contesto Architetturale (Multi-Stop Routing):</b><br>
+	 * A seguito dell'evoluzione del motore di calcolo verso il routing a tappe multiple, una singola 
+	 * entità {@code Shipment} non è più legata a una singola rotta monolitica, ma a una collezione di 
+	 * segmenti intermedi. Per questo motivo, il metodo è progettato per restituire una {@code List<ShipmentRoute>}, 
+	 * rappresentante l'intero viaggio frazionato che il veicolo dovrà compiere.
+	 * </p>
+	 * <p>
+	 * <b>Meccanismo Spring Data JPA (Property Traversal & Query Derivation):</b><br>
+	 * Questo metodo sfrutta la potente funzionalità di "Property Traversal" di Spring Data. 
+	 * Analizzando la firma del metodo ({@code findBy} + {@code Shipment} + {@code TrackingNumber}), 
+	 * il framework genera automaticamente a runtime una query SQL ottimizzata che esegue un 
+	 * {@code INNER JOIN} implicito tra la tabella {@code shipment_route} e la tabella padre {@code shipment}. 
+	 * Questo permette di filtrare le rotte usando un attributo dell'entità relazionata senza dover 
+	 * scrivere query JPQL custom con l'annotazione {@code @Query}.
+	 * </p>
+	 * <p>
+	 * <b>Sicurezza (Anti-IDOR Policy):</b><br>
+	 * L'utilizzo del {@code trackingNumber} (formato UUID) come criterio di ricerca al posto 
+	 * del classico {@code shipmentId} (Primary Key sequenziale) garantisce che l'esposizione 
+	 * di questo metodo nei layer superiori non presti il fianco ad attacchi di tipo 
+	 * <i>Insecure Direct Object Reference</i> o all'enumerazione dei record da parte di client malevoli.
+	 * </p>
+	 * @param shipmentTrackingNumber L'identificativo di sicurezza alfanumerico (UUID) che 
+	 * identifica univocamente la spedizione padre nel sistema.
+	 * @return Una {@link List} contenente le entità {@link ShipmentRoute} associate alla spedizione. 
+	 * <br><b>Nota Null-Safety:</b> In conformità alle specifiche di Spring Data, se nessuna 
+	 * rotta viene trovata per il tracking number fornito, il metodo restituisce sempre 
+	 * una lista vuota ({@code []}) e <b>mai</b> {@code null}, prevenendo {@code NullPointerException} 
+	 * nel Service Layer.
+	 */
+	List<ShipmentRoute> findByShipmentTrackingNumber(String shipmentTrackingNumber);
 }

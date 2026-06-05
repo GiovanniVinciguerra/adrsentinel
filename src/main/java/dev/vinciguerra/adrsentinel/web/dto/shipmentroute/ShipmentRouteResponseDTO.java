@@ -47,7 +47,7 @@ public record ShipmentRouteResponseDTO(List<ShipmentRouteStageResponseDTO> route
 	 * @param geometry La stringa vettoriale compressa (Encoded Polyline) per renderizzare accuratamente 
 	 * il tracciato di questo segmento su una mappa frontend (Leaflet/Google Maps).
 	 */
-	public record ShipmentRouteStageResponseDTO(String routeUUID, Double originLat, Double originLng, Double destLat, Double destLng, Float distancekm,
+	public record ShipmentRouteStageResponseDTO(Long id, String routeUUID, Double originLat, Double originLng, Double destLat, Double destLng, Float distancekm,
 			Integer etaMinutes, String tunnelRestriction, String geometry) {
 		
 		/**
@@ -70,6 +70,7 @@ public record ShipmentRouteResponseDTO(List<ShipmentRouteStageResponseDTO> route
 				return null;
 			
 			return new ShipmentRouteStageResponseDTO(
+				entity.getId(),
 				entity.getRouteUUID(),
 				entity.getOriginLat(),
 				entity.getOriginLng(),

@@ -87,7 +87,10 @@ public class CaffeineCacheConfiguration {
 	public static final String ALL_VEHICLE_CACHE = "all_vehicle";
 	/** Chiave statica globale per l'estrazione dalla cache dell'intera flotta veicoli. */
 	public static final String ALL_VEHICLE_KEY = "all_vehicle_key";
+	/** Identificatore della regione di memoria per il raggruppamento (UUID) globale dei percorsi stradali. */
 	public static final String SHIPMENT_ROUTE_BY_ROUTE_UUID_CACHE = "shipment_route_by_route_uuid";
+	/** Identificatore della regione di memoria per il raggruppamento (Shipment.trackingNumber) globale dei percorsi stradali. */
+	public static final String SHIPMENT_ROUTE_BY_SHIPMENT_CACHE = "shipment_route_by_shipment_cache";
 	
 	/**
 	 * Fabbrica e registra nel container di Spring il gestore centrale delle cache (CacheManager).
@@ -174,6 +177,10 @@ public class CaffeineCacheConfiguration {
 			SHIPMENT_ROUTE_BY_ROUTE_UUID_CACHE,
 			shipmentRouteCacheSetting.routeUUID().maxSize()
 		);
+		CaffeineCache shipmentRouteByShipmentCache = buildCache(
+			SHIPMENT_ROUTE_BY_SHIPMENT_CACHE,
+			shipmentRouteCacheSetting.shipmentTrackingNumber().maxSize()
+		);
 		cacheManager.setCaches(
 			Arrays.asList(
 				adrClassClassCodeCache,
@@ -191,7 +198,8 @@ public class CaffeineCacheConfiguration {
 				vehicleLicensePlateCache,
 				vehicleMaxUsefulWeightCache,
 				vehicleAllCache,
-				shipmentRouteByRouteUUIDCache
+				shipmentRouteByRouteUUIDCache,
+				shipmentRouteByShipmentCache
 			)
 		);
 		return cacheManager;

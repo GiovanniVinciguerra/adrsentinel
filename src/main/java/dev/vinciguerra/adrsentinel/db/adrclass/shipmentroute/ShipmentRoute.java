@@ -145,6 +145,37 @@ public class ShipmentRoute {
 	)
 	private Shipment shipment;
 	
+	public ShipmentRoute() {/* Costruttore volutamente lasciato vuoto */}
+	
+	/**
+	 * Costruttore architetturale progettato specificamente per supportare il pattern di 
+	 * Persistenza Differita ("Calcola-e-Conferma") nel ciclo di vita di una rotta.
+	 * <p>
+	 * <b>Flusso Operativo (Stateless Routing):</b>
+	 * <ol>
+	 * <li><b>Calcolo:</b> Il server elabora il percorso ottimizzato basandosi sui vincoli del veicolo e della merce ADR.</li>
+	 * <li><b>Allocazione:</b> Viene istanziato un oggetto transitorio {@code ShipmentRoute} a cui viene 
+	 * assegnato un UUID generato a runtime.</li>
+	 * <li><b>Esposizione:</b> L'oggetto viene restituito al client tramite payload di risposta senza essere persistito nel DB.</li>
+	 * <li><b>Conferma e Persistenza:</b> A valle dell'approvazione dell'utente, il client invia una richiesta 
+	 * di salvataggio (INSERT) allegando l'UUID originale. Questo costruttore permette al backend di ricostruire 
+	 * l'entità ricollegandola all'identificativo precedentemente generato.</li>
+	 * </ol>
+	 * </p>
+	 * <p>
+	 * <b>Integrità del Dominio (Immutabilità):</b><br>
+	 * L'utilizzo di questo costruttore parametrico sopperisce all'assenza intenzionale di un metodo 
+	 * {@code setRouteUUID()}. L'identificativo pubblico è una <i>Business Key</i>: una volta 
+	 * iniettato al momento dell'istanziazione, non può in alcun modo essere alterato, garantendo 
+	 * la sicurezza e la coerenza del dato.
+	 * </p>
+	 * @param routeUUID L'identificativo alfanumerico univoco precedentemente calcolato dal server 
+	 * e ri-sottomesso dal client per innescare la persistenza definitiva.
+	 */
+	public ShipmentRoute(String routeUUID) {
+		this.routeUUID = routeUUID;
+	}
+	
 	/**
 	 * Hook del ciclo di vita JPA (Lifecycle Callback) invocato automaticamente dall'ORM 
 	 * prima di ogni inserimento ({@code @PrePersist}) o aggiornamento ({@code @PreUpdate}) nel database.

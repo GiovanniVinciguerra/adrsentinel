@@ -111,7 +111,6 @@ public class VehicleService extends AbstractGenericService {
 	 * per evitare dati stantii (<i>Stale Data</i>) alle successive letture.
 	 * La validazione dell'entità è demandata automaticamente ad Hibernate Validator durante la {@code INSERT/UPDATE}.
 	 * </p>
-	 *
 	 * @param newVehicle il veicolo da salvare nel database.
 	 * @return il veicolo salvato, comprensivo dell'ID generato dal database.
 	 */
@@ -197,7 +196,7 @@ public class VehicleService extends AbstractGenericService {
 	 * L'aggiornamento della RAM è delegato al {@link TransactionSynchronizationManager} per 
 	 * avvenire rigorosamente <b>solo dopo</b> il commit effettivo su disco.
 	 * @param licensePlate La Business Key (Targa) del veicolo, utilizzata per la risoluzione univoca.
-	 * @param updateDto Il payload in ingresso, contenente esclusivamente il certificato adr del veicolo.
+	 * @param updateDto Il payload in ingresso, contenente esclusivamente i certificati adr del veicolo.
 	 * @return L'entità {@link Vehicle} persistita, riflettente il nuovo stato legale.
 	 * @throws ResourceNotFoundException Se la targa fornita non è censita all'interno del database.
 	 */
@@ -207,7 +206,10 @@ public class VehicleService extends AbstractGenericService {
 		Vehicle vehicle = vehicleRepository.findByLicensePlate(licensePlate)
 			.orElseThrow(() -> new ResourceNotFoundException("Vehicle not found: " + licensePlate));
 		final Integer oldMaxUsefulWeight = vehicle.getMaxUsefulWeightkg();
-		vehicle.getVehicleCategory().getVehicleApprovals().add(Enum.valueOf(VehicleApproval.class, updateDto.approval()));
+		Set<VehicleApproval> approvals = new HashSet<VehicleApproval>();
+		for(String approval : updateDto.approvals())
+			approvals.add(Enum.valueOf(VehicleApproval.class, approval));
+		vehicle.getVehicleCategory().setVehicleApprovals(approvals);
 		Vehicle updatedVehicle = vehicleRepository.save(vehicle);
 		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
 			@Override

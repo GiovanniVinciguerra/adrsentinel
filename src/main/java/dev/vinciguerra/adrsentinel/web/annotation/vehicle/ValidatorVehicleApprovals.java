@@ -2,6 +2,7 @@ package dev.vinciguerra.adrsentinel.web.annotation.vehicle;
 
 import static java.lang.annotation.ElementType.FIELD;
 import static java.lang.annotation.ElementType.PARAMETER;
+import static java.lang.annotation.ElementType.TYPE_USE;
 import static java.lang.annotation.RetentionPolicy.RUNTIME;
 import java.lang.annotation.Documented;
 import java.lang.annotation.Retention;
@@ -30,7 +31,7 @@ import jakarta.validation.Payload;
  */
 @Documented
 @Retention(RUNTIME)
-@Target({ FIELD, PARAMETER })
+@Target({ FIELD, PARAMETER, TYPE_USE })
 @Constraint(validatedBy = { VehicleApprovalsValidator.class })
 public @interface ValidatorVehicleApprovals {
 	/**

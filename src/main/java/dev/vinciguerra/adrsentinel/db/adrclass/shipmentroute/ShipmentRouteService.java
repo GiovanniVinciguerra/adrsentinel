@@ -8,17 +8,22 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import dev.vinciguerra.adrsentinel.db.AbstractGenericService;
 import dev.vinciguerra.adrsentinel.db.CaffeineCacheConfiguration;
 import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumber.TunnelRestriction;
 import dev.vinciguerra.adrsentinel.db.shipment.Shipment;
+import dev.vinciguerra.adrsentinel.db.shipment.Shipment.ShipmentStatus;
 import dev.vinciguerra.adrsentinel.db.shipmentitem.ShipmentItem;
 import dev.vinciguerra.adrsentinel.db.shipmentitem.ShipmentItemService;
 import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle;
 import dev.vinciguerra.adrsentinel.exception.AddressNotResolvableException;
 import dev.vinciguerra.adrsentinel.exception.GeocodingApiException;
+import dev.vinciguerra.adrsentinel.exception.IllegalShipmentStateException;
 import dev.vinciguerra.adrsentinel.exception.ResourceNotFoundException;
 import dev.vinciguerra.adrsentinel.web.dto.shipmentroute.GeoCoordinateResponseDTO;
 import dev.vinciguerra.adrsentinel.web.dto.shipmentroute.OrsRouteRequestDTO;
@@ -26,7 +31,9 @@ import dev.vinciguerra.adrsentinel.web.dto.shipmentroute.OrsRouteRequestDTO.Opti
 import dev.vinciguerra.adrsentinel.web.dto.shipmentroute.OrsRouteRequestDTO.ProfileParams;
 import dev.vinciguerra.adrsentinel.web.dto.shipmentroute.OrsRouteRequestDTO.Restrictions;
 import dev.vinciguerra.adrsentinel.web.dto.shipmentroute.OrsRouteResponseDTO;
+import dev.vinciguerra.adrsentinel.web.dto.shipmentroute.ShipmentRouteRequestDTO.ShipmentRouteDetailDTO;
 import dev.vinciguerra.adrsentinel.web.dto.shipmentroute.ShipmentRouteResponseDTO;
+import dev.vinciguerra.adrsentinel.web.dto.shipmentroute.ShipmentRouteUpdateDTO;
 
 /**
  * Servizio di orchestrazione (Core Domain Service) deputato alla gestione del ciclo di vita 
@@ -101,6 +108,192 @@ public class ShipmentRouteService extends AbstractGenericService {
 		logger.info("[DataBase CALL] Searching for the ShipmentRoute by routeUUID: {}", routeUUID);
 		return shipmentRouteRepository.findByRouteUUID(routeUUID)
 			.orElseThrow(() -> new ResourceNotFoundException("ShipmentRoute not found: " + routeUUID));
+	}
+	
+	/**
+	 * Recupera l'elenco sequenziale dei segmenti di viaggio (Tratte/Legs) per una determinata spedizione, 
+	 * interponendo un layer di Caching L1 (Caffeine) ad altissime prestazioni per abbattere il carico sul database.
+	 * <p>
+	 * <b>Strategia di Caching (Spring AOP Proxy):</b><br>
+	 * Il metodo è decorato con {@code @Cacheable}. Al momento dell'invocazione, il Proxy AOP di Spring 
+	 * intercetta la chiamata prima che entri nel metodo:
+	 * <ul>
+	 * <li><b>Cache Hit:</b> Se il {@code shipmentTrackingNumber} (usato dinamicamente come chiave tramite SpEL {@code key = "#shipmentTrackingNumber"}) 
+	 * è già presente nella cache {@code SHIPMENT_ROUTE_BY_SHIPMENT_CACHE}, il framework restituisce immediatamente 
+	 * la lista in memoria (complessità temporale O(1)), bypassando completamente l'esecuzione del metodo.</li>
+	 * <li><b>Cache Miss:</b> Se il dato è assente o espirato (TTL), il metodo viene effettivamente eseguito, 
+	 * interroga il database tramite il Repository, restituisce il risultato e, contemporaneamente, 
+	 * popola la cache per le chiamate future.</li>
+	 * </ul>
+	 * </p>
+	 * <p>
+	 * <b>Telemetria e Monitoraggio dell'Efficienza:</b><br>
+	 * Il log {@code "[DataBase CALL]"} è strategicamente posizionato <i>all'interno</i> del corpo del metodo. 
+	 * Grazie al funzionamento del Proxy AOP, questa riga verrà stampata in console <b>esclusivamente in caso di Cache Miss</b>. 
+	 * Questo approccio fornisce una metrica vitale (Observability) per monitorare l'efficienza della configurazione 
+	 * di Caffeine: se il log appare ripetutamente per lo stesso Tracking Number, significa che le policy di 
+	 * eviction (scadenza o dimensione massima) della cache sono da tarare.
+	 * </p>
+	 * <p>
+	 * <b>Sicurezza (Anti-IDOR):</b><br>
+	 * Continua a delegare la ricerca al Tracking Number (UUID) invece che alla Primary Key del database, 
+	 * schermando il layer di persistenza da tentativi di enumerazione.
+	 * </p>
+	 * @param shipmentTrackingNumber L'identificatore alfanumerico pubblico (UUID) della spedizione di cui recuperare le rotte.
+	 * @return L'elenco ({@link List}) delle entità {@link ShipmentRoute} idratate dal database o dalla cache.
+	 * Restituisce una lista vuota se nessuna rotta è associata al Tracking Number indicato (Nessun {@code null} restituito).
+	 */
+	@Cacheable(value = CaffeineCacheConfiguration.SHIPMENT_ROUTE_BY_SHIPMENT_CACHE, key = "#shipmentTrackingNumber")
+	public List<ShipmentRoute> getByShipmentTrackingNumber(String shipmentTrackingNumber) {
+		logger.info("[DataBase CALL] Searching for the ShipmentRoute by Shipment trackingNumber: {}", shipmentTrackingNumber);
+		return shipmentRouteRepository.findByShipmentTrackingNumber(shipmentTrackingNumber);
+	}
+	
+	/**
+	 * Persiste in modalità batch una collezione di nuovi segmenti di rotta (Legs) nel database 
+	 * e orchestra il successivo popolamento (Warm-up) delle cache applicative.
+	 * <p>
+	 * <b>Pattern di Coerenza (Transaction Synchronization):</b><br>
+	 * Il metodo affronta il classico problema della "Race Condition" tra Cache e Database. 
+	 * Invece di aggiornare la memoria RAM (Caffeine) immediatamente dopo ogni singola {@code INSERT}, 
+	 * l'operazione di caching viene delegata al {@link TransactionSynchronizationManager}. 
+	 * Sfruttando l'hook {@code afterCommit()}, il sistema garantisce matematicamente che la cache 
+	 * verrà popolata <b>solo ed esclusivamente</b> se la transazione SQL va a buon fine. 
+	 * Se il database dovesse eseguire un Rollback (es. per violazione di un constraint), la RAM 
+	 * rimarrà intonsa, prevenendo il gravissimo fenomeno del <i>Cache Poisoning</i> (Dati fantasma in memoria).
+	 * </p>
+	 * <p>
+	 * <b>Telemetria:</b><br>
+	 * Estrae preventivamente tutti i Route UUID tramite Stream API per generare un log di audit 
+	 * pulito e conciso prima dell'apertura formale delle operazioni di I/O.
+	 * </p>
+	 * @param newShipmentRoutes La lista delle entità {@link ShipmentRoute} transitorie (Transient) 
+	 * appena calcolate dal motore di geolocalizzazione, pronte per essere persistite.
+	 * @return La lista delle entità aggiornate e gestite dal Persistence Context di Hibernate, 
+	 * complete di chiavi primarie generate dal database.
+	 */
+	@Transactional
+	public List<ShipmentRoute> save(List<ShipmentRoute> newShipmentRoutes) {
+		List<String> UUIDs = newShipmentRoutes.stream().map(ShipmentRoute::getRouteUUID).toList();
+		logger.info("[DataBase CALL] Saving new ShipmentRoutes with routeUUIDs: {}", UUIDs);
+		List<ShipmentRoute> savedShipmentRoutes = new ArrayList<ShipmentRoute>();
+		for(ShipmentRoute route : newShipmentRoutes)
+			savedShipmentRoutes.add(shipmentRouteRepository.save(route));
+		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+			@Override
+			public void afterCommit() { syncCacheAfterInsert(savedShipmentRoutes); }
+		});
+		return savedShipmentRoutes;
+	}
+	
+	/**
+	 * Esegue l'aggiornamento transazionale di uno specifico segmento di rotta logistica, 
+	 * applicando i nuovi parametri vettoriali e mantenendo l'allineamento con la cache.
+	 * <p>
+	 * <b>Architettura e Sicurezza:</b>
+	 * <ul>
+	 * <li><b>Anti-IDOR:</b> Il metodo viene esposto ai layer superiori (Controller) richiedendo come 
+	 * parametro di ricerca il {@code routeUUID} (identificativo pubblico) anziché la chiave primaria, 
+	 * blindando l'accesso ai dati.</li>
+	 * <li><b>Dirty Checking e Salvataggio:</b> L'entità viene estratta fresca dal DB. Anche se l'annotazione 
+	 * {@code @Transactional} applicherebbe le modifiche in automatico a fine metodo (Dirty Checking), 
+	 * l'invocazione esplicita di {@code repository.save(route)} è mantenuta per garantire che l'hook 
+	 * di sincronizzazione catturi l'istanza finale aggiornata.</li>
+	 * <li><b>Enum Hydration:</b> Converte dinamicamente la stringa della restrizione gallerie in 
+	 * arrivo dal DTO nel corrispettivo dominio tipizzato {@link TunnelRestriction}.</li>
+	 * </ul>
+	 * </p>
+	 * @param routeUUID L'identificatore alfanumerico univoco della tratta da aggiornare.
+	 * @param updateDto Il payload validato (Data Transfer Object) contenente le nuove coordinate, 
+	 * la polilinea aggiornata e le metriche di viaggio.
+	 * @return L'entità {@link ShipmentRoute} aggiornata e sincronizzata col database.
+	 * @throws ResourceNotFoundException Se l'UUID fornito non corrisponde ad alcun segmento esistente 
+	 * (Interrompe la transazione prima di effettuare qualsiasi logica di aggiornamento).
+	 * @throws IllegalShipmentStateException Se lo Shipment collegato a questa rotta non è più nello stato PLANNED.
+	 */
+	@Transactional
+	public ShipmentRoute updateByRouteUUID(String routeUUID, ShipmentRouteUpdateDTO updateDto) throws ResourceNotFoundException, IllegalShipmentStateException {
+		logger.info("[DataBase CALL] Updating ShipmentRoute details with routeUUID: {}", routeUUID);
+		ShipmentRoute route = shipmentRouteRepository.findByRouteUUID(routeUUID)
+			.orElseThrow(() -> new ResourceNotFoundException("ShipmentRoute not found: " + routeUUID));
+		if(route.getShipment().getShipmentStatus() != ShipmentStatus.PLANNED)
+			throw new IllegalShipmentStateException("Update denied: shipment is no longer in PLANNED status.");
+		route.setOriginLat(updateDto.originLat());
+		route.setOriginLng(updateDto.originLng());
+		route.setDestLat(updateDto.destLat());
+		route.setDestLng(updateDto.destLng());
+		route.setDistanceKm(updateDto.distancekm());
+		route.setEtaMinutes(updateDto.etaMins());
+		route.setTunnelRestriction(Enum.valueOf(TunnelRestriction.class, updateDto.tunnelRestriction()));
+		route.setGeometry(updateDto.geometry());
+		ShipmentRoute updatedRoute = shipmentRouteRepository.save(route);
+		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+			@Override
+			public void afterCommit() { syncCacheAfterUpdate(updatedRoute); }
+		});
+		return updatedRoute;
+	}
+	
+	/**
+	 * Callback privata (Hook) invocata dal gestore delle transazioni esclusivamente dopo 
+	 * un commit SQL (INSERT) avvenuto con successo.
+	 * <p>
+	 * <b>Strategia di Inserimento (Multi-Index Cache Warming):</b><br>
+	 * Per ogni nuova tratta salvata, il metodo interroga l'orchestratore di cache centralizzato 
+	 * per popolare contemporaneamente due regioni di memoria distinte:
+	 * <ol>
+	 * <li>La cache per la ricerca del singolo segmento (Chiave: {@code Route UUID}).</li>
+	 * <li>La cache per la ricerca dell'intero viaggio a tappe (Chiave: {@code Shipment Tracking Number}). 
+	 * Su quest'ultima utilizza la strategia {@code LIST_RECORD} per accodare dinamicamente il nuovo 
+	 * segmento alla collezione preesistente.</li>
+	 * </ol>
+	 * </p>
+	 * @param savedShipmentRoutes La collezione delle rotte appena consolidate nel database.
+	 */
+	private void syncCacheAfterInsert(List<ShipmentRoute> savedShipmentRoutes) {
+		for(ShipmentRoute savedRoute : savedShipmentRoutes) {
+			storeInCache(
+				CaffeineCacheConfiguration.SHIPMENT_ROUTE_BY_ROUTE_UUID_CACHE,
+				savedRoute.getRouteUUID(),
+				savedRoute,
+				CacheOperation.SINGLE_RECORD
+			);
+			storeInCache(
+				CaffeineCacheConfiguration.SHIPMENT_ROUTE_BY_SHIPMENT_CACHE,
+				savedRoute.getShipment().getTrackingNumber(),
+				savedRoute,
+				CacheOperation.LIST_RECORD
+			);
+		}
+	}
+	
+	/**
+	 * Callback privata (Hook) invocata dal gestore delle transazioni esclusivamente dopo 
+	 * un commit SQL (UPDATE) avvenuto con successo.
+	 * <p>
+	 * <b>Strategia di Aggiornamento Immutabile (Zero Key-Shift):</b><br>
+	 * A differenza di altre entità dove le chiavi di raggruppamento possono cambiare nel tempo, 
+	 * sia il {@code Route UUID} (identificativo del segmento) che il {@code Tracking Number} 
+	 * (identificativo della spedizione madre) sono vincolati architetturalmente a essere immutabili.
+	 * Di conseguenza, il metodo invoca la variante a 4 parametri di {@code storeInCache} (senza {@code oldKey}), 
+	 * demandando all'orchestratore la semplice sovrascrittura in-place per il record singolo e il 
+	 * pattern <i>Extract-Replace</i> all'interno della lista.
+	 * </p>
+	 * @param updatedRoute L'istanza della rotta appena modificata e consolidata nel database.
+	 */
+	private void syncCacheAfterUpdate(ShipmentRoute updatedRoute) {
+		storeInCache(
+			CaffeineCacheConfiguration.SHIPMENT_ROUTE_BY_ROUTE_UUID_CACHE,
+			updatedRoute.getRouteUUID(),
+			updatedRoute,
+			CacheOperation.SINGLE_RECORD
+		);
+		storeInCache(
+			CaffeineCacheConfiguration.SHIPMENT_ROUTE_BY_SHIPMENT_CACHE,
+			updatedRoute.getShipment().getTrackingNumber(),
+			updatedRoute,
+			CacheOperation.LIST_RECORD
+		);
 	}
 	
 	/**
@@ -279,5 +472,46 @@ public class ShipmentRouteService extends AbstractGenericService {
 			restrictions
 		);
 		return new OrsRouteRequestDTO(coordinates, new Options(profileParams));
+	}
+	
+	/**
+	 * Mapper infrastrutturale responsabile dell'idratazione (Hydration) dell'entità di dominio 
+	 * JPA {@link ShipmentRoute} a partire dal payload di conferma inviato dal client.
+	 * <p>
+	 * <b>Contesto Architetturale (Fase 2: "Conferma"):</b><br>
+	 * Questo metodo rappresenta il fulcro del pattern di Persistenza Differita. 
+	 * Invece di delegare interamente al database l'identità del record, il metodo invoca 
+	 * il costruttore specializzato iniettando il {@code routeUUID} originato in precedenza 
+	 * dal motore cartografico. Questo garantisce l'assoluta immutabilità della <i>Business Key</i> 
+	 * fin dall'istanziazione dell'oggetto.
+	 * </p>
+	 * <p>
+	 * <b>Gestione del Persistence Context (The Owning Side):</b><br>
+	 * Oltre a travasare le metriche spaziali e temporali, il metodo esegue un'operazione vitale per 
+	 * l'integrità relazionale di Hibernate: l'istruzione {@code route.setShipment(shipment)}. 
+	 * Essendo la tabella {@code shipment_route} il "Lato Proprietario" (Owning Side) della relazione, 
+	 * questa dipendenza è l'unica fonte di verità per il framework. L'operazione garantisce 
+	 * la corretta valorizzazione della Foreign Key ({@code shipment_id}) durante la futura 
+	 * transazione di {@code INSERT}, prevenendo eccezioni di tipo {@code DataIntegrityViolationException}.
+	 * </p>
+	 * @param dto Il Data Transfer Object contenente i dettagli vettoriali e le metriche di viaggio 
+	 * (latitudini, longitudini, geometria, ETA), già rigorosamente validati a livello di Controller 
+	 * tramite le custom annotation (es. {@code @ValidatorLatitude}).
+	 * @param shipment L'entità padre (precedentemente estratta dal DB) a cui agganciare questo 
+	 * specifico segmento di rotta.
+	 * @return Un'istanza transitoria (Transient) di {@link ShipmentRoute}, logicamente coerente 
+	 * e pronta per essere passata al Repository per il salvataggio fisico su database.
+	 */
+	public ShipmentRoute mapToEntity(ShipmentRouteDetailDTO dto, Shipment shipment) {
+		ShipmentRoute route = new ShipmentRoute(dto.routeUUID());
+		route.setOriginLat(dto.originLat());
+		route.setOriginLng(dto.originLng());
+		route.setDestLat(dto.destLat());
+		route.setDestLng(dto.destLng());
+		route.setDistanceKm(dto.distancekm());
+		route.setEtaMinutes(dto.etaMins());
+		route.setGeometry(dto.geometry());
+		route.setShipment(shipment);
+		return route;
 	}
 }

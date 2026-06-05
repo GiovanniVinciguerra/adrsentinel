@@ -1,16 +1,26 @@
 package dev.vinciguerra.adrsentinel.web.controller;
 
+import java.util.List;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import dev.vinciguerra.adrsentinel.db.adrclass.shipmentroute.ShipmentRoute;
 import dev.vinciguerra.adrsentinel.db.adrclass.shipmentroute.ShipmentRouteService;
 import dev.vinciguerra.adrsentinel.db.shipment.Shipment;
 import dev.vinciguerra.adrsentinel.db.shipment.ShipmentService;
 import dev.vinciguerra.adrsentinel.web.annotation.ValidatorUUID;
+import dev.vinciguerra.adrsentinel.web.dto.shipmentroute.ShipmentRouteRequestDTO;
 import dev.vinciguerra.adrsentinel.web.dto.shipmentroute.ShipmentRouteResponseDTO;
+import dev.vinciguerra.adrsentinel.web.dto.shipmentroute.ShipmentRouteUpdateDTO;
+import dev.vinciguerra.adrsentinel.web.dto.shipmentroute.SingleShipmentRouteResponseDTO;
+import jakarta.validation.Valid;
 
 /**
  * Controller REST (Presentation Layer) responsabile dell'esposizione degli endpoint HTTP 
@@ -61,6 +71,61 @@ public class ShipmentRouteController {
 	}
 	
 	/**
+	 * Espone l'endpoint di lettura per recuperare i dettagli spaziali e metrici 
+	 * di un singolo segmento di rotta (Leg).
+	 * <p>
+	 * <b>Sicurezza (Zero-Trust & Anti-IDOR):</b><br>
+	 * L'endpoint è blindato in ingresso dal vincolo custom {@code @ValidatorUUID}, 
+	 * che respinge preventivamente formati non conformi con un errore 400 Bad Request. 
+	 * Inoltre, la ricerca avviene tramite {@code routeUUID} (Business Key) anziché 
+	 * tramite chiave primaria del database, annullando il rischio di enumerazione 
+	 * delle risorse (Insecure Direct Object Reference).
+	 * </p>
+	 * <p>
+	 * <b>Isolamento del Dominio:</b><br>
+	 * L'entità JPA recuperata dal Service Layer viene incapsulata e trasformata 
+	 * nel {@link SingleShipmentRouteResponseDTO} prima di essere serializzata in JSON. 
+	 * Questo garantisce che i dati sensibili del database o le logiche di persistenza non vengano 
+	 * mai esposti accidentalmente al client (Presentation Layer).
+	 * </p>
+	 * @param routeUUID L'identificativo alfanumerico pubblico che punta in modo univoco al segmento desiderato.
+	 * @return Una {@link ResponseEntity} contenente il DTO della rotta con HTTP Status 200 (OK).
+	 * @throws ResourceNotFoundException (Gestita globalmente) se l'UUID non corrisponde ad alcun record.
+	 */
+	@GetMapping("/{routeUUID}")
+	public ResponseEntity<SingleShipmentRouteResponseDTO> getByRouteUUID(@PathVariable @ValidatorUUID String routeUUID) {
+		ShipmentRoute route = shipmentRouteService.getByRouteUUID(routeUUID);
+		return ResponseEntity.ok(SingleShipmentRouteResponseDTO.fromEntity(route));
+	}
+	
+	/**
+	 * Recupera l'intero ecosistema di navigazione (viaggio multi-tappa) associato 
+	 * a una specifica spedizione, interrogando il sistema tramite il suo Tracking Number.
+	 * <p>
+	 * <b>Aggregazione del Payload:</b><br>
+	 * L'endpoint non si limita a restituire un array piatto di segmenti, ma costruisce 
+	 * una struttura gerarchica (tramite {@link ShipmentRouteResponseDTO}) che include sia 
+	 * la sequenza ordinata delle tratte che le informazioni anagrafiche della spedizione madre 
+	 * (es. veicolo, merci, vincoli).
+	 * </p>
+	 * <p>
+	 * <b>Architettura e Performance:</b><br>
+	 * Delega l'estrazione al Service Layer, il quale sfrutta il livello di caching (Caffeine) 
+	 * per servire la lista in tempi prossimi allo zero se la spedizione è stata interrogata di recente, 
+	 * riducendo drasticamente il carico sul database relazionale.
+	 * </p>
+	 * @param trackingNumber Il codice pubblico di tracciamento della spedizione, sottoposto 
+	 * a rigorosa validazione sintattica per bloccare payload malevoli prima dell'elaborazione.
+	 * @return Una {@link ResponseEntity} con HTTP Status 200 (OK) e il payload gerarchico del viaggio.
+	 */
+	@GetMapping("/shipment/{trackingNumber}")
+	public ResponseEntity<ShipmentRouteResponseDTO> getByShipmentTrackingNumber(@PathVariable @ValidatorUUID String trackingNumber) {
+		Shipment shipment = shipmentService.getByTrackingNumber(trackingNumber);
+		List<ShipmentRoute> routes = shipmentRouteService.getByShipmentTrackingNumber(trackingNumber);
+		return ResponseEntity.ok(ShipmentRouteResponseDTO.fromEntity(routes, shipment));
+	}
+	
+	/**
 	 * Endpoint REST (GET) deputato al calcolo e all'estrazione della rotta stradale (profilo HGV) 
 	 * ottimizzata per una specifica spedizione, valutando attivamente le restrizioni gallerie 
 	 * applicabili in base alle distinte di carico (merci pericolose).
@@ -97,5 +162,70 @@ public class ShipmentRouteController {
 	public ResponseEntity<ShipmentRouteResponseDTO> routing(@PathVariable @ValidatorUUID String shipmentTrackingNumber) {
 		Shipment shipment = shipmentService.getByTrackingNumber(shipmentTrackingNumber);
 		return ResponseEntity.ok(shipmentRouteService.routing(shipment));
+	}
+	
+	/**
+	 * Endpoint REST per la creazione e il consolidamento batch dei segmenti di rotta.
+	 * <p>
+	 * <b>Pattern Operativo (Fase 2: Conferma della Persistenza Differita):</b><br>
+	 * Questo metodo rappresenta l'anello finale dell'architettura "Calcola-e-Conferma".
+	 * Riceve dal client il set di rotte precedentemente elaborate dal motore cartografico in modalità 
+	 * <i>stateless</i> e procede alla loro memorizzazione fisica.
+	 * </p>
+	 * <p>
+	 * <b>Flusso Architetturale:</b>
+	 * <ol>
+	 * <li><b>Lookup del Parent:</b> Recupera l'entità madre {@link Shipment} tramite il Tracking Number, 
+	 * garantendo l'integrità referenziale.</li>
+	 * <li><b>Hydration & Mapping:</b> Sfrutta le Stream API e il mapper statico per convertire i DTO 
+	 * in entità JPA, iniettando contestualmente l'istanza della spedizione per popolare la Foreign Key 
+	 * (lato proprietario della relazione).</li>
+	 * <li><b>Persistenza:</b> Delega al Service Layer il salvataggio transazionale in batch.</li>
+	 * <li><b>RESTful Compliance:</b> Restituisce rigorosamente uno status code HTTP 201 (CREATED) 
+	 * allegando nel body la rappresentazione gerarchica della risorsa appena generata.</li>
+	 * </ol>
+	 * </p>
+	 * @param shipmentRouteRequestDTO Il payload validato contenente la collezione dei segmenti 
+	 * confermati dal client e il puntatore (Tracking Number) alla spedizione di appartenenza.
+	 * @return Una {@link ResponseEntity} con HTTP Status 201 (CREATED) contenente il DTO completo 
+	 * del viaggio multi-tappa.
+	 */
+	@PostMapping
+	public ResponseEntity<ShipmentRouteResponseDTO> create(@RequestBody @Valid ShipmentRouteRequestDTO shipmentRouteRequestDTO) {
+		Shipment shipment = shipmentService.getByTrackingNumber(shipmentRouteRequestDTO.shipmentTrackingNumber());
+		List<ShipmentRoute> shipmentRoutesToSave = shipmentRouteRequestDTO.routeDetails().stream()
+			.map(routeDetailDTO -> shipmentRouteService.mapToEntity(routeDetailDTO, shipment))
+			.toList();
+		List<ShipmentRoute> savedShipmentRoutes = shipmentRouteService.save(shipmentRoutesToSave);
+		return ResponseEntity.status(HttpStatus.CREATED).body(ShipmentRouteResponseDTO.fromEntity(savedShipmentRoutes, shipment));
+	}
+	
+	/**
+	 * Endpoint REST per l'aggiornamento puntuale delle metriche e della geometria di uno specifico segmento.
+	 * <p>
+	 * <b>Design Pattern (Thin Controller & Clean Architecture):</b><br>
+	 * Questo metodo funge da puro "Passacarte" (Facade) verso il livello di business. 
+	 * Non contiene logica di dominio (es. verifiche sullo stato della spedizione madre). Il controllo 
+	 * sulle mutazioni illegali (es. modifica di una spedizione non più in stato {@code PLANNED}) 
+	 * è centralizzato e blindato all'interno del Service Layer transazionale, che solleverà le 
+	 * opportune eccezioni (es. HTTP 409 Conflict) se i vincoli legali vengono violati.
+	 * </p>
+	 * <p>
+	 * <b>Sicurezza (Fail-Fast & Anti-IDOR):</b>
+	 * <ul>
+	 * <li><b>@ValidatorUUID:</b> Ispeziona e blocca la request a monte se l'identificativo in URL è malformato o tenta attacchi di iniezione.</li>
+	 * <li><b>@Valid:</b> Attiva la catena di validatori custom sul JSON in ingresso (es. {@code @ValidatorLatitude}, {@code @ValidatorETA}), 
+	 * rigettando payload fisicamente o logicamente impossibili (HTTP 400).</li>
+	 * <li><b>UUID come Business Key:</b> Maschera completamente la Primary Key del database verso l'esterno.</li>
+	 * </ul>
+	 * </p>
+	 * @param routeUUID Il parametro di path (identificativo pubblico) che individua univocamente la tratta da mutare.
+	 * @param updateDto Il payload (Request Body) contenente i nuovi valori spaziali e temporali della tratta.
+	 * @return Una {@link ResponseEntity} con HTTP Status 200 (OK) che incapsula la vista aggiornata del singolo segmento.
+	 */
+	@PutMapping("/{routeUUID}")
+	public ResponseEntity<SingleShipmentRouteResponseDTO> updateByRouteUUID(@PathVariable @ValidatorUUID String routeUUID, @RequestBody @Valid ShipmentRouteUpdateDTO updateDto) {
+		ShipmentRoute updatedShipmentRoute = shipmentRouteService.updateByRouteUUID(routeUUID, updateDto);
+		return ResponseEntity.ok(SingleShipmentRouteResponseDTO.fromEntity(updatedShipmentRoute));
 	}
 }

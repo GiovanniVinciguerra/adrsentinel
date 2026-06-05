@@ -1,5 +1,9 @@
 package dev.vinciguerra.adrsentinel.web.dto.vehicle;
 
+import java.util.Set;
+import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorVehicleApprovals;
+import jakarta.validation.constraints.NotEmpty;
+
 /**
  * Data Transfer Object (DTO) in ingresso (Request Payload) ultraleggero, progettato 
  * esclusivamente per l'aggiornamento mirato (State Toggle / Patch) dello stato 
@@ -18,9 +22,9 @@ package dev.vinciguerra.adrsentinel.web.dto.vehicle;
  * Questo approccio previene in modo assoluto le {@code NullPointerException} a runtime 
  * e implementa il principio del <i>Secure by Default</i> (un veicolo non è mai considerato 
  * certificato per merci pericolose a meno di una dichiarazione esplicita e positiva).
- * @param approval La nuova certificazione adr del veicolo.
+ * @param approvals Le nuove certificazioni del veicolo che sostituiranno le vecchie già possedute.
  * @author Giovanni Vinciguerra
  * @version 1.0 (Strict Validated Input Payload)
  * @since 1.0
  */
-public record VehicleUpdateAdrApprovalDTO(String approval) {}
+public record VehicleUpdateAdrApprovalDTO(@NotEmpty(message = "Malformed payload: approvals are required") Set<@ValidatorVehicleApprovals String> approvals) {}
