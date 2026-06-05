@@ -35,7 +35,7 @@ import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentResponseDTO;
  * @version 1.0
  * @since 1.0 
  */
-public record SingleShipmentRouteResponseDTO(Long id, String routeUUID, Double originLat, Double originLng, Double destLat, Double destLng, Float distancekm,
+public record SingleShipmentRouteResponseDTO(String routeUUID, Double originLat, Double originLng, Double destLat, Double destLng, Float distancekm,
 		Integer etaMinutes, String tunnelRestriction, String geometry, ShipmentResponseDTO shipment) {
 	
 	/**
@@ -60,7 +60,6 @@ public record SingleShipmentRouteResponseDTO(Long id, String routeUUID, Double o
 			return null;
 		
 		return new SingleShipmentRouteResponseDTO(
-			entity.getId(),
 			entity.getRouteUUID(),
 			entity.getOriginLat(),
 			entity.getOriginLng(),

@@ -20,8 +20,6 @@ import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleResponseDTO;
  * un oggetto immutabile e Thread-Safe. Inoltre, i record godono di una serializzazione 
  * JSON estremamente rapida ed efficiente tramite le librerie standard (es. Jackson), 
  * poiché riducono al minimo l'overhead in memoria e l'utilizzo della Reflection.
- * @param id L'identificatore tecnico primario (Surrogate Key) del database. Utile al client 
- * per la gestione di griglie dati o framework reattivi lato frontend.
  * @param trackingNumber La Business Key pubblica (UUID). È il vero identificatore di dominio 
  * da fornire ai clienti per il tracciamento esterno della spedizione.
  * @param shipmentDate Il marcatore temporale (Data e Ora locale) della pianificazione logistica. 
@@ -36,7 +34,7 @@ import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleResponseDTO;
  * @version 1.0 (Strict Validated Output Payload)
  * @since 1.0
  */
-public record ShipmentResponseDTO(Long id, String trackingNumber, String shipmentDate, String shipmentStatus,
+public record ShipmentResponseDTO(String trackingNumber, String shipmentDate, String shipmentStatus,
 		String originAddress, List<String> destinationAddresses, VehicleResponseDTO vehicle) {
 	
 	/**
@@ -77,7 +75,6 @@ public record ShipmentResponseDTO(Long id, String trackingNumber, String shipmen
 			return null;
 		
 		return new ShipmentResponseDTO(
-			entity.getId(),
 			entity.getTrackingNumber(),
 			entity.getShipmentDate().toString(),
 			entity.getShipmentStatus().name(),

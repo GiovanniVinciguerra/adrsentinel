@@ -25,7 +25,6 @@ import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle;
  * Il flag {@code adrCertified} rappresenta lo stato di omologazione legale del mezzo al trasporto 
  * di merci pericolose, fungendo da interruttore logico per l'abilitazione del veicolo all'interno 
  * delle procedure di spedizione ADR.
- * @param id L'identificatore primario (Surrogate Key) del database.
  * @param licensePlate La targa del veicolo, utilizzata come identificatore visivo e legale.
  * @param vehicleCategory Il DTO annidato contenente la classificazione tecnica ADR (es. FL, AT, OX).
  * @param maxWeightkg La massa massima tecnicamente ammissibile a pieno carico (in kg).
@@ -40,7 +39,7 @@ import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle;
  * @version 1.0 (Strict Validated Output Payload)
  * @since 1.0
  */
-public record VehicleResponseDTO(Long id, String licensePlate, VehicleCategoryResponseDTO vehicleCategory, Integer maxWeightkg,
+public record VehicleResponseDTO(String licensePlate, VehicleCategoryResponseDTO vehicleCategory, Integer maxWeightkg,
 		Integer maxUsefulWeightkg, Float heightm, Float widthm, Float lengthm, Float wheelbasem, Integer nAxles) {
 	
 	/**
@@ -75,7 +74,6 @@ public record VehicleResponseDTO(Long id, String licensePlate, VehicleCategoryRe
 			return null;
 		
 		return new VehicleResponseDTO(
-			entity.getId(),
 			entity.getLicensePlate(),
 			VehicleCategoryResponseDTO.fromEntity(entity.getVehicleCategory()),
 			entity.getMaxWeightkg(),

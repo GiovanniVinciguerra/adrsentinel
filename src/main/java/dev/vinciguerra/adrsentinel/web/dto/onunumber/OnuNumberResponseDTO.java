@@ -18,8 +18,6 @@ import dev.vinciguerra.adrsentinel.web.dto.adrclass.AdrClassResponseDTO;
  * <i>Response DTO</i> (destinato alla serializzazione JSON verso il Frontend), l'oggetto 
  * viene istanziato dal Service/Mapper e viaggia verso il Controller senza alcun rischio 
  * di mutazione accidentale del suo stato durante il transito.
- * @param id L'identificatore tecnico primario (Surrogate Key) assegnato dal database. 
- * Utile lato client per operazioni di binding o come chiave in framework reattivi.
  * @param onuCode Il Numero ONU (UN Number) a 4 cifre (es. "1202" per Gasolio). Rappresenta 
  * la Business Key internazionale univoca della sostanza.
  * @param name La denominazione ufficiale di trasporto (Proper Shipping Name) della sostanza, 
@@ -40,7 +38,7 @@ import dev.vinciguerra.adrsentinel.web.dto.adrclass.AdrClassResponseDTO;
  * @version 1.0 (Strict Validated Input Payload)
  * @since 1.0
  */
-public record OnuNumberResponseDTO(Long id, String onuCode, String name, String physicalState, String kemlerCode,
+public record OnuNumberResponseDTO(String onuCode, String name, String physicalState, String kemlerCode,
 		String packingGroup, String tunnelRestriction, Integer transportCategory, AdrClassResponseDTO adrClass) {
 	
 	/**
@@ -78,7 +76,6 @@ public record OnuNumberResponseDTO(Long id, String onuCode, String name, String 
 			return null;
 		
 		return new OnuNumberResponseDTO(
-			entity.getId(),
 			entity.getOnuCode(),
 			entity.getName(),
 			entity.getPhysicalState().name(),

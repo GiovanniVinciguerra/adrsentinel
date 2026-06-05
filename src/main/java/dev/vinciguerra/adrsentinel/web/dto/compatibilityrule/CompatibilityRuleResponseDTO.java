@@ -25,10 +25,6 @@ import dev.vinciguerra.adrsentinel.web.dto.adrclass.AdrClassResponseDTO;
  * in sicurezza da stream paralleli e serializzato dai convertitori HTTP (come Jackson), 
  * che trasformeranno i campi in un albero JSON gerarchico, pulito e prevedibile.
  * </p>
- * @param id L'identificativo fisico (Primary Key) generato dal database. Esporre 
- * questo campo è fondamentale per consentire al frontend di mantenere 
- * lo stato e di puntare alla risorsa esatta in caso di future operazioni 
- * di mutazione (es. {@code PUT /compatibility-rules/{id}} o {@code DELETE}).
  * @param adrClassA L'oggetto idratato rappresentante la prima classe ADR della regola, 
  * completo dei suoi attributi anagrafici (codice e descrizione).
  * @param adrClassB L'oggetto idratato rappresentante la seconda classe ADR.
@@ -39,7 +35,7 @@ import dev.vinciguerra.adrsentinel.web.dto.adrclass.AdrClassResponseDTO;
  * @version 1.0 (Read-Only Immutable View)
  * @since 1.0
  */
-public record CompatibilityRuleResponseDTO(Long id, AdrClassResponseDTO adrClassA, AdrClassResponseDTO adrClassB, boolean isCompatible, String warningNote) {
+public record CompatibilityRuleResponseDTO(AdrClassResponseDTO adrClassA, AdrClassResponseDTO adrClassB, boolean isCompatible, String warningNote) {
 	/**
 	 * Factory Method statico per la conversione (Mapping) e l'aggregazione strutturata 
 	 * di un'entità di dominio {@link CompatibilityRule} nel suo corrispondente 
@@ -73,7 +69,6 @@ public record CompatibilityRuleResponseDTO(Long id, AdrClassResponseDTO adrClass
 			return null;
 		
 		return new CompatibilityRuleResponseDTO(
-			entity.getId(),
 			AdrClassResponseDTO.fromEntity(entity.getAdrClassA()),
 			AdrClassResponseDTO.fromEntity(entity.getAdrClassB()),
 			entity.isCompatible(),

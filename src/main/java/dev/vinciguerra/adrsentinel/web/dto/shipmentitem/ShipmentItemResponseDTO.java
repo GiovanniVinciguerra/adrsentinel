@@ -23,7 +23,6 @@ import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentResponseDTO;
  * materializzate (Nested DTOs) della spedizione padre ({@link ShipmentResponseDTO}) e della normativa 
  * ADR applicabile ({@link OnuNumberResponseDTO}), fornendo al frontend una "fotografia" completa 
  * e gerarchica, immediatamente renderizzabile nella User Interface senza richiedere ulteriori fetch.
- * @param id L'identificatore surrogato (Primary Key) del database.
  * @param uuid La Business Key pubblica e inalterabile (UUID) dell'articolo, utilizzata dai client 
  * per operazioni REST sicure (es. interrogazioni puntuali, update, delete) prevenendo attacchi IDOR.
  * @param quantity La grandezza fisica e quantitativa della materia caricata (es. 100.5).
@@ -36,7 +35,7 @@ import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentResponseDTO;
  * @version 1.0 (Strict Validated Output Payload)
  * @since 1.0
  */
-public record ShipmentItemResponseDTO(Long id, String uuid, Float quantity, String unitOfMeasure, ShipmentResponseDTO shipment, OnuNumberResponseDTO onuNumber) {
+public record ShipmentItemResponseDTO(String uuid, Float quantity, String unitOfMeasure, ShipmentResponseDTO shipment, OnuNumberResponseDTO onuNumber) {
 	/**
 	 * Factory Method statico per la conversione (Mapping) e l'aggregazione di un'entità 
 	 * di dominio {@link ShipmentItem} nel suo corrispondente Data Transfer Object in uscita 
@@ -71,7 +70,6 @@ public record ShipmentItemResponseDTO(Long id, String uuid, Float quantity, Stri
 			return null;
 		
 		return new ShipmentItemResponseDTO(
-			entity.getId(),
 			entity.getItemUUID(),
 			entity.getQuantity(),
 			entity.getUnitOfMeasure().name(),
