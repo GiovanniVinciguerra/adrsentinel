@@ -15,8 +15,10 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import dev.vinciguerra.adrsentinel.db.AbstractGenericService;
 import dev.vinciguerra.adrsentinel.db.CaffeineCacheConfiguration;
 import dev.vinciguerra.adrsentinel.db.shipment.Shipment.ShipmentStatus;
+import dev.vinciguerra.adrsentinel.db.shipment.Shipment.VehicleSnapshot;
 import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle;
 import dev.vinciguerra.adrsentinel.db.vehicle.VehicleService;
+import dev.vinciguerra.adrsentinel.exception.IllegalShipmentStateException;
 import dev.vinciguerra.adrsentinel.exception.ResourceNotFoundException;
 import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentRequestDTO;
 import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentUpdateDTO;
@@ -255,12 +257,15 @@ public class ShipmentService extends AbstractGenericService {
 	 * @param updateDto Il DTO contenente l'intero set di dati anagrafici (mai parziale).
 	 * @return L'entità aggiornata.
 	 * @throws ResourceNotFoundException Se il tracking number o la targa fornita non esistono a sistema.
+	 * @throws IllegalShipmentStateException Se questo Shipment non è più nello stato PLANNED.
 	 */
 	@Transactional
-	public Shipment updateDetailsByTrackingNumber(String trackingNumber, ShipmentUpdateDTO updateDto) throws ResourceNotFoundException {
+	public Shipment updateDetailsByTrackingNumber(String trackingNumber, ShipmentUpdateDTO updateDto) throws ResourceNotFoundException, IllegalShipmentStateException {
 		logger.info("[DataBase CALL] Updating Shipment with trackingNumber: {}", trackingNumber);
 		Shipment shipment = shipmentRepository.findByTrackingNumber(trackingNumber)
 			.orElseThrow(() -> new ResourceNotFoundException("Shipment not found: " + trackingNumber));
+		if(shipment.getShipmentStatus() != ShipmentStatus.PLANNED)
+			throw new IllegalShipmentStateException("Update denied: shipment is no longer in PLANNED status.");
 		final LocalDate oldDate = shipment.getShipmentDate().toLocalDate();
 		Vehicle vehicle = vehicleService.getByLicensePlate(updateDto.vehicleLicensePlate());
 		shipment.setVehicle(vehicle);
@@ -309,6 +314,17 @@ public class ShipmentService extends AbstractGenericService {
 			.orElseThrow(() -> new ResourceNotFoundException("Shipment not found: " + trackingNumber));
 		LocalDate oldDate = shipment.getShipmentDate().toLocalDate();
 		shipment.setShipmentStatus(Enum.valueOf(ShipmentStatus.class, updateStatusDTO.status()));
+		if(shipment.getShipmentStatus() != ShipmentStatus.PLANNED) {
+			if(shipment.getVehicleSnapshot() == null) {
+				logger.info(
+					"Shipment [{}] has changed status to {}. Snapshot action taken on associated vehicle [{}].",
+					shipment.getTrackingNumber(),
+					shipment.getShipmentStatus().name(),
+					shipment.getVehicle().getLicensePlate()
+				);
+				shipment.setVehicleSnapshot(new VehicleSnapshot(shipment.getVehicle()));
+			}
+		}
 		Shipment updatedShipment = shipmentRepository.save(shipment);
 		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
 			@Override

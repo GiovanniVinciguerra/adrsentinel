@@ -17,6 +17,7 @@ import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorLicensePlate;
 import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorMaxUsefulWeight;
 import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleRequestDTO;
 import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleResponseDTO;
+import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleUpdateActiveStatusDTO;
 import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleUpdateAdrApprovalDTO;
 import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleUpdateDTO;
 import jakarta.validation.Valid;
@@ -126,8 +127,40 @@ public class VehicleController {
 	}
 	
 	/**
+	 * Endpoint REST (HTTP PUT) dedicato all'aggiornamento dello stato operativo di un veicolo.
+	 * <p>
+	 * <b>Semantica RESTful e Idempotenza:</b><br>
+	 * L'operazione è mappata sul verbo {@code PUT} in quanto garantisce l'idempotenza: invocazioni 
+	 * multiple e identiche di questo endpoint produrranno il medesimo stato finale nel sistema, 
+	 * senza effetti collaterali indesiderati. La risorsa da modificare è identificata tramite URI 
+	 * utilizzando la sua chiave logica di business (Targa) anziché la chiave surrogata (Database ID), 
+	 * esponendo un'API sicura e agnostica rispetto al livello di persistenza.
+	 * </p>
+	 * <p>
+	 * <b>Boundary Validation (Barriera Protettiva Fail-Fast):</b><br>
+	 * Il metodo agisce da scudo per il Service Layer delegando al framework due rigidi controlli preliminari:
+	 * <ul>
+	 * <li><b>URI Validation:</b> L'annotazione custom {@code @ValidatorLicensePlate} ispeziona la Path Variable, 
+	 * bloccando istantaneamente (HTTP 400) formati di targa errati o tentativi di iniezione di caratteri non ammessi.</li>
+	 * <li><b>Payload Validation:</b> L'annotazione {@code @Valid} innesca il motore di validazione (Hibernate Validator) 
+	 * sul corpo della richiesta JSON, garantendo che l'oggetto {@link VehicleUpdateActiveStatusDTO} 
+	 * non sia malformato e contenga effettivamente il campo booleano richiesto.</li>
+	 * </ul>
+	 * </p>
+	 * @param licensePlate La targa alfanumerica univoca del veicolo, estratta direttamente dal path dell'URI.
+	 * @param updateDto Il payload (Data Transfer Object) contenente il nuovo stato desiderato ({@code active}).
+	 * @return HTTP {@code 200 OK} con l'oggetto veicolo aggiornato.
+	 */
+	@PutMapping("/active-status/{licensePlate}")
+	public ResponseEntity<VehicleResponseDTO> updateVehicleActiveStatus(@PathVariable @ValidatorLicensePlate String licensePlate,
+			@RequestBody @Valid VehicleUpdateActiveStatusDTO updateDto) {
+		Vehicle updatedVehicle = vehicleService.updateActiveStatusByLicensePlate(licensePlate, updateDto);
+		return ResponseEntity.ok(VehicleResponseDTO.fromEntity(updatedVehicle));
+	}
+	
+	/**
 	 * Endpoint atomico di State Toggle per l'abilitazione o la revoca istantanea 
-	 * della certificazione ADR di un veicolo.
+	 * delle certificazioni ADR di un veicolo.
 	 * <p><b>Design del Payload (Fallback Architetturale):</b></p>
 	 * L'assenza dell'annotazione {@code @Valid} su {@code updateDto} è una scelta 
 	 * architetturale deliberata. Sfruttando i tipi primitivi (boolean) all'interno del Record, 

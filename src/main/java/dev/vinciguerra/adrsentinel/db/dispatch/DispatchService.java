@@ -227,7 +227,8 @@ public class DispatchService {
 	}
 	
 	/**
-	 * Seleziona il veicolo più economico (minor portata utile) tra quelli conformi normativamente.
+	 * Seleziona il veicolo attivo ({@code isActive() == true}) più economico (minor portata utile) tra quelli conformi normativamente. 
+	 * I veicoli attivi vengono selezionati direttamente durante la query al database.
 	 * @param cluster Il gruppo di merci da trasportare.
 	 * @param vehiclesToAssign Lista dei veicoli scremati per peso netto e disponibilità.
 	 * @param isExempt Flag che indica se l'intero cluster gode dell'esenzione 1000 punti.

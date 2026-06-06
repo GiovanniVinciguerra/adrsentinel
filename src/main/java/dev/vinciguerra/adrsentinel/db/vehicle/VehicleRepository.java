@@ -34,20 +34,18 @@ public interface VehicleRepository extends JpaRepository<Vehicle, Long> {
 	 * lo sviluppatore (a livello di Service) a gestire in modo sicuro l'eventualità che il veicolo non esista, 
 	 * tipicamente utilizzando {@code .orElseThrow(() -> new ResourceNotFoundException(...))}.
 	 * </p>
-	 *
 	 * @param licensePlate la targa del veicolo da cercare (normalizzata in uppercase senza spazi).
 	 * @return un {@link Optional} contenente il veicolo se trovato, oppure un Optional vuoto.
 	 */
 	Optional<Vehicle> findByLicensePlate(String licensePlate);
 	/**
-	 * Ricerca tutti i veicoli che hanno una portata utile <b>almeno uguale</b> a quella specificata.
+	 * Ricerca tutti i veicoli attivi ({@code isActive() == true}) che hanno una portata utile <b>almeno uguale</b> a quella specificata.
 	 * <p>
 	 * <b>Nota Architetturale:</b> Il parametro è stato allineato al tipo wrapper {@link Integer} per 
 	 * coerenza con il mapping dell'entità {@code Vehicle}.
 	 * </p>
-	 *
 	 * @param maxUsefulWeightkg il peso massimo utile (portata) esatto in chilogrammi.
 	 * @return una {@link List} di veicoli che corrispondono al criterio, o una lista vuota se nessun veicolo soddisfa il requisito.
 	 */
-	List<Vehicle> findByMaxUsefulWeightkgGreaterThanEqual(Integer maxUsefulWeightkg);
+	List<Vehicle> findByMaxUsefulWeightkgGreaterThanEqualAndActiveTru(Integer maxUsefulWeightkg);
 }

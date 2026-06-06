@@ -80,7 +80,9 @@ public record ShipmentResponseDTO(String trackingNumber, String shipmentDate, St
 			entity.getShipmentStatus().name(),
 			entity.getOriginAddress(),
 			entity.getDestinationAddresses(),
-			VehicleResponseDTO.fromEntity(entity.getVehicle())
+			entity.getVehicleSnapshot() != null ?
+				VehicleResponseDTO.fromEntity(entity.getVehicleSnapshot()) :
+				VehicleResponseDTO.fromEntity(entity.getVehicle())
 		);
 	}
 }

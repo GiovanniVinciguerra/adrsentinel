@@ -14,8 +14,10 @@ import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumber;
 import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumber.PackingGroup;
 import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumberService;
 import dev.vinciguerra.adrsentinel.db.shipment.Shipment;
+import dev.vinciguerra.adrsentinel.db.shipment.Shipment.ShipmentStatus;
 import dev.vinciguerra.adrsentinel.db.shipment.ShipmentService;
 import dev.vinciguerra.adrsentinel.db.shipmentitem.ShipmentItem.UnitOfMeasure;
+import dev.vinciguerra.adrsentinel.exception.IllegalShipmentStateException;
 import dev.vinciguerra.adrsentinel.exception.ResourceNotFoundException;
 import dev.vinciguerra.adrsentinel.web.dto.shipmentitem.ShipmentItemRequestDTO;
 import dev.vinciguerra.adrsentinel.web.dto.shipmentitem.ShipmentItemUpdateDTO;
@@ -169,11 +171,14 @@ public class ShipmentItemService extends AbstractGenericService {
 	 * @return L'entità {@link ShipmentItem} completamente idratata e persistita post-aggiornamento.
 	 * @throws ResourceNotFoundException Se l'UUID fornito non corrisponde ad alcun articolo esistente 
 	 * (attivando il Fail-Fast e il conseguente Rollback transazionale).
+	 * @throws IllegalShipmentStateException Se lo Shipment collegato a questa rotta non è più nello stato PLANNED.
 	 */
 	@Transactional
-	public ShipmentItem updateDetailsByItemUUID(String itemUUID, ShipmentItemUpdateDTO updateDto) throws ResourceNotFoundException {
+	public ShipmentItem updateDetailsByItemUUID(String itemUUID, ShipmentItemUpdateDTO updateDto) throws ResourceNotFoundException, IllegalShipmentStateException {
 		ShipmentItem item = shipmentItemRepository.findByItemUUID(itemUUID)
 			.orElseThrow(() -> new ResourceNotFoundException("ShipmentItem not found: " + itemUUID));
+		if(item.getShipment().getShipmentStatus() != ShipmentStatus.PLANNED)
+			throw new IllegalShipmentStateException("Update denied: shipment is no longer in PLANNED status.");
 		final String shipmentTrackingNumber = item.getShipment().getTrackingNumber();
 		OnuNumber number = onuNumberService.getByOnuCodeAndPackingGroupAndName(
 			updateDto.onuCode(),

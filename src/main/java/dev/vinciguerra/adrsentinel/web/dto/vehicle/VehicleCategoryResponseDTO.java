@@ -1,8 +1,10 @@
 package dev.vinciguerra.adrsentinel.web.dto.vehicle;
 
+import java.util.Collections;
+import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle.VehicleCategory;
-import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle.VehicleCategory.VehicleApproval;
 
 /**
  * Data Transfer Object (DTO) in uscita (Response Payload) che modella la classificazione 
@@ -33,7 +35,7 @@ import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle.VehicleCategory.VehicleApp
  * @version 1.0 (Strict Validated Output Payload)
  * @since 1.0
  */
-public record VehicleCategoryResponseDTO(String vehicleType, String loadType, Set<VehicleApproval> vehicleApprovals) {
+public record VehicleCategoryResponseDTO(String vehicleType, String loadType, Set<String> vehicleApprovals) {
 	/**
 	 * Factory Method statico per la conversione (Mapping) di un'entità di dominio 
 	 * {@link VehicleCategory} nel suo corrispondente Data Transfer Object in uscita 
@@ -50,8 +52,8 @@ public record VehicleCategoryResponseDTO(String vehicleType, String loadType, Se
 	 * difensivo ({@code if(entity == null)}), rendendo il metodo intrinsecamente <i>Null-Safe</i>. 
 	 * Questo è fondamentale poiché i metadati di categoria potrebbero essere opzionali o mancanti in 
 	 * determinati scenari di lookup del veicolo, prevenendo così {@code NullPointerException} a runtime.</li>
-	 * <li><b>Type Flattening (Disaccoppiamento Enum):</b> Entrambi i parametri di classificazione 
-	 * (Tipo di Veicolo e Tipo di Carico) vengono esplicitamente convertiti nella loro controparte testuale 
+	 * <li><b>Type Flattening (Disaccoppiamento Enum):</b> Tutti i parametri di classificazione 
+	 * (Tipo di Veicolo, Tipo di Carico e {@codeSet<VehicleApproval>}) vengono esplicitamente convertiti nella loro controparte testuale 
 	 * tramite l'invocazione di {@code .name()}. Questa pratica disaccoppia il payload JSON generato 
 	 * dalle classi enumeratore (Enum) interne del backend, garantendo un "API Contract" stabile, 
 	 * prevedibile e agnostico rispetto alla tecnologia del client (es. Angular, React, app mobili).</li>
@@ -68,7 +70,12 @@ public record VehicleCategoryResponseDTO(String vehicleType, String loadType, Se
 		return new VehicleCategoryResponseDTO(
 			entity.getVehicleType().name(),
 			entity.getLoadType().name(),
-			entity.getVehicleApprovals()
+			/* Mappa da Set<VehicleApproval> a Set<String>, restituendo un Set vuoto se il Set di partenza era vuoto. */
+			Optional.of(entity.getVehicleApprovals())
+				.orElseGet(Collections::emptySet)
+				.stream()
+				.map(Enum::name)
+				.collect(Collectors.toSet())
 		);
 	}
 }

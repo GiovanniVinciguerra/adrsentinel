@@ -3,6 +3,7 @@ package dev.vinciguerra.adrsentinel.db.vehicle;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
+import org.hibernate.annotations.ColumnDefault;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
@@ -216,6 +217,17 @@ public class Vehicle {
 		nullable = false
 	)
 	private Integer nAxles;
+	/**
+	 * Flag booleano utilizzato per la soft-delete del veicolo. Se {@code true} il veicolo può essere selezionato 
+	 * per le spedizioni, se  {@code false} il veicolo non verrà più selezionato, ma manterrà la consistenza relazionale del 
+	 * database.
+	 */
+	@Column(
+		name = "is_active",
+		nullable = false
+	)
+	@ColumnDefault("true")
+	private boolean active;
 	
 	/**
 	 * Lifecycle Hook (Tolerant Reader) eseguito prima di interagire con il database.
@@ -318,6 +330,14 @@ public class Vehicle {
 		this.nAxles = nAxles;
 	}
 
+	public boolean isActive() {
+		return active;
+	}
+
+	public void setActive(boolean active) {
+		this.active = active;
+	}
+
 	/** L'uguaglianza logica tra veicoli si basa esclusivamente sulla Business Key (Targa). */
 	@Override
 	public int hashCode() {
@@ -360,7 +380,7 @@ public class Vehicle {
 			.append(", vehicleCategory=").append(vehicleCategory).append(", maxWeightkg=").append(maxWeightkg)
 			.append(", maxUsefulWeightkg=").append(maxUsefulWeightkg).append(", heightm=").append(heightm)
 			.append(", widthm=").append(widthm).append(", lengthm=").append(lengthm).append(", wheelbasem=")
-			.append(wheelbasem).append(", nAxles=").append(nAxles).append("]");
+			.append(wheelbasem).append(", nAxles=").append(nAxles).append(", active=").append(active) .append("]");
 		return builder.toString();
 	}
 }

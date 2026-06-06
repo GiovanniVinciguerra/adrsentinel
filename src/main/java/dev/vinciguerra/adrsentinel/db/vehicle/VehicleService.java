@@ -17,6 +17,7 @@ import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle.VehicleCategory.VehicleApp
 import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle.VehicleCategory.VehicleType;
 import dev.vinciguerra.adrsentinel.exception.ResourceNotFoundException;
 import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleRequestDTO;
+import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleUpdateActiveStatusDTO;
 import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleUpdateAdrApprovalDTO;
 import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleUpdateDTO;
 
@@ -76,19 +77,19 @@ public class VehicleService extends AbstractGenericService {
 	}
 	
 	/**
-	 * Ricerca una flotta di veicoli capaci di trasportare <b>almeno</b> il peso utile specificato.
+	 * Ricerca una flotta di veicoli attivi ({@code isActive() == true}) capaci di trasportare <b>almeno</b> il peso utile specificato.
 	 * <p>
 	 * <b>Logica di Dominio:</b> Modella la necessità operativa di trovare veicoli idonei a un carico.
-	 * Interroga il DB cercando veicoli con portata utile {@code >=} al parametro richiesto.
+	 * Interroga il DB cercando veicoli attivi con portata utile {@code >=} al parametro richiesto.
 	 * </p>
 	 *
-	 * @param maxUsefulWeightkg il peso minimo che il veicolo deve poter caricare. Protetto da {@code @Positive}.
+	 * @param maxUsefulWeightkg il peso minimo che il veicolo deve poter caricare.
 	 * @return una lista di veicoli idonei al carico (può essere vuota).
 	 */
 	@Cacheable(value = CaffeineCacheConfiguration.VEHICLE_BY_MAX_USEFUL_WEIGHT_CACHE, key = "#maxUsefulWeightkg")
 	public List<Vehicle> getByMaxUsefulWeight(Integer maxUsefulWeightkg) {
 		logger.info("[DataBase CALL] Searching for the Vehicle by maxUsefulWeightkg: {}", maxUsefulWeightkg);
-		return vehicleRepository.findByMaxUsefulWeightkgGreaterThanEqual(maxUsefulWeightkg);
+		return vehicleRepository.findByMaxUsefulWeightkgGreaterThanEqualAndActiveTru(maxUsefulWeightkg);
 	}
 	
 	/**
@@ -117,6 +118,7 @@ public class VehicleService extends AbstractGenericService {
 	@Transactional
 	public Vehicle save(Vehicle newVehicle) {
 		logger.info("[DataBase CALL] Saving new Vehicle with licensePlate: {}", newVehicle.getLicensePlate());
+		newVehicle.setActive(true);
 		Vehicle savedVehicle = vehicleRepository.save(newVehicle);
 		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
 			@Override
@@ -157,7 +159,7 @@ public class VehicleService extends AbstractGenericService {
 		Vehicle vehicle = vehicleRepository.findByLicensePlate(licensePlate)
 			.orElseThrow(() -> new ResourceNotFoundException("Vehicle not found: " + licensePlate));
 		final Integer oldMaxUsefulWeight = vehicle.getMaxUsefulWeightkg();
-		VehicleCategory category = new VehicleCategory();
+		VehicleCategory category =  new VehicleCategory();
 		category.setVehicleType(Enum.valueOf(VehicleType.class, updateDto.vehicleType()));
 		category.setLoadType(Enum.valueOf(LoadType.class, updateDto.loadType()));
 		vehicle.setMaxWeightkg(updateDto.maxWeightkg());
@@ -166,6 +168,54 @@ public class VehicleService extends AbstractGenericService {
 		vehicle.setHeightm(updateDto.heightm());
 		vehicle.setLengthm(updateDto.lengthm());
 		vehicle.setWidthm(updateDto.widthm());
+		Vehicle updatedVehicle = vehicleRepository.save(vehicle);
+		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+			@Override
+			public void afterCommit() { syncCacheAfterUpdate(updatedVehicle, oldMaxUsefulWeight); }
+		});
+		return updatedVehicle;
+	}
+	
+	/**
+	 * Esegue l'aggiornamento dello stato operativo (Soft Delete o Riattivazione) di un veicolo, 
+	 * identificato in modo univoco tramite la sua Business Key (Targa).
+	 * <p>
+	 * <b>Pattern Architetturale: Soft Delete & Audit Trail</b><br>
+	 * All'interno del dominio gestionale, i veicoli che hanno effettuato dei trasporti non vengono 
+	 * mai eliminati fisicamente dal database (Hard Delete) per proteggere l'integrità referenziale 
+	 * dei viaggi storici (Shipment) e rispettare i rigidi vincoli degli Audit normativi. 
+	 * Questo metodo manipola esclusivamente il flag di visibilità operativa ({@code active}), 
+	 * escludendo o reintroducendo il mezzo nelle logiche di assegnazione per le nuove spedizioni.
+	 * </p>
+	 * <p>
+	 * <b>Integrità Transazionale e Sicurezza della Cache (Anti-Poisoning):</b><br>
+	 * L'esecuzione è racchiusa in un contesto {@code @Transactional} per garantire l'atomicità (ACID). 
+	 * Una peculiarità architetturale fondamentale di questo metodo è la protezione della Cache: 
+	 * l'aggiornamento o l'eviction dei dati temporizzati (tramite {@code syncCacheAfterUpdate}) 
+	 * è delegato al {@link TransactionSynchronizationManager}. Questo assicura che l'allineamento 
+	 * della cache avvenga <i>esclusivamente</i> nella fase di {@code afterCommit()}. 
+	 * Qualora il database dovesse subire un Rollback (es. caduta di rete improvvisa o vincoli violati), 
+	 * la cache rimarrà intatta, prevenendo disallineamenti di stato tra memoria e disco (Dirty Reads).
+	 * </p>
+	 * <p>
+	 * <b>Observability e Log Aggregation:</b><br>
+	 * L'operazione traccia un log diagnostico strutturato. La targa del veicolo viene iniettata 
+	 * isolandola per favorire l'indicizzazione e le ricerche mirate tramite sistemi di log 
+	 * monitoring (es. stack ELK o Datadog).
+	 * </p>
+	 * @param licensePlate La targa alfanumerica del veicolo (chiave logica di business) da modificare.
+	 * @param updateDto Il payload di richiesta contenente il nuovo stato desiderato ({@code active: true/false}).
+	 * @return L'entità {@link Vehicle} aggiornata, gestita (Managed) dal Persistence Context di Hibernate.
+	 * @throws ResourceNotFoundException Se la targa fornita non corrisponde ad alcuna anagrafica 
+	 * presente a sistema (approccio Fail-Fast).
+	 */
+	@Transactional
+	public Vehicle updateActiveStatusByLicensePlate(String licensePlate, VehicleUpdateActiveStatusDTO updateDto) throws ResourceNotFoundException {
+		logger.info("[DataBase CALL] Updating Vehicle details with licensePlate: {}", licensePlate);
+		Vehicle vehicle = vehicleRepository.findByLicensePlate(licensePlate)
+			.orElseThrow(() -> new ResourceNotFoundException("Vehicle not found: " + licensePlate));
+		final Integer oldMaxUsefulWeight = vehicle.getMaxUsefulWeightkg();
+		vehicle.setActive(updateDto.active());
 		Vehicle updatedVehicle = vehicleRepository.save(vehicle);
 		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
 			@Override

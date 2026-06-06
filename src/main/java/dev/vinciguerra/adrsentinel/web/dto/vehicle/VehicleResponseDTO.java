@@ -1,6 +1,14 @@
 package dev.vinciguerra.adrsentinel.web.dto.vehicle;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import dev.vinciguerra.adrsentinel.db.shipment.Shipment.VehicleSnapshot;
 import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle;
+import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle.VehicleCategory;
+import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle.VehicleCategory.VehicleApproval;
 
 /**
  * Data Transfer Object (DTO) in uscita (Response Payload) che rappresenta la scheda tecnica 
@@ -35,12 +43,14 @@ import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle;
  * @param wheelbasem Il passo del veicolo (distanza tra gli assi in cm), parametro tecnico per la stabilità e il raggio di sterzata.
  * @param nAxles Il numero totale di assi, variabile chiave per la ripartizione del peso e i costi di pedaggio.
  * @param adrCertified Indica se il veicolo è legalmente certificato e idoneo al trasporto ADR secondo la normativa vigente.
+ * @param active Flag booleano che indica se il veicolo è attivo ({@code true}) oppure no ({@code false}). Può essere {@code null} nel caso in cui 
+ * il veicolo rappresentato sia preso dallo storico {@link VehicleSnapshot}, in cui non è presente un campo {@code active}.
  * @author Giovanni Vinciguerra
  * @version 1.0 (Strict Validated Output Payload)
  * @since 1.0
  */
 public record VehicleResponseDTO(String licensePlate, VehicleCategoryResponseDTO vehicleCategory, Integer maxWeightkg,
-		Integer maxUsefulWeightkg, Float heightm, Float widthm, Float lengthm, Float wheelbasem, Integer nAxles) {
+		Integer maxUsefulWeightkg, Float heightm, Float widthm, Float lengthm, Float wheelbasem, Integer nAxles, Boolean active, boolean historicalData) {
 	
 	/**
 	 * Factory Method statico per la conversione (Mapping) e l'aggregazione di un'entità 
@@ -82,7 +92,46 @@ public record VehicleResponseDTO(String licensePlate, VehicleCategoryResponseDTO
 			entity.getWidthm(),
 			entity.getLengthm(),
 			entity.getWheelbasem(),
-			entity.getnAxles()
+			entity.getnAxles(),
+			entity.isActive(),
+			false
+		);
+	}
+	
+	public static VehicleResponseDTO fromEntity(VehicleSnapshot entity) {
+		if(entity == null)
+			return null;
+		
+		/* Costruzione della VehicleCategory dovuta al flattening */
+		VehicleCategory category = new VehicleCategory();
+		category.setLoadType(entity.getLoadType());
+		category.setVehicleType(entity.getVehicleType());
+		Set<VehicleApproval> approvals;
+		if(entity.getVehicleApprovals().equals("NONE"))
+			approvals = new HashSet<VehicleApproval>();
+		else {
+			approvals = Arrays
+				.stream(
+					entity.getVehicleApprovals()
+					.split(",")
+				)
+				.map(VehicleApproval::valueOf)
+				.collect(Collectors.toSet());
+		}
+		category.setVehicleApprovals(approvals);
+		
+		return new VehicleResponseDTO(
+			entity.getLicensePlate(),
+			VehicleCategoryResponseDTO.fromEntity(category),
+			entity.getMaxWeightkg(),
+			entity.getMaxUsefulWeightkg(),
+			entity.getHeightm(),
+			entity.getWidthm(),
+			entity.getLengthm(),
+			entity.getWheelbasem(),
+			entity.getnAxles(),
+			null,
+			true
 		);
 	}
 }
