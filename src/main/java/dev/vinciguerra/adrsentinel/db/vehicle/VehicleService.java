@@ -89,7 +89,7 @@ public class VehicleService extends AbstractGenericService {
 	@Cacheable(value = CaffeineCacheConfiguration.VEHICLE_BY_MAX_USEFUL_WEIGHT_CACHE, key = "#maxUsefulWeightkg")
 	public List<Vehicle> getByMaxUsefulWeight(Integer maxUsefulWeightkg) {
 		logger.info("[DataBase CALL] Searching for the Vehicle by maxUsefulWeightkg: {}", maxUsefulWeightkg);
-		return vehicleRepository.findByMaxUsefulWeightkgGreaterThanEqualAndActiveTru(maxUsefulWeightkg);
+		return vehicleRepository.findByMaxUsefulWeightkgGreaterThanEqualAndActiveTrue(maxUsefulWeightkg);
 	}
 	
 	/**

@@ -247,7 +247,7 @@ public class Vehicle {
 			licensePlate = licensePlate.trim().toUpperCase();
 		}
 		if(vehicleCategory.vehicleApprovals == null)
-			vehicleCategory.vehicleApprovals = new HashSet<Vehicle.VehicleCategory.VehicleApproval>();
+			vehicleCategory.vehicleApprovals = new HashSet<VehicleCategory.VehicleApproval>();
 	}
 	
 	public Long getId() {

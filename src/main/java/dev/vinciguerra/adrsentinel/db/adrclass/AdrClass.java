@@ -6,7 +6,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.PostLoad;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -29,7 +28,6 @@ import jakarta.persistence.UniqueConstraint;
  * <li><b>Validazione Dichiarativa Estrema:</b> L'integrità del formato del codice classe è delegata a una 
  * Regex con Lookahead, capace di validare complesse regole tipografiche prescritte dal manuale ONU.</li>
  * </ul>
- *
  * @author Giovanni Vinciguerra
  * @version 2.0 (Refactored with Jakarta Validation & UX Normalization)
  * @since 1.0
@@ -86,7 +84,7 @@ public class AdrClass implements Comparable<AdrClass> {
 	 * Metodo di normalizzazione del ciclo di vita (Lifecycle Callback).
 	 * <p>
 	 * Viene invocato automaticamente dal framework JPA (Hibernate) prima delle operazioni di 
-	 * INSERT, UPDATE e subito dopo il ricaricamento in memoria (LOAD).
+	 * INSERT e UPDATE.
 	 * </p>
 	 * <b>Operazioni eseguite:</b>
 	 * <ul>
@@ -98,7 +96,6 @@ public class AdrClass implements Comparable<AdrClass> {
 	 */
 	@PrePersist
 	@PreUpdate
-	@PostLoad
 	private void normalize() {
 		if(classCode != null)
 			classCode = classCode.trim().toUpperCase();

@@ -8,6 +8,8 @@ skinparam class {
     BorderColor Black
 }
 
+' DOMINIO NORMATIVO (ADR / UN)
+
 entity "adr_class" as Classes {
   * id : Long <<PK>>
   --
@@ -20,7 +22,6 @@ entity "onu_number" as UN {
   --
   * onu_code : String <<UQ>>
   * name : String
-  * physical_state : String
   * kemler_code : String
   * packing_group : enum
   * physical_state : enum
@@ -38,27 +39,43 @@ entity "compatibility_rule" as Rules {
   * warning_note : String
 }
 
+' DOMINIO ANAGRAFICHE (Master Data - No FK Spedizioni)
+
 entity "vehicle" as Vehicles {
   * id : Long <<PK>>
   --
   * license_plate : String <<UQ>>
   * vehicle_type : enum
-  * physical_state : enum
   * max_weight_kg : Integer
-  * max_useful_weight_kg : Integer
-  * height_m : Float
-  * width_m : Float
-  * length_m : Float
-  * wheelbase_m : Float
-  * n_axles : Integer
-  * load_type : enum
+  * active : boolean
 }
 
-entity "adr_vehicle_approval" as Approval {
+entity "customer" as Customer {
+	* id : Long <<PK>>
 	--
-	* vehicle_id : Long <<FK>>
-	* vehicle_approval : enum
+	* company_name : String
+	* vat_number : String <<UQ>>
+	* legal_address : String
+    * active : boolean
 }
+
+entity "driver" as Driver {
+	* id : Long <<PK>>
+	--
+	* full_name : String
+	* tax_code : String <<UQ>>
+	* license_number : String <<UQ>>
+	* cqc : boolean
+	* active : boolean
+}
+
+entity "adr_driver_approval" as DriverApproval {
+	--
+	* driver_id : Long <<FK>>
+	* driver_approval : enum
+}
+
+' DOMINIO TRANSAZIONALE (La Spedizione)
 
 entity "shipment" as Shipments {
   * id : Long <<PK>>
@@ -68,8 +85,6 @@ entity "shipment" as Shipments {
   * status : enum
   * origin_address : String
   * destination_address : String
-  * distance_km : Float
-  * vehicle_id : Long <<FK>>
 }
 
 entity "shipment_item" as Items {
@@ -82,15 +97,83 @@ entity "shipment_item" as Items {
   * onu_number_id : Long <<FK>>
 }
 
-' Relazioni Dominio Normativo
-Classes ||..o{ UN : "1 a N"
-Classes ||..o{ Rules : "Classe A"
-Classes ||..o{ Rules : "Classe B"
+entity "package_info" as PackageInfo {
+	* id : Long <<PK>>
+	--
+	* n_package : Integer
+	* description : String
+	* shipment_item_id : Long <<FK>>
+}
 
-' Relazioni Dominio Logistico
-Vehicles ||..o{ Shipments : "1 a N"
-Vehicles ||..o{ Approval: "1 a N"
-Shipments ||..|{ Items : "1 a N (Cascade)"
-UN ||..o{ Items : "1 a N"
+entity "shipment_route" as ShipmentRoute {
+	* id : Long <<PK>>
+	--
+	* orgn_lat : Double
+	* dest_lat : Double
+	* distance_km : Float
+	* shipment_id : Long <<FK>>
+}
+
+' DOMINIO SNAPSHOT LEGALI (Shadow Tables / Join Tables)
+
+entity "shipment_vehicle_snapshot" as VehicleSnapshot {
+    * id : Long <<PK>>
+	--
+	* shipment_id : Long <<FK>>
+    * original_vehicle_id : Long <<FK>>
+    --
+	* snap_license_plate : String
+	* snap_vehicle_type : enum
+	* snap_max_weight_kg : Integer
+}
+
+entity "shipment_driver_snapshot" as DriverSnapshot {
+    * id : Long <<PK>>
+	--
+	* shipment_id : Long <<FK>>
+    * original_driver_id : Long <<FK>>
+    --
+	* snap_full_name : String
+	* snap_tax_code : String 
+	* snap_license_number : String
+	* snap_cqc : boolean
+    * snap_adr_approvals : String
+}
+
+entity "shipment_customer_snapshot" as CustomerSnapshot {
+	* id : Long <<PK>>
+	--
+	* shipment_id : Long <<FK>>
+    * original_customer_id : Long <<FK>>
+    * role : enum <<Sender, Receiver, Carrier>>
+    --
+	* snap_company_name : String
+	* snap_vat_number : String
+	* snap_legal_address : String
+    --
+    UniqueKey(shipment_id, role)
+}
+
+' RELAZIONI
+
+Classes ||--o{ UN : "1 a N"
+Classes ||--o{ Rules : "Class A"
+Classes ||--o{ Rules : "Class B"
+
+Shipments ||--|{ Items : "1 a N"
+UN ||--o{ Items : "1 a N"
+Shipments ||--|| ShipmentRoute : "1 a 1"
+Items ||--o| PackageInfo : "0..1 a 1"
+Driver ||--o{ DriverApproval : "1 a N"
+
+' Relazioni Anagrafiche -> Snapshot (Uno a Molti Storico)
+Vehicles ||..o{ VehicleSnapshot : "Storico"
+Driver ||..o{ DriverSnapshot : "Storico"
+Customer ||..o{ CustomerSnapshot : "Storico"
+
+' Relazioni Spedizione -> Snapshot (Il "Congelamento")
+Shipments ||--|| VehicleSnapshot : "1 a 1 (Mezzo Congelato)"
+Shipments ||--|{ DriverSnapshot : "1 a 1..2 (Autisti Congelati)"
+Shipments ||--|{ CustomerSnapshot : "1 a 3 (Clienti Congelati con Ruolo)"
 
 @enduml

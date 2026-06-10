@@ -78,6 +78,18 @@
 		    <groupId>com.github.ben-manes.caffeine</groupId>
 		    <artifactId>caffeine</artifactId>
 		</dependency>
+		<!-- Source: https://mvnrepository.com/artifact/com.googlecode.libphonenumber/libphonenumber -->
+		<dependency>
+		    <groupId>com.googlecode.libphonenumber</groupId>
+		    <artifactId>libphonenumber</artifactId>
+		    <version>9.0.32</version>
+		</dependency>
+		<!-- Source: https://mvnrepository.com/artifact/org.apache.commons/commons-text -->
+		<dependency>
+		    <groupId>org.apache.commons</groupId>
+		    <artifactId>commons-text</artifactId>
+		    <version>1.15.0</version>
+		</dependency>
 	</dependencies>
 
 	<build>
