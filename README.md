@@ -39,7 +39,7 @@ AdrSentinel non è un semplice gestionale dati, ma un vero e proprio **motore de
 Il cuore pulsante di AdrSentinel è il suo Database, progettato secondo i principi del **Domain-Driven Design (DDD)**. Le complesse leggi del trasporto italiano non sono state affrontate con semplici controlli "If/Else" nel codice, ma sono state modellate intrinsecamente nella struttura relazionale dei dati su **PostgreSQL**.
 
 * **Il Dominio Normativo:** Le entità `onu_numbers` (sostanze chimiche) e `adr_classes` sono collegate da una matrice di compatibilità (`compatibility_rules`). Il database stesso "sa" se la Classe A può viaggiare con la Classe B, bloccando alla radice inserimenti illegali.
-* **Il Dominio Logistico:** L'entità `shipment` funge da anello di congiunzione tra le regole chimiche (`shipment_item`) e i vincoli fisici del del veicolo (`vehicle`).
+* **Il Dominio Logistico:** L'entità `shipment` funge da anello di congiunzione tra le regole chimiche (`shipment_item`) e i vincoli fisici del del veicolo (`vehicle`), dell'autista (`driver`) e dei clienti (Mittente, Destinatario e Vettore) che partecipano alla spedizione (`customer`).
 
 ---
 
@@ -56,8 +56,10 @@ Questo backend è stato sviluppato ponendo un'attenzione maniacale alla qualità
 ## Roadmap & Next Steps (Lavori in Corso)
 AdrSentinel è un progetto vivo e in continua evoluzione. I prossimi moduli attualmente in fase di sviluppo/progettazione includono:
 
-1. **Dynamic Safe-Routing (GIS Integration):** L'integrazione di un motore GIS basato su Java (come **GraphHopper**) per calcolare percorsi "ad hoc". Il sistema incrocerà le dimensioni fisiche del veicolo e la classe ADR trasportata con i dati stradali (OpenStreetMap), deviando automaticamente il percorso per evitare ponti vietati, strade troppo strette o tunnel preclusi a specifiche sostanze.
-2. **Test-Driven Reliability:** Sebbene la logica sia attualmente blindata da vincoli SQL e validazioni Spring, il prossimo passo prevede una copertura totale del Service Layer tramite **JUnit e Mockito**, per garantire zero regressioni durante l'aggiunta di nuove norme ADR.
+- [x] **Load Optimization:** Implementazione di un algoritmo per l'assegnazione automatica del veicolo e dell'autista ottimali in base alla spedizione ADR. Il sistema ottimizza l'impiego della flotta aziendale selezionando il veicolo disponibile con la portata utile minore, pur garantendo la capienza sufficiente per il carico. Oltre a questo criterio di efficienza dimensionale, l'algoritmo verifica la compatibilità delle certificazioni del mezzo, valuta l'applicabilità dell'esenzione parziale (regola dei 1000 punti) e si assicura contestualmente che l'autista sia in possesso del patentino CFP ADR in corso di validità per le specifiche classi di pericolo trasportate.
+- [x] **Dynamic Safe-Routing (HeiGIT Integration):** Implementazione di un client per la comunicazione REST con le API GIS di HeiGIT. Questa integrazione permette di esternalizzare il calcolo topologico dei percorsi sicuri: inviando al servizio il payload con ingombro del mezzo e classe ADR, il sistema ottiene in tempo reale il tracciato ottimizzato su mappa, garantendo il pieno rispetto dei divieti di transito per il trasporto di merci pericolose.
+- [ ] **Bolla di Viaggio:** Creazione automatica della bolla di viaggio in formato PDF da scaricare. La bolla di viaggio una volta creata viene memorizzata per sempre nel database pronta per essere fornita immediatamente per un nuovo download.
+- [ ] **Test-Driven Reliability:** Sebbene la logica sia attualmente blindata da vincoli SQL e validazioni Spring, il prossimo passo prevede una copertura totale del Service Layer tramite **JUnit e Mockito**, per garantire zero regressioni durante l'aggiunta di nuove norme ADR.
 
 ---
 
