@@ -1,0 +1,73 @@
+server:
+  compression:
+    enabled: true
+    mime-types: application/json,text/plain
+    min-response-size: 2048
+spring:
+  application:
+    name: adrsentinel
+  datasource:
+    url: jdbc:mariadb://localhost:3306/adrsentinel
+    driver-class-name: org.mariadb.jdbc.Driver
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jpa:
+    open-in-view: false
+    show-sql: true
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+  jackson:
+    deserialization:
+      fail-on-reading-dup-tree-key: true
+ors:
+  api:
+    base-url: "https://api.openrouteservice.org"
+    key: ${ORS_API_KEY}
+adr-sentinel:
+  cache:
+    adr-class:
+      class-code:
+        max-size: 15
+      all-adr:
+        max-size: 1
+    compatibility-rule:
+      adr-class-a:
+        max-size: 15
+    onu-number:
+      onu-code:
+        max-size: 200
+      onu-code-and-packing-group:
+        max-size: 3500
+      kemler-code:
+        max-size: 100
+      adr-class:
+        max-size: 60
+      all-onu-number:
+        max-size: 1
+    shipment:
+      tracking:
+        max-size: 5000
+      period:
+        max-size: 60
+      vehicle:
+        max-size: 100
+    shipment-item:
+      item-uuid:
+        max-size: 5000
+      shipment:
+        max-size: 100
+    vehicle:
+      license-plate:
+        max-size: 100
+      max-useful-weight:
+        max-size: 100
+      all-vehicle:
+        max-size: 1
+    shipment-route:
+      route-uuid:
+        max-size: 5000
+      shipment-tracking-number:
+        max-size: 100
