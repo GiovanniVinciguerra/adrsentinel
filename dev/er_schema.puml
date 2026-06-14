@@ -8,6 +8,8 @@ skinparam class {
     BorderColor Black
 }
 
+' DISCLAIMER: le tabelle ponte, per gestire la molteplicità, tra le entità Shipment, Customer e Driver sono state volutamente omesse per una migliore leggibilità
+
 ' DOMINIO NORMATIVO (ADR / UN)
 
 entity "adr_class" as Classes {
@@ -120,7 +122,6 @@ entity "shipment_vehicle_snapshot" as VehicleSnapshot {
     * id : Long <<PK>>
 	--
 	* shipment_id : Long <<FK>>
-    * original_vehicle_id : Long <<FK>>
     --
 	* snap_license_plate : String
 	* snap_vehicle_type : enum
@@ -131,7 +132,6 @@ entity "shipment_driver_snapshot" as DriverSnapshot {
     * id : Long <<PK>>
 	--
 	* shipment_id : Long <<FK>>
-    * original_driver_id : Long <<FK>>
     --
 	* snap_full_name : String
 	* snap_tax_code : String 
@@ -144,36 +144,33 @@ entity "shipment_customer_snapshot" as CustomerSnapshot {
 	* id : Long <<PK>>
 	--
 	* shipment_id : Long <<FK>>
-    * original_customer_id : Long <<FK>>
-    * role : enum <<Sender, Receiver, Carrier>>
-    --
+	--
+    * snap_role : enum <<Sender, Receiver, Carrier>>
 	* snap_company_name : String
 	* snap_vat_number : String
 	* snap_legal_address : String
-    --
-    UniqueKey(shipment_id, role)
+	--
+    UniqueKey(shipment_id, snap_role)
 }
 
 ' RELAZIONI
 
-Classes ||--o{ UN : "1 a N"
+Classes "1 " ||--o{ "1 " UN
 Classes ||--o{ Rules : "Class A"
 Classes ||--o{ Rules : "Class B"
 
-Shipments ||--|{ Items : "1 a N"
-UN ||--o{ Items : "1 a N"
-Shipments ||--|| ShipmentRoute : "1 a 1"
-Items ||--o| PackageInfo : "0..1 a 1"
-Driver ||--o{ DriverApproval : "1 a N"
-
-' Relazioni Anagrafiche -> Snapshot (Uno a Molti Storico)
-Vehicles ||..o{ VehicleSnapshot : "Storico"
-Driver ||..o{ DriverSnapshot : "Storico"
-Customer ||..o{ CustomerSnapshot : "Storico"
+Vehicles "1\t" ||--|| "1\t" Shipments
+Driver "1..2\t" ||--|{ "1 " Shipments
+Customer "3 " ||--|{ "1 " Shipments
+Shipments "1  " ||--|{ "n " Items
+UN "1\t" ||--o{ "n\t" Items
+Shipments "1" ||--|| "1 " ShipmentRoute
+Items "1 " ||--o| "0..1\t" PackageInfo
+Driver "1" ||--o{ "n" DriverApproval
 
 ' Relazioni Spedizione -> Snapshot (Il "Congelamento")
-Shipments ||--|| VehicleSnapshot : "1 a 1 (Mezzo Congelato)"
-Shipments ||--|{ DriverSnapshot : "1 a 1..2 (Autisti Congelati)"
-Shipments ||--|{ CustomerSnapshot : "1 a 3 (Clienti Congelati con Ruolo)"
+Shipments "1 " ||--|| "1 " VehicleSnapshot : " (Veicolo Congelato)"
+Shipments "1\t" ||--|{ "1..2     " DriverSnapshot : " (Autisti Congelati)"
+Shipments "1" ||--|{ "3" CustomerSnapshot : " (Clienti Congelati)"
 
 @enduml

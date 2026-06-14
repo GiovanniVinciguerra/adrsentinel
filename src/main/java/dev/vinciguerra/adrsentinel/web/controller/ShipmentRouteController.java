@@ -104,9 +104,8 @@ public class ShipmentRouteController {
 	 * <p>
 	 * <b>Aggregazione del Payload:</b><br>
 	 * L'endpoint non si limita a restituire un array piatto di segmenti, ma costruisce 
-	 * una struttura gerarchica (tramite {@link ShipmentRouteResponseDTO}) che include sia 
-	 * la sequenza ordinata delle tratte che le informazioni anagrafiche della spedizione madre 
-	 * (es. veicolo, merci, vincoli).
+	 * una struttura gerarchica (tramite {@link ShipmentRouteResponseDTO}) che include 
+	 * la sequenza ordinata delle tratte.
 	 * </p>
 	 * <p>
 	 * <b>Architettura e Performance:</b><br>
@@ -120,9 +119,8 @@ public class ShipmentRouteController {
 	 */
 	@GetMapping("/shipment/{trackingNumber}")
 	public ResponseEntity<ShipmentRouteResponseDTO> getByShipmentTrackingNumber(@PathVariable @ValidatorUUID String trackingNumber) {
-		Shipment shipment = shipmentService.getByTrackingNumber(trackingNumber);
 		List<ShipmentRoute> routes = shipmentRouteService.getByShipmentTrackingNumber(trackingNumber);
-		return ResponseEntity.ok(ShipmentRouteResponseDTO.fromEntity(routes, shipment));
+		return ResponseEntity.ok(ShipmentRouteResponseDTO.fromEntity(routes));
 	}
 	
 	/**
@@ -197,7 +195,7 @@ public class ShipmentRouteController {
 			.map(routeDetailDTO -> shipmentRouteService.mapToEntity(routeDetailDTO, shipment))
 			.toList();
 		List<ShipmentRoute> savedShipmentRoutes = shipmentRouteService.save(shipmentRoutesToSave);
-		return ResponseEntity.status(HttpStatus.CREATED).body(ShipmentRouteResponseDTO.fromEntity(savedShipmentRoutes, shipment));
+		return ResponseEntity.status(HttpStatus.CREATED).body(ShipmentRouteResponseDTO.fromEntity(savedShipmentRoutes));
 	}
 	
 	/**

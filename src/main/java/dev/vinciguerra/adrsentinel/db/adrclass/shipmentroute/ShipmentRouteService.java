@@ -401,7 +401,7 @@ public class ShipmentRouteService extends AbstractGenericService {
 				routeStages.add(stageEntity);
 			}
 			logger.info("Multi-stop orchestration completed successfully. Total processed stages: {}", routeStages.size());
-			return ShipmentRouteResponseDTO.fromEntity(routeStages, shipment);
+			return ShipmentRouteResponseDTO.fromEntity(routeStages);
 		} catch (RestClientException error) {
 			logger.error("Fatal communication error with ORS during route calculation: {}", error.getMessage());
 			throw new GeocodingApiException("Navigation service temporarily unavailable.", error);

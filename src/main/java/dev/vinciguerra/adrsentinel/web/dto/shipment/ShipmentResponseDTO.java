@@ -1,9 +1,7 @@
 package dev.vinciguerra.adrsentinel.web.dto.shipment;
 
 import java.util.List;
-
 import dev.vinciguerra.adrsentinel.db.shipment.Shipment;
-import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleResponseDTO;
 
 /**
  * Data Transfer Object (DTO) in uscita (Response Payload) per l'esposizione sicura e 
@@ -29,13 +27,12 @@ import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleResponseDTO;
  * @param originAddress L'indirizzo toponomastico del sito di prelievo del carico ADR.
  * @param destinationAddresses Gli indirizzi toponomastici dei siti di consegna.
  * @param distancekm La distanza calcolata in chilometri della rotta logistica.
- * @param vehicle L'oggetto rappresentante il mezzo della flotta assegnato a questo trasporto.
  * @author Giovanni Vinciguerra
  * @version 1.0 (Strict Validated Output Payload)
  * @since 1.0
  */
 public record ShipmentResponseDTO(String trackingNumber, String shipmentDate, String shipmentStatus,
-		String originAddress, List<String> destinationAddresses, VehicleResponseDTO vehicle) {
+		String originAddress, List<String> destinationAddresses) {
 	
 	/**
 	 * Factory Method statico per la conversione (Mapping) e l'aggregazione strutturata 
@@ -60,10 +57,6 @@ public record ShipmentResponseDTO(String trackingNumber, String shipmentDate, St
 	 * il payload dalla classe Java sottostante.</li>
 	 * </ul>
 	 * </li>
-	 * <li><b>Mapping Annidato (Protezione dal Loop):</b> Invece di iniettare l'entità complessa 
-	 * del Veicolo, la risoluzione viene delegata al factory method {@link VehicleResponseDTO#fromEntity}. 
-	 * Questo blocca alla radice qualsiasi rischio di <i>StackOverflowError</i> (Infinite Loop) 
-	 * o <i>LazyInitializationException</i> durante la serializzazione JSON.</li>
 	 * </ul>
 	 * @param entity L'istanza dell'entità JPA recuperata dal database, rappresentante la 
 	 * singola spedizione logistica ADR. Ammette valori {@code null}.
@@ -79,10 +72,7 @@ public record ShipmentResponseDTO(String trackingNumber, String shipmentDate, St
 			entity.getShipmentDate().toString(),
 			entity.getShipmentStatus().name(),
 			entity.getOriginAddress(),
-			entity.getDestinationAddresses(),
-			entity.getVehicleSnapshot() != null ?
-				VehicleResponseDTO.fromEntity(entity.getVehicleSnapshot()) :
-				VehicleResponseDTO.fromEntity(entity.getVehicle())
+			entity.getDestinationAddresses()
 		);
 	}
 }

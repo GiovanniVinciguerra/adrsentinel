@@ -2,8 +2,6 @@ package dev.vinciguerra.adrsentinel.web.dto.shipmentroute;
 
 import java.util.List;
 import dev.vinciguerra.adrsentinel.db.adrclass.shipmentroute.ShipmentRoute;
-import dev.vinciguerra.adrsentinel.db.shipment.Shipment;
-import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentResponseDTO;
 
 /**
  * Data Transfer Object (DTO) aggregatore (Response Payload) utilizzato dal Presentation Layer 
@@ -21,14 +19,11 @@ import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentResponseDTO;
  * </p>
  * @param routes La lista sequenziale dei singoli segmenti di viaggio calcolati, dove l'ordine 
  * nella lista rispetta l'ordine di percorrenza fisica del veicolo.
- * @param shipment Il DTO contenente le informazioni anagrafiche e fisiche della spedizione 
- * associata (Destinatario, Veicolo, ecc.), opportunamente mascherato e convertito.
  * @author Giovanni Vinciguerra
  * @version 2.0 (Multi-Stop Validated Output Payload)
  * @since 1.0 
  */
-public record ShipmentRouteResponseDTO(List<ShipmentRouteStageResponseDTO> routes, ShipmentResponseDTO shipment) {
-	
+public record ShipmentRouteResponseDTO(List<ShipmentRouteStageResponseDTO> routes) {
 	/**
 	 * DTO Annidato (Nested Record) che rappresenta la singola tratta (Segmento/Leg) 
 	 * all'interno di un viaggio multi-tappa.
@@ -91,17 +86,15 @@ public record ShipmentRouteResponseDTO(List<ShipmentRouteStageResponseDTO> route
 	 * per invocare iterativamente il mapper del singolo segmento ({@code fromEntity(ShipmentRoute)}).
 	 * </p>
 	 * @param entity La lista delle entità di database {@link ShipmentRoute} calcolate e persistite.
-	 * @param shipment L'entità padre {@link Shipment} che ha originato la richiesta.
 	 * @return Una nuova istanza immutabile di {@link ShipmentRouteResponseDTO}, oppure {@code null} 
 	 * se la lista delle tratte fornita in input è nulla o vuota.
 	 */
-	public static ShipmentRouteResponseDTO fromEntity(List<ShipmentRoute> entity, Shipment shipment) {
+	public static ShipmentRouteResponseDTO fromEntity(List<ShipmentRoute> entity) {
 		if(entity == null || entity.isEmpty())
 			return null;
 		
 		return new ShipmentRouteResponseDTO(
-			entity.stream().map(ShipmentRouteStageResponseDTO::fromEntity).toList(),
-			ShipmentResponseDTO.fromEntity(shipment)
+			entity.stream().map(ShipmentRouteStageResponseDTO::fromEntity).toList()
 		);
 	}
 }

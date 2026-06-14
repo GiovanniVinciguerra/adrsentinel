@@ -1,7 +1,6 @@
 package dev.vinciguerra.adrsentinel.web.dto.shipmentroute;
 
 import dev.vinciguerra.adrsentinel.db.adrclass.shipmentroute.ShipmentRoute;
-import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentResponseDTO;
 
 /**
  * Data Transfer Object (Response Payload) utilizzato dal Presentation Layer per esporre 
@@ -29,14 +28,12 @@ import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentResponseDTO;
  * @param etaMinutes Il tempo di percorrenza stimato espresso in minuti.
  * @param tunnelRestriction Il codice ADR della restrizione gallerie (es. "C/E"). Restituisce {@code null} se assente.
  * @param geometry La stringa vettoriale compressa (Encoded Polyline) per il rendering su mappa.
- * @param shipment L'oggetto annidato (Nested DTO) che espone i dettagli anagrafici, normativi 
- * e di stato della spedizione a cui questa tratta appartiene.
  * @author Giovanni Vinciguerra
  * @version 1.0
  * @since 1.0 
  */
 public record SingleShipmentRouteResponseDTO(String routeUUID, Double originLat, Double originLng, Double destLat, Double destLng, Float distancekm,
-		Integer etaMinutes, String tunnelRestriction, String geometry, ShipmentResponseDTO shipment) {
+		Integer etaMinutes, String tunnelRestriction, String geometry) {
 	
 	/**
 	 * Mapper statico (Static Factory Method) responsabile della conversione dall'entità di 
@@ -48,8 +45,6 @@ public record SingleShipmentRouteResponseDTO(String routeUUID, Double originLat,
 	 * <li><b>Enum Flattening Protetto:</b> Converte l'enumeratore {@code TunnelRestriction} nel suo 
 	 * valore testuale tramite un operatore ternario. Questo previene i crash (NPE) qualora 
 	 * la tratta non sia soggetta ad alcuna restrizione ADR.</li>
-	 * <li><b>Nested Mapping:</b> Invoca a cascata il mapper di {@link ShipmentResponseDTO} 
-	 * per travasare le informazioni dell'entità genitore in totale sicurezza.</li>
 	 * </ul>
 	 * </p>
 	 * @param entity L'entità {@link ShipmentRoute} da serializzare, estratta dal Persistence Context.
@@ -68,8 +63,7 @@ public record SingleShipmentRouteResponseDTO(String routeUUID, Double originLat,
 			entity.getDistanceKm(),
 			entity.getEtaMinutes(),
 			entity.getTunnelRestriction().name(),
-			entity.getGeometry(),
-			ShipmentResponseDTO.fromEntity(entity.getShipment())
+			entity.getGeometry()
 		);
 	}
 }

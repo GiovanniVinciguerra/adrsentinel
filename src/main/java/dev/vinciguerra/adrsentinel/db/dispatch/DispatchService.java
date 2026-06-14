@@ -28,7 +28,6 @@ import dev.vinciguerra.adrsentinel.web.dto.dispatch.DispatchRequestDTO;
 import dev.vinciguerra.adrsentinel.web.dto.dispatch.DispatchResponseDTO;
 import dev.vinciguerra.adrsentinel.web.dto.dispatch.OnuItemRequestDTO;
 import dev.vinciguerra.adrsentinel.web.dto.dispatch.VehicleDispatchResponseDTO;
-import dev.vinciguerra.adrsentinel.web.dto.onunumber.OnuNumberResponseDTO;
 import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleResponseDTO;
 
 /**
@@ -134,11 +133,11 @@ public class DispatchService {
 		for(List<EnrichedOnuItem> cluster : safeClusters) {
 			int clusterTotalWeight_kg = 0;
 			float totalAdrPoints = 0.0f;
-			List<OnuNumberResponseDTO> onuNumbersDTO = new ArrayList<OnuNumberResponseDTO>();
+			List<String> onuNumbersCode = new ArrayList<String>();
 			for(EnrichedOnuItem item : cluster) {
 				clusterTotalWeight_kg += item.dto().netWeightkg();
 				totalAdrPoints += calculateAdrPoints(item.entity(), item.dto().netWeightkg());
-				onuNumbersDTO.add(OnuNumberResponseDTO.fromEntity(item.entity()));
+				onuNumbersCode.add(item.entity.getOnuCode());
 			}
 			boolean isExempt = (totalAdrPoints <= 1000.0f);
 			List<Vehicle> vehiclesToAssign = vehicleService.getByMaxUsefulWeight(clusterTotalWeight_kg);
@@ -160,7 +159,7 @@ public class DispatchService {
 			dispatchResults.add(
 				new VehicleDispatchResponseDTO(
 					VehicleResponseDTO.fromEntity(selectedVehicle),
-					onuNumbersDTO,
+					onuNumbersCode,
 					clusterTotalWeight_kg,
 					isExempt
 				)

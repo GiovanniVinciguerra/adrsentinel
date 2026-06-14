@@ -1,7 +1,6 @@
 package dev.vinciguerra.adrsentinel.web.dto.onunumber;
 
 import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumber;
-import dev.vinciguerra.adrsentinel.web.dto.adrclass.AdrClassResponseDTO;
 
 /**
  * Data Transfer Object (DTO) in sola lettura (Read-Only) per l'esposizione dei 
@@ -32,19 +31,16 @@ import dev.vinciguerra.adrsentinel.web.dto.adrclass.AdrClassResponseDTO;
  * Impatta in modo determinante sugli algoritmi di routing, vietando il transito in specifiche gallerie autostradali.
  * @param transportCategory La Categoria di Trasporto (valore da 0 a 4). Moltiplicatore matematico 
  * essenziale per il calcolo delle esenzioni parziali (Regola del 1000 - ADR 1.1.3.6).
- * @param adrClass La Classe di Pericolo principale ADR (es. 3 per liquidi infiammabili, 8 per corrosivi). 
- * Guida le procedure di segregazione delle merci e le etichette da apporre sul carico.
  * @author Giovanni Vinciguerra
  * @version 1.0 (Strict Validated Input Payload)
  * @since 1.0
  */
 public record OnuNumberResponseDTO(String onuCode, String name, String physicalState, String kemlerCode,
-		String packingGroup, String tunnelRestriction, Integer transportCategory, AdrClassResponseDTO adrClass) {
+		String packingGroup, String tunnelRestriction, Integer transportCategory) {
 	
 	/**
 	 * Factory Method statico per la conversione (Mapping) e l'aggregazione di un'entità 
 	 * di dominio {@link OnuNumber} nel suo corrispondente Data Transfer Object {@link OnuNumberResponseDTO}.
-	 *
 	 * <p><b>Contesto Architetturale (Pattern DTO e Information Hiding):</b></p>
 	 * Questo metodo agisce come traduttore tra il livello di persistenza (JPA/Hibernate) 
 	 * e il contratto API (Presentation Layer). Incapsula la logica di estrazione dei dati 
@@ -61,10 +57,6 @@ public record OnuNumberResponseDTO(String onuCode, String name, String physicalS
 	 * convertiti in formato testuale tramite l'invocazione di {@code .name()}. Questa pratica 
 	 * disaccoppia il payload JSON dalle classi Enum interne di Java, offrendo una 
 	 * serializzazione prevedibile, sicura e compatibile con qualsiasi client esterno.</li>
-	 * <li><b>Mapping Annidato (Delegated Resolving):</b> Per la risoluzione del grafo degli oggetti, 
-	 * invece di implementare logica duplicata, il metodo delega la costruzione dell'oggetto 
-	 * figlio al factory method competente ({@link AdrClassResponseDTO#fromEntity}). 
-	 * Questo rispetta il principio DRY (Don't Repeat Yourself) e garantisce coerenza strutturale.</li>
 	 * </ul>
 	 * @param entity L'istanza dell'entità JPA recuperata dal database, rappresentante 
 	 * la "carta d'identità" ADR di una sostanza. Ammette valori {@code null}.
@@ -82,8 +74,7 @@ public record OnuNumberResponseDTO(String onuCode, String name, String physicalS
 			entity.getKemlerCode(),
 			entity.getPackingGroup().name(),
 			entity.getTunnelRestriction().name(),
-			entity.getTransportCategory(),
-			AdrClassResponseDTO.fromEntity(entity.getAdrClass())
+			entity.getTransportCategory()
 		);
 	}
 }

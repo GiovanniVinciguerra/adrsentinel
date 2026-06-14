@@ -1,8 +1,6 @@
 package dev.vinciguerra.adrsentinel.web.dto.dispatch;
 
 import java.util.List;
-
-import dev.vinciguerra.adrsentinel.web.dto.onunumber.OnuNumberResponseDTO;
 import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleResponseDTO;
 
 /**
@@ -45,5 +43,5 @@ import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleResponseDTO;
  * @version 1.0 (Strict Validated Input Payload)
  * @since 1.0
  */
-public record VehicleDispatchResponseDTO(VehicleResponseDTO assignedVehicleDTO, List<OnuNumberResponseDTO> assignedOnuCodes, Integer totalPayloadWeightkg,
+public record VehicleDispatchResponseDTO(VehicleResponseDTO assignedVehicleDTO, List<String> assignedOnuCodes, Integer totalPayloadWeightkg,
 	boolean isExempt) {}
