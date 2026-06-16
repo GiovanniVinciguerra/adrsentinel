@@ -4,11 +4,10 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
-
-import dev.vinciguerra.adrsentinel.db.shipment.Shipment.VehicleSnapshot;
 import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle;
 import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle.VehicleCategory;
 import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle.VehicleCategory.VehicleApproval;
+import dev.vinciguerra.adrsentinel.db.vehicle.VehicleSnapshot;
 
 /**
  * Data Transfer Object (DTO) in uscita (Response Payload) che rappresenta la scheda tecnica 
@@ -50,7 +49,8 @@ import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle.VehicleCategory.VehicleApp
  * @since 1.0
  */
 public record VehicleResponseDTO(String licensePlate, VehicleCategoryResponseDTO vehicleCategory, Integer maxWeightkg,
-		Integer maxUsefulWeightkg, Float heightm, Float widthm, Float lengthm, Float wheelbasem, Integer nAxles, Boolean active, boolean historicalData) {
+		Integer maxUsefulWeightkg, Float heightm, Float widthm, Float lengthm, Float wheelbasem, Integer nAxles, Boolean active, Boolean inTransit,
+		boolean historicalData) {
 	/**
 	 * Factory Method statico per la conversione (Mapping) e l'aggregazione di un'entità 
 	 * di dominio {@link Vehicle} nel suo corrispondente Data Transfer Object in uscita 
@@ -93,25 +93,53 @@ public record VehicleResponseDTO(String licensePlate, VehicleCategoryResponseDTO
 			entity.getWheelbasem(),
 			entity.getnAxles(),
 			entity.isActive(),
+			entity.isInTranit(),
 			false
 		);
 	}
 	
+	/**
+	 * Converte la "Fotografia Legale" (Snapshot) nel corrispondente Data Transfer Object (DTO) 
+	 * destinato al layer di presentazione (Controller/API).
+	 * <p><b>Ruolo Architetturale (Pattern DTO e Mapper):</b></p>
+	 * Questo metodo statico funge da <i>Adapter</i> in fase di lettura. Il suo scopo è isolare 
+	 * il client esterno dalle logiche di ottimizzazione del database (strutture appiattite e de-normalizzate), 
+	 * restituendo una struttura dati gerarchica e ricca (identica a quella di un veicolo "live").
+	 * <p><b>Processo di Re-Idratazione (Unflattening) e Ricostruzione:</b></p>
+	 * Poiché il {@link VehicleSnapshot} storicizza le informazioni in forma piatta, il mapper 
+	 * esegue un reverse-engineering del dato transiente:
+	 * <ul>
+	 * <li><b>Transient Category:</b> Viene istanziata "al volo" una {@link VehicleCategory} fittizia. 
+	 * Questo trucco permette di incapsulare i dati di tipo e carico, abilitando il riuso pulito 
+	 * del mapper annidato {@code VehicleCategoryResponseDTO.fromEntity()}.</li>
+	 * <li><b>Deserializzazione ADR:</b> La stringa appiattita delle omologazioni (es. {@code "AT,FL"}) 
+	 * viene splittata usando la virgola come delimitatore e i singoli token vengono mappati 
+	 * dinamicamente (tramite {@code Enum.valueOf}) per ricostruire il {@code Set<VehicleApproval>}. 
+	 * Il caso limite {@code "NONE"} viene intercettato elegantemente per restituire una collezione vuota.</li>
+	 * </ul>
+	 * @implNote Gli ultimi parametri passati al costruttore del {@link VehicleResponseDTO} 
+	 * ({@code null, null, true}) riflettono la natura storica del dato: i valori {@code null} omettono 
+	 * deliberatamente le associazioni volatili del veicolo originale (active e inTransit), 
+	 * mentre il flag booleano historicalData indica al client che questo veicolo è uno snapshot.
+	 * @param entity L'entità storica ({@link VehicleSnapshot}) estratta dal database o dalla cache.
+	 * @return Il payload {@link VehicleResponseDTO} assemblato e pronto per la serializzazione (es. JSON), 
+	 * oppure {@code null} in modo silente (Null-Safety) se l'entità in ingresso è nulla.
+	 */
 	public static VehicleResponseDTO fromEntity(VehicleSnapshot entity) {
 		if(entity == null)
 			return null;
 		
 		/* Costruzione della VehicleCategory dovuta al flattening */
 		VehicleCategory category = new VehicleCategory();
-		category.setLoadType(entity.getLoadType());
-		category.setVehicleType(entity.getVehicleType());
+		category.setLoadType(entity.getLoadTypeSnap());
+		category.setVehicleType(entity.getVehicleTypeSnap());
 		Set<VehicleApproval> approvals;
-		if(entity.getVehicleApprovals().equals("NONE"))
+		if(entity.getVehicleApprovalSnap().equals("NONE"))
 			approvals = new HashSet<VehicleApproval>();
 		else {
 			approvals = Arrays
 				.stream(
-					entity.getVehicleApprovals()
+					entity.getVehicleApprovalSnap()
 					.split(",")
 				)
 				.map(VehicleApproval::valueOf)
@@ -120,15 +148,16 @@ public record VehicleResponseDTO(String licensePlate, VehicleCategoryResponseDTO
 		category.setVehicleApprovals(approvals);
 		
 		return new VehicleResponseDTO(
-			entity.getLicensePlate(),
+			entity.getLicensePlateSnap(),
 			VehicleCategoryResponseDTO.fromEntity(category),
-			entity.getMaxWeightkg(),
-			entity.getMaxUsefulWeightkg(),
-			entity.getHeightm(),
-			entity.getWidthm(),
-			entity.getLengthm(),
-			entity.getWheelbasem(),
-			entity.getnAxles(),
+			entity.getMaxWeightkgSnap(),
+			entity.getMaxUsefulWeightkgSnap(),
+			entity.getHeightmSnap(),
+			entity.getWidthmSnap(),
+			entity.getLengthmSnap(),
+			entity.getWheelbasemSnap(),
+			entity.getnAxleSnap(),
+			null,
 			null,
 			true
 		);

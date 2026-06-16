@@ -140,7 +140,11 @@ public class DispatchService {
 				onuNumbersCode.add(item.entity.getOnuCode());
 			}
 			boolean isExempt = (totalAdrPoints <= 1000.0f);
-			List<Vehicle> vehiclesToAssign = vehicleService.getByMaxUsefulWeight(clusterTotalWeight_kg);
+			List<Vehicle> vehicles = vehicleService.getByMaxUsefulWeightGreaterThanEqual(clusterTotalWeight_kg);
+			List<Vehicle> vehiclesToAssign = vehicles
+				.stream()
+				.filter(vehicle -> vehicle.isActive() && !vehicle.isInTranit())
+				.toList();
 			if(vehiclesToAssign == null || vehiclesToAssign.isEmpty())
 				throw new ResourceNotFoundException("No vehicle found with payload capacity: " + clusterTotalWeight_kg);
 			if(!alreadyAssignedVehicles.isEmpty()) {

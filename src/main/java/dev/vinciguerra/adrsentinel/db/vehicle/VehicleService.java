@@ -87,9 +87,9 @@ public class VehicleService extends AbstractGenericService {
 	 * @return una lista di veicoli idonei al carico (può essere vuota).
 	 */
 	@Cacheable(value = CaffeineCacheConfiguration.VEHICLE_BY_MAX_USEFUL_WEIGHT_CACHE, key = "#maxUsefulWeightkg")
-	public List<Vehicle> getByMaxUsefulWeight(Integer maxUsefulWeightkg) {
+	public List<Vehicle> getByMaxUsefulWeightGreaterThanEqual(Integer maxUsefulWeightkg) {
 		logger.info("[DataBase CALL] Searching for the Vehicle by maxUsefulWeightkg: {}", maxUsefulWeightkg);
-		return vehicleRepository.findByMaxUsefulWeightkgGreaterThanEqualAndActiveTrue(maxUsefulWeightkg);
+		return vehicleRepository.findByMaxUsefulWeightkgGreaterThanEqual(maxUsefulWeightkg);
 	}
 	
 	/**
@@ -119,6 +119,7 @@ public class VehicleService extends AbstractGenericService {
 	public Vehicle save(Vehicle newVehicle) {
 		logger.info("[DataBase CALL] Saving new Vehicle with licensePlate: {}", newVehicle.getLicensePlate());
 		newVehicle.setActive(true);
+		newVehicle.setInTransit(false);
 		Vehicle savedVehicle = vehicleRepository.save(newVehicle);
 		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
 			@Override
@@ -260,6 +261,21 @@ public class VehicleService extends AbstractGenericService {
 		for(String approval : updateDto.approvals())
 			approvals.add(Enum.valueOf(VehicleApproval.class, approval));
 		vehicle.getVehicleCategory().setVehicleApprovals(approvals);
+		Vehicle updatedVehicle = vehicleRepository.save(vehicle);
+		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+			@Override
+			public void afterCommit() { syncCacheAfterUpdate(updatedVehicle, oldMaxUsefulWeight); }
+		});
+		return updatedVehicle;
+	}
+	
+	@Transactional
+	public Vehicle updateInTransitStatusById(Long id, boolean status) {
+		logger.info("[DataBase CALL] Updating Vehicle inTransit with id: {}", id);
+		Vehicle vehicle = vehicleRepository.findById(id)
+			.orElseThrow(() -> new ResourceNotFoundException("Vehicle not found: " + id));
+		final Integer oldMaxUsefulWeight = vehicle.getMaxUsefulWeightkg();
+		vehicle.setInTransit(status);
 		Vehicle updatedVehicle = vehicleRepository.save(vehicle);
 		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
 			@Override

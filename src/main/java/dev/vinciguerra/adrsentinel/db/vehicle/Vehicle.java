@@ -218,6 +218,16 @@ public class Vehicle {
 	)
 	private Integer nAxles;
 	/**
+	 * Flag booleano utilizzato per la verifica e l'asseganzione del veicolo in fase di dispatch. Se {@code true} il veicolo non verrà 
+	 * selezionato perchè già in viaggio.
+	 */
+	@Column(
+		name = "is_in_transit",
+		nullable = false
+	)
+	@ColumnDefault("false")
+	private boolean inTransit;
+	/**
 	 * Flag booleano utilizzato per la soft-delete del veicolo. Se {@code true} il veicolo può essere selezionato 
 	 * per le spedizioni, se  {@code false} il veicolo non verrà più selezionato, ma manterrà la consistenza relazionale del 
 	 * database.
@@ -329,6 +339,14 @@ public class Vehicle {
 	public void setnAxles(Integer nAxles) {
 		this.nAxles = nAxles;
 	}
+	
+	public boolean isInTranit() {
+		return inTransit;
+	}
+	
+	public void setInTransit(boolean inTransit) {
+		this.inTransit = inTransit;
+	}
 
 	public boolean isActive() {
 		return active;
@@ -380,7 +398,8 @@ public class Vehicle {
 			.append(", vehicleCategory=").append(vehicleCategory).append(", maxWeightkg=").append(maxWeightkg)
 			.append(", maxUsefulWeightkg=").append(maxUsefulWeightkg).append(", heightm=").append(heightm)
 			.append(", widthm=").append(widthm).append(", lengthm=").append(lengthm).append(", wheelbasem=")
-			.append(wheelbasem).append(", nAxles=").append(nAxles).append(", active=").append(active) .append("]");
+			.append(wheelbasem).append(", nAxles=").append(nAxles).append(", inTransit=").append(inTransit)
+			.append(", active=").append(active) .append("]");
 		return builder.toString();
 	}
 }

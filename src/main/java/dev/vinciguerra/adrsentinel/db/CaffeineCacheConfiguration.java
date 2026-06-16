@@ -16,6 +16,7 @@ import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumberCacheSetting;
 import dev.vinciguerra.adrsentinel.db.shipment.ShipmentCacheSetting;
 import dev.vinciguerra.adrsentinel.db.shipmentitem.ShipmentItemCacheSetting;
 import dev.vinciguerra.adrsentinel.db.vehicle.VehicleCacheSetting;
+import dev.vinciguerra.adrsentinel.db.vehicle.VehicleSnapshotCacheSetting;
 
 /**
  * Torre di controllo e configurazione dell'infrastruttura di Caching L1 (Local Memory).
@@ -45,6 +46,7 @@ import dev.vinciguerra.adrsentinel.db.vehicle.VehicleCacheSetting;
 	ShipmentCacheSetting.class,
 	ShipmentItemCacheSetting.class,
 	VehicleCacheSetting.class,
+	VehicleSnapshotCacheSetting.class,
 	ShipmentRouteCacheSetting.class
 })
 public class CaffeineCacheConfiguration {
@@ -87,6 +89,8 @@ public class CaffeineCacheConfiguration {
 	public static final String ALL_VEHICLE_CACHE = "all_vehicle";
 	/** Chiave statica globale per l'estrazione dalla cache dell'intera flotta veicoli. */
 	public static final String ALL_VEHICLE_KEY = "all_vehicle_key";
+	/** Identificatore della regione di memoria per il raggruppamento degli storici del veicolo associato a una data spedizione. */
+	public static final String VEHICLE_SNAPSHOT_BY_SHIPMENT_ID_CACHE = "vehicle_snapshot_by_shipment_id";
 	/** Identificatore della regione di memoria per il raggruppamento (UUID) globale dei percorsi stradali. */
 	public static final String SHIPMENT_ROUTE_BY_ROUTE_UUID_CACHE = "shipment_route_by_route_uuid";
 	/** Identificatore della regione di memoria per il raggruppamento (Shipment.trackingNumber) globale dei percorsi stradali. */
@@ -111,7 +115,7 @@ public class CaffeineCacheConfiguration {
 	@Bean
 	public CacheManager cacheManager(AdrClassCacheSetting adrClassSetting, CompatibilityRuleCacheSetting compatibilityRuleCacheSetting, 
 			OnuNumberCacheSetting onuNumberCacheSetting, ShipmentCacheSetting shipmentCacheSetting, ShipmentItemCacheSetting shipmentItemCacheSetting,
-			VehicleCacheSetting vehicleCacheSetting, ShipmentRouteCacheSetting shipmentRouteCacheSetting) {
+			VehicleCacheSetting vehicleCacheSetting, VehicleSnapshotCacheSetting vehicleSnapshotCacheSetting, ShipmentRouteCacheSetting shipmentRouteCacheSetting) {
 		SimpleCacheManager cacheManager = new SimpleCacheManager();
 		CaffeineCache adrClassClassCodeCache = buildCache(
 			ADR_CLASS_BY_CLASS_CODE_CACHE,
@@ -173,6 +177,10 @@ public class CaffeineCacheConfiguration {
 			ALL_VEHICLE_CACHE,
 			vehicleCacheSetting.allVehicle().maxSize()
 		);
+		CaffeineCache vehicleSnapshotByShipmentIdCache = buildCache(
+			VEHICLE_SNAPSHOT_BY_SHIPMENT_ID_CACHE,
+			vehicleSnapshotCacheSetting.shipmentId().maxSize()
+		);
 		CaffeineCache shipmentRouteByRouteUUIDCache = buildCache(
 			SHIPMENT_ROUTE_BY_ROUTE_UUID_CACHE,
 			shipmentRouteCacheSetting.routeUUID().maxSize()
@@ -198,6 +206,7 @@ public class CaffeineCacheConfiguration {
 				vehicleLicensePlateCache,
 				vehicleMaxUsefulWeightCache,
 				vehicleAllCache,
+				vehicleSnapshotByShipmentIdCache,
 				shipmentRouteByRouteUUIDCache,
 				shipmentRouteByShipmentCache
 			)

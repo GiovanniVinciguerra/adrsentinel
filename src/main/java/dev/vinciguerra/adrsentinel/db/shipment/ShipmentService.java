@@ -15,9 +15,10 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import dev.vinciguerra.adrsentinel.db.AbstractGenericService;
 import dev.vinciguerra.adrsentinel.db.CaffeineCacheConfiguration;
 import dev.vinciguerra.adrsentinel.db.shipment.Shipment.ShipmentStatus;
-import dev.vinciguerra.adrsentinel.db.shipment.Shipment.VehicleSnapshot;
 import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle;
 import dev.vinciguerra.adrsentinel.db.vehicle.VehicleService;
+import dev.vinciguerra.adrsentinel.db.vehicle.VehicleSnapshot;
+import dev.vinciguerra.adrsentinel.db.vehicle.VehicleSnapshotService;
 import dev.vinciguerra.adrsentinel.exception.IllegalShipmentStateException;
 import dev.vinciguerra.adrsentinel.exception.ResourceNotFoundException;
 import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentRequestDTO;
@@ -55,16 +56,18 @@ import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentUpdateStatusDTO;
 public class ShipmentService extends AbstractGenericService {
 	private final ShipmentRepository shipmentRepository;
 	private final VehicleService vehicleService;
+	private final VehicleSnapshotService vehicleSnapshotService;
 	
 	/**
 	 * Costruttore con Dependency Injection nativa di Spring.
 	 * @param shipmentRepository il livello di accesso ai dati fisici (Database).
 	 * @param cacheManager il gestore dell'infrastruttura di memoria (iniettato nella superclasse).
 	 */
-	public ShipmentService(ShipmentRepository shipmentRepository, VehicleService vehicleService, CacheManager cacheManager) {
+	public ShipmentService(ShipmentRepository shipmentRepository, VehicleService vehicleService, VehicleSnapshotService vehicleSnapshotService, CacheManager cacheManager) {
 		super(cacheManager);
-		this.vehicleService = vehicleService;
 		this.shipmentRepository = shipmentRepository;
+		this.vehicleService = vehicleService;
+		this.vehicleSnapshotService = vehicleSnapshotService;
 	}
 	
 	// --- SEZIONE 1: BOUNDED DATA (CACHED) ---
@@ -281,7 +284,8 @@ public class ShipmentService extends AbstractGenericService {
 	
 	/**
 	 * Esegue l'aggiornamento chirurgico dello stato logistico di una spedizione esistente, 
-	 * garantendo l'allineamento transazionale tra Database e Memoria Cache.
+	 * garantendo l'allineamento transazionale tra Database e Memoria Cache, e orchestrando 
+	 * il ciclo di vita delle entità correlate (Veicoli e Snapshot).
 	 * <p><b>Contesto Architetturale e Transazionalità:</b></p>
 	 * Il metodo opera all'interno di un contesto {@code @Transactional}. L'aggiornamento sul 
 	 * database (via Hibernate) e la successiva mutazione della memoria RAM (Caffeine) sono 
@@ -297,15 +301,28 @@ public class ShipmentService extends AbstractGenericService {
 	 * essa viene passata al motore di cache ({@code syncCacheAfterUpdate}) per permettergli di 
 	 * valutare l'assenza di un "Key Shift" e agire con una sostituzione (Upsert) sicura e 
 	 * localizzata all'interno della corretta lista in RAM.</li>
-	 * <li><b>Mutazione & Salvataggio:</b> Converte in modo rigoroso (case-sensitive) la stringa 
-	 * del DTO nel corrispondente valore {@link ShipmentStatus} e persiste l'entità.</li>
+	 * <li><b>Mutazione di Stato e Logica di Dominio:</b> Converte rigorosamente la stringa del DTO nel 
+	 * valore {@link ShipmentStatus} e applica specifici side-effect in base al nuovo stato:
+	 * <ul>
+	 * <li>{@code PLANNED}: Imposta il veicolo ({@link Vehicle}) associato in stato di transito.</li>
+	 * <li>{@code TRANSIT}: Genera e persiste uno snapshot storico ({@link VehicleSnapshot}) del veicolo 
+	 * associato per cristallizzarne i dati al momento della partenza. Successivamente, <b>scollega</b> 
+	 * la spedizione dal veicolo master (impostandolo a {@code null}) permettendo al veicolo di seguire 
+	 * il proprio ciclo di vita indipendente.</li>
+	 * <li><b>Altri Stati (es. Terminali):</b> Utilizza lo snapshot salvato in precedenza per risalire 
+	 * alla targa del veicolo originale e ripristinarne lo stato di disponibilità (non più in transito).</li>
+	 * </ul>
+	 * </li>
+	 * <li><b>Persistenza:</b> Salva l'entità aggiornata e registra la sincronizzazione della cache.</li>
 	 * </ol>
 	 * @param trackingNumber La Business Key (Targa alfanumerica) che identifica univocamente la spedizione nel sistema.
-	 * @param updateStatusDTO Il payload contenente il nuovo stato logistico (es. "IN_VIAGGIO", "CONSEGNATA").
+	 * @param updateStatusDTO Il payload contenente il nuovo stato logistico (es. "TRANSIT", "DELIVERED").
 	 * @return L'istanza aggiornata di {@link Shipment}, ricaricata col nuovo stato e persistita.
 	 * @throws ResourceNotFoundException Se il {@code trackingNumber} fornito non trova riscontro nel database.
 	 * @throws IllegalArgumentException Se la stringa di stato fornita nel DTO non corrisponde esattamente 
 	 * (tramite {@code Enum.valueOf}) a nessuna costante definita in {@link ShipmentStatus}.
+	 * @throws RuntimeException (o derivate) se negli stati terminali non viene trovato un {@link VehicleSnapshot} 
+	 * associato all'ID della spedizione, o se il veicolo originale non è più presente.
 	 */
 	@Transactional
 	public Shipment updateStatusByTrackingNumber(String trackingNumber, ShipmentUpdateStatusDTO updateStatusDTO) {
@@ -314,16 +331,31 @@ public class ShipmentService extends AbstractGenericService {
 			.orElseThrow(() -> new ResourceNotFoundException("Shipment not found: " + trackingNumber));
 		LocalDate oldDate = shipment.getShipmentDate().toLocalDate();
 		shipment.setShipmentStatus(Enum.valueOf(ShipmentStatus.class, updateStatusDTO.status()));
-		if(shipment.getShipmentStatus() != ShipmentStatus.PLANNED) {
-			if(shipment.getVehicleSnapshot() == null) {
-				logger.info(
-					"Shipment [{}] has changed status to {}. Snapshot action taken on associated vehicle [{}].",
-					shipment.getTrackingNumber(),
-					shipment.getShipmentStatus().name(),
-					shipment.getVehicle().getLicensePlate()
-				);
-				shipment.setVehicleSnapshot(new VehicleSnapshot(shipment.getVehicle()));
-			}
+		if(shipment.getShipmentStatus() == ShipmentStatus.PLANNED) {
+			Vehicle vehicle = shipment.getVehicle();
+			/* Veicolo in transito (attributo inTransit = true) */
+			vehicleService.updateInTransitStatusById(vehicle.getId(), true);
+			/* Driver in transito (attributo inTransit = true) */
+			
+		} else if(shipment.getShipmentStatus() == ShipmentStatus.TRANSIT) {
+			/* Snapshot del Vehicle */
+			logger.info(
+				"Shipment [{}] has changed status to {}. Snapshot action taken on associated vehicle [{}].",
+				shipment.getTrackingNumber(),
+				shipment.getShipmentStatus().name(),
+				shipment.getVehicle().getLicensePlate()
+			);
+			VehicleSnapshot snapshot = new VehicleSnapshot(shipment);
+			vehicleSnapshotService.save(snapshot);
+			shipment.setVehicle(null); /* Scollega questo Shipment dal Veicolo master che vive di vita propria. */
+			/* Snapshot del Driver */
+			
+			/* Snapshot del Customer */
+			
+		} else {
+			VehicleSnapshot vehicleSnap = vehicleSnapshotService.getByShipmentId(shipment.getId());
+			Vehicle vehicle = vehicleService.getByLicensePlate(vehicleSnap.getLicensePlateSnap());
+			vehicleService.updateInTransitStatusById(vehicle.getId(), false);
 		}
 		Shipment updatedShipment = shipmentRepository.save(shipment);
 		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {

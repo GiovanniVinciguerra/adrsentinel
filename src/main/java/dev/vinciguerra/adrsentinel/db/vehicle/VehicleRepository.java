@@ -47,5 +47,5 @@ public interface VehicleRepository extends JpaRepository<Vehicle, Long> {
 	 * @param maxUsefulWeightkg il peso massimo utile (portata) esatto in chilogrammi.
 	 * @return una {@link List} di veicoli che corrispondono al criterio, o una lista vuota se nessun veicolo soddisfa il requisito.
 	 */
-	List<Vehicle> findByMaxUsefulWeightkgGreaterThanEqualAndActiveTrue(Integer maxUsefulWeightkg);
+	List<Vehicle> findByMaxUsefulWeightkgGreaterThanEqual(Integer maxUsefulWeightkg);
 }

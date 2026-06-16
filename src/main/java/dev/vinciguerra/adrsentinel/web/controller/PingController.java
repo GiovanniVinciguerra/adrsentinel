@@ -44,7 +44,7 @@ public class PingController {
 	 * abbattendo il carico sul Garbage Collector.
 	 * </p>
 	 */
-	private static final String PING_RESPONSE = "Server ADR Sentinel: STATUS ONLINE\n";
+	private static final String PING_RESPONSE = "Server ADR Sentinel: STATUS ONLINE";
 	
 	/**
 	 * Gestisce le richieste HTTP GET in arrivo sulla rotta {@code /ping}.

@@ -4,18 +4,13 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import org.hibernate.annotations.ColumnDefault;
 import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle;
-import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle.VehicleCategory.VehicleApproval;
 import dev.vinciguerra.adrsentinel.exception.BadRequestException;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
-import jakarta.persistence.Embeddable;
-import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -72,179 +67,6 @@ public class Shipment {
 		DELIVERED,
 		/** Spedizione annullata. Stato di fallimento o revoca. */
 		CANCELLED
-	}
-	
-	/**
-	 * Value Object (Pattern @Embeddable) che rappresenta la "Fotografia Legale" (Snapshot) 
-	 * inalterabile di un veicolo al momento dell'avvio di una spedizione (Stato DISPATCHED).
-	 * <p>
-	 * <b>Isolamento del Dominio (Audit Trail):</b><br>
-	 * Questa classe viene "spalmata" sotto forma di colonne direttamente all'interno della 
-	 * tabella {@code shipment}. Non possiede vincoli {@code unique} e tutte le colonne sono 
-	 * marcate come {@code updatable = false} per garantire l'immutabilità assoluta a livello JPA.
-	 * I valori a livello di DB sono tollerati come {@code null} per permettere la creazione 
-	 * della spedizione in stato {@code PLANNED}.
-	 * </p>
-	 */
-	@Embeddable
-	public static class VehicleSnapshot {
-		@Column(
-			name = "license_plate",
-			updatable = false,
-			nullable = true,
-			length = 10
-		)
-		private String licensePlate;
-		@Enumerated(EnumType.STRING)
-		@Column(
-			name = "vehicle_type",
-			updatable = false,
-			nullable = true,
-			length = 255
-		)
-		private Vehicle.VehicleCategory.VehicleType vehicleType;
-		@Enumerated(EnumType.STRING)
-		@Column(
-			name = "load_type",
-			updatable = false,
-			nullable = true,
-			length = 255
-		)
-		private Vehicle.VehicleCategory.LoadType loadType;
-		/**
-		 * Le approvazioni ADR vengono appiattite in una stringa (es. "AT,FL") per evitare 
-		 * la creazione di tabelle relazionali aggiuntive (CollectionTable) legate allo snapshot.
-		 * Questo garantisce che la riga dello Shipment sia auto-consistente e massimizza le performance di lettura.
-		 */
-		@Column(
-			name = "vehicle_approvals",
-			updatable = false,
-			nullable = true,
-			length = 255
-		)
-		private String vehicleApprovals;
-		@Column(
-			name = "max_weight_kg",
-			updatable = false,
-			nullable = true
-		)
-		private Integer maxWeightkg;
-		@Column(
-			name = "max_useful_weight_kg",
-			updatable = false,
-			nullable = true
-		)
-		private Integer maxUsefulWeightkg;
-		@Column(
-			name = "height_m",
-			updatable = false,
-			nullable = true
-		)
-		private Float heightm;
-		@Column(
-			name = "width_m",
-			updatable = false,
-			nullable = true
-		)
-		private Float widthm;
-		@Column(
-			name = "length_m",
-			updatable = false,
-			nullable=true
-		)
-		private Float lengthm;
-		@Column(
-			name = "wheelbase_m",
-			updatable = false,
-			nullable = true
-		)
-		private Float wheelbasem;
-		@Column(
-			name = "n_axles",
-			updatable = false,
-			nullable = true
-		)
-		private Integer nAxles;
-		
-		protected VehicleSnapshot() {/* Costruttore lasciato volutamente vuoto */}
-		
-		public VehicleSnapshot(Vehicle vehicle) {
-			this.licensePlate = vehicle.getLicensePlate();
-			this.vehicleType = vehicle.getVehicleCategory().getVehicleType();
-			this.loadType = vehicle.getVehicleCategory().getLoadType();
-			Set<VehicleApproval> approvals = vehicle.getVehicleCategory().getVehicleApprovals();
-			if(approvals.isEmpty())
-				this.vehicleApprovals = "NONE";
-			else
-				this.vehicleApprovals = approvals
-					.stream()
-					.map(Enum::name)
-					.sorted()
-					.collect(Collectors.joining(","));
-			this.maxWeightkg = vehicle.getMaxUsefulWeightkg();
-			this.maxUsefulWeightkg = vehicle.getMaxUsefulWeightkg();
-			this.heightm = vehicle.getHeightm();
-			this.widthm = vehicle.getWidthm();
-			this.lengthm = vehicle.getLengthm();
-			this.wheelbasem = vehicle.getWheelbasem();
-			this.nAxles = vehicle.getnAxles();
-		}
-
-		public String getLicensePlate() {
-			return licensePlate;
-		}
-
-		public Vehicle.VehicleCategory.VehicleType getVehicleType() {
-			return vehicleType;
-		}
-
-		public Vehicle.VehicleCategory.LoadType getLoadType() {
-			return loadType;
-		}
-
-		public String getVehicleApprovals() {
-			return vehicleApprovals;
-		}
-
-		public Integer getMaxWeightkg() {
-			return maxWeightkg;
-		}
-
-		public Integer getMaxUsefulWeightkg() {
-			return maxUsefulWeightkg;
-		}
-
-		public Float getHeightm() {
-			return heightm;
-		}
-
-		public Float getWidthm() {
-			return widthm;
-		}
-
-		public Float getLengthm() {
-			return lengthm;
-		}
-
-		public Float getWheelbasem() {
-			return wheelbasem;
-		}
-
-		public Integer getnAxles() {
-			return nAxles;
-		}
-
-		@Override
-		public String toString() {
-			StringBuilder builder = new StringBuilder();
-			builder.append("VehicleSnapshot [licensePlate=").append(licensePlate).append(", vehicleType=")
-				.append(vehicleType).append(", loadType=").append(loadType).append(", vehicleApprovals=")
-				.append(vehicleApprovals).append(", maxWeightkg=").append(maxWeightkg)
-				.append(", maxUsefulWeightkg=").append(maxUsefulWeightkg).append(", heightm=").append(heightm)
-				.append(", widthm=").append(widthm).append(", lengthm=").append(lengthm).append(", wheelbasem=")
-				.append(wheelbasem).append(", nAxles=").append(nAxles).append("]");
-			return builder.toString();
-		}
 	}
 	
 	/** Chiave primaria surrogata autogenerata. */
@@ -336,19 +158,17 @@ public class Shipment {
 	/**
 	 * Il mezzo di trasporto assegnato a questa specifica spedizione.
 	 * <p>
-	 * Relazione caricata in modo pigro ({@code LAZY}) per ottimizzare le performance di estrazione 
-	 * delle spedizioni dal database.
+	 * Può essere {@code null} se questa Shipment non è più nello stato {@code PLANNED}, nel qual caso 
+	 * per il veicolo fa fede lo snapshot dello stesso.
 	 * </p>
 	 */
 	@ManyToOne(fetch = FetchType.EAGER)
 	@JoinColumn(
 		name = "vehicle_id",
-		nullable = false,
+		nullable = true,
 		foreignKey = @ForeignKey(name = "fk_shipment_vehicle")
 	)
 	private Vehicle vehicle;
-	@Embedded
-	private VehicleSnapshot vehicleSnapshot;
 	
 	/**
 	 * Hook Orchestratore (Coordinator) per gli eventi di scrittura del database.
@@ -422,13 +242,6 @@ public class Shipment {
 				.trim()
 			);
 		}
-		if(vehicleSnapshot != null) {
-			if(vehicleSnapshot.getVehicleApprovals() == null || vehicleSnapshot.getVehicleApprovals().isBlank()) {
-				/* Accede direttamente al dato perchè i Setter non sono presenti essendo in sola lettura. Ciò è consentito perchè Shipment è 
-				 * il reale proprietario di VehicleSnapshot e di conseguenza non è stato usato il pattern Wither (nuovo oggetto creato da zero). */
-				vehicleSnapshot.vehicleApprovals = "NONE";
-			}
-		}
 	}
 	
 	public Long getId() {
@@ -481,14 +294,6 @@ public class Shipment {
 	
 	public void setVehicle(Vehicle vehicle) {
 		this.vehicle = vehicle;
-	}
-	
-	public VehicleSnapshot getVehicleSnapshot() {
-		return vehicleSnapshot;
-	}
-
-	public void setVehicleSnapshot(VehicleSnapshot vehicleSnapshot) {
-		this.vehicleSnapshot = vehicleSnapshot;
 	}
 	
 	/** Calcola l'hash code basandosi esclusivamente sulla Business Key ({@code trackingNumber}). */

@@ -93,7 +93,7 @@ public class VehicleController {
 	 */
 	@GetMapping("/weight/{maxUsefulWeight}")
 	public ResponseEntity<List<VehicleResponseDTO>> getByMaxUsefulWeight(@PathVariable @ValidatorMaxUsefulWeight Integer maxUsefulWeight) {
-		List<Vehicle> vehicles = vehicleService.getByMaxUsefulWeight(maxUsefulWeight);
+		List<Vehicle> vehicles = vehicleService.getByMaxUsefulWeightGreaterThanEqual(maxUsefulWeight);
 		List<VehicleResponseDTO> response = vehicles.stream().map(VehicleResponseDTO::fromEntity).toList();
 		return ResponseEntity.ok(response);
 	}
