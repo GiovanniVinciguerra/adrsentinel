@@ -22,6 +22,8 @@ entity "adr_class" as Classes {
 entity "onu_number" as UN {
   * id : Long <<PK>>
   --
+  * adr_class_id : Long <<FK>>
+  --
   * onu_code : String <<UQ>>
   * name : String
   * kemler_code : String
@@ -29,7 +31,6 @@ entity "onu_number" as UN {
   * physical_state : enum
   * tunnel_restriction : enum
   * transport_category : Integer
-  * adr_class_id : Long <<FK>>
 }
 
 entity "compatibility_rule" as Rules {
@@ -37,6 +38,7 @@ entity "compatibility_rule" as Rules {
   --
   * adr_class_a_id : Long <<FK>>
   * adr_class_b_id : Long <<FK>>
+  --
   * is_compatible : Boolean
   * warning_note : String
 }
@@ -74,6 +76,7 @@ entity "driver" as Driver {
 entity "adr_driver_approval" as DriverApproval {
 	--
 	* driver_id : Long <<FK>>
+	--
 	* driver_approval : enum
 }
 
@@ -81,6 +84,10 @@ entity "adr_driver_approval" as DriverApproval {
 
 entity "shipment" as Shipments {
   * id : Long <<PK>>
+  --
+  * vehicle_id : Long <<FK>
+  * driver_id : Long <<FK>>
+  * customer_id : Long <<FK>>
   --
   * tracking_number : String <<UQ>>
   * shipment_date : Timestamp
@@ -92,28 +99,31 @@ entity "shipment" as Shipments {
 entity "shipment_item" as Items {
   * id : Long <<PK>>
   --
+  * shipment_id : Long <<FK>>
+  * onu_number_id : Long <<FK>>
+  --
   * item_uuid : String
   * quantity : Float
   * unit_of_measure : enum
-  * shipment_id : Long <<FK>>
-  * onu_number_id : Long <<FK>>
 }
 
 entity "package_info" as PackageInfo {
 	* id : Long <<PK>>
 	--
+	* shipment_item_id : Long <<FK>>
+	--
 	* n_package : Integer
 	* description : String
-	* shipment_item_id : Long <<FK>>
 }
 
 entity "shipment_route" as ShipmentRoute {
 	* id : Long <<PK>>
 	--
+	* shipment_id : Long <<FK>>
+	--
 	* orgn_lat : Double
 	* dest_lat : Double
 	* distance_km : Float
-	* shipment_id : Long <<FK>>
 }
 
 ' DOMINIO SNAPSHOT LEGALI (Shadow Tables / Join Tables)
@@ -164,7 +174,7 @@ Driver "1..2\t" ||--|{ "1 " Shipments
 Customer "3 " ||--|{ "1 " Shipments
 Shipments "1  " ||--|{ "n " Items
 UN "1\t" ||--o{ "n\t" Items
-Shipments "1" ||--|| "1 " ShipmentRoute
+Shipments "1" ||--|| "1..n " ShipmentRoute
 Items "1 " ||--o| "0..1\t" PackageInfo
 Driver "1" ||--o{ "n" DriverApproval
 

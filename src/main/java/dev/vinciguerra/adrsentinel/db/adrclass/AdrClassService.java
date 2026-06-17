@@ -31,7 +31,6 @@ import dev.vinciguerra.adrsentinel.web.dto.adrclass.AdrClassRequestDTO;
  * @since 1.0
  */
 @Service
-@Transactional(readOnly = true)
 public class AdrClassService extends AbstractGenericService {
 	private final AdrClassRepository adrClassRepository;
 	

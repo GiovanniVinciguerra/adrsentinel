@@ -12,6 +12,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import dev.vinciguerra.adrsentinel.db.adrclass.AdrClassCacheSetting;
 import dev.vinciguerra.adrsentinel.db.adrclass.shipmentroute.ShipmentRouteCacheSetting;
 import dev.vinciguerra.adrsentinel.db.compatibilityrule.CompatibilityRuleCacheSetting;
+import dev.vinciguerra.adrsentinel.db.driver.DriverCacheSetting;
 import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumberCacheSetting;
 import dev.vinciguerra.adrsentinel.db.shipment.ShipmentCacheSetting;
 import dev.vinciguerra.adrsentinel.db.shipmentitem.ShipmentItemCacheSetting;
@@ -47,6 +48,7 @@ import dev.vinciguerra.adrsentinel.db.vehicle.VehicleSnapshotCacheSetting;
 	ShipmentItemCacheSetting.class,
 	VehicleCacheSetting.class,
 	VehicleSnapshotCacheSetting.class,
+	DriverCacheSetting.class,
 	ShipmentRouteCacheSetting.class
 })
 public class CaffeineCacheConfiguration {
@@ -91,6 +93,12 @@ public class CaffeineCacheConfiguration {
 	public static final String ALL_VEHICLE_KEY = "all_vehicle_key";
 	/** Identificatore della regione di memoria per il raggruppamento degli storici del veicolo associato a una data spedizione. */
 	public static final String VEHICLE_SNAPSHOT_BY_SHIPMENT_ID_CACHE = "vehicle_snapshot_by_shipment_id";
+	/** Identificatore della regione di memoria per il raggruppamento globale di tutti gli autisti associati per license. */
+	public static final String DRIVER_BY_LICENSE_CACHE = "driver_by_license";
+	/** Identificatore della regione di memoria per il raggruppamento globale di tutti gli autisti. */
+	public static final String ALL_DRIVER_CACHE = "all_driver";
+	/** Chiave statica globale per l'estrazione dalla cache di tutti gli autisti. */
+	public static final String ALL_DRIVER_KEY = "all_driver_key";
 	/** Identificatore della regione di memoria per il raggruppamento (UUID) globale dei percorsi stradali. */
 	public static final String SHIPMENT_ROUTE_BY_ROUTE_UUID_CACHE = "shipment_route_by_route_uuid";
 	/** Identificatore della regione di memoria per il raggruppamento (Shipment.trackingNumber) globale dei percorsi stradali. */
@@ -115,7 +123,8 @@ public class CaffeineCacheConfiguration {
 	@Bean
 	public CacheManager cacheManager(AdrClassCacheSetting adrClassSetting, CompatibilityRuleCacheSetting compatibilityRuleCacheSetting, 
 			OnuNumberCacheSetting onuNumberCacheSetting, ShipmentCacheSetting shipmentCacheSetting, ShipmentItemCacheSetting shipmentItemCacheSetting,
-			VehicleCacheSetting vehicleCacheSetting, VehicleSnapshotCacheSetting vehicleSnapshotCacheSetting, ShipmentRouteCacheSetting shipmentRouteCacheSetting) {
+			VehicleCacheSetting vehicleCacheSetting, VehicleSnapshotCacheSetting vehicleSnapshotCacheSetting, DriverCacheSetting driverCacheSetting,
+			ShipmentRouteCacheSetting shipmentRouteCacheSetting) {
 		SimpleCacheManager cacheManager = new SimpleCacheManager();
 		CaffeineCache adrClassClassCodeCache = buildCache(
 			ADR_CLASS_BY_CLASS_CODE_CACHE,
@@ -181,6 +190,14 @@ public class CaffeineCacheConfiguration {
 			VEHICLE_SNAPSHOT_BY_SHIPMENT_ID_CACHE,
 			vehicleSnapshotCacheSetting.shipmentId().maxSize()
 		);
+		CaffeineCache driverByLicenseCache = buildCache(
+			DRIVER_BY_LICENSE_CACHE,
+			driverCacheSetting.license().maxSize()
+		);
+		CaffeineCache allDriverCache = buildCache(
+			ALL_DRIVER_KEY,
+			driverCacheSetting.allDriver().maxSize()
+		);
 		CaffeineCache shipmentRouteByRouteUUIDCache = buildCache(
 			SHIPMENT_ROUTE_BY_ROUTE_UUID_CACHE,
 			shipmentRouteCacheSetting.routeUUID().maxSize()
@@ -207,6 +224,8 @@ public class CaffeineCacheConfiguration {
 				vehicleMaxUsefulWeightCache,
 				vehicleAllCache,
 				vehicleSnapshotByShipmentIdCache,
+				driverByLicenseCache,
+				allDriverCache,
 				shipmentRouteByRouteUUIDCache,
 				shipmentRouteByShipmentCache
 			)

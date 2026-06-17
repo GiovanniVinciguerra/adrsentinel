@@ -81,19 +81,4 @@ public interface ShipmentRepository extends JpaRepository<Shipment, Long> {
 	 * @return un oggetto {@link Page} contenente il blocco di spedizioni richiesto e i metadati di navigazione.
 	 */
 	Page<Shipment> findByShipmentStatus(ShipmentStatus shipmentStatus, Pageable pageable);
-	/**
-	 * Esegue l'estrazione dello storico cronologico di tutte le spedizioni (passate e presenti) 
-	 * assegnate e processate da uno specifico veicolo della flotta.
-	 * <p>
-	 * <b>Capacity Planning e Sicurezza (Defensive Programming):</b><br>
-	 * Il ciclo di vita operativo di un mezzo pesante può generare decine di migliaia di record di viaggio. 
-	 * L'obbligo del parametro {@link Pageable} funge da "valvola di sicurezza", impedendo che la 
-	 * richiesta di un registro (Logbook) di un mezzo storico causi colli di bottiglia sul database 
-	 * o saturi il Thread locale del server applicativo.
-	 * </p>
-	 * @param licensePlate La targa del veicolo di cui si vogliono conoscere le spedizioni.
-	 * @param pageable i criteri strutturati per il caricamento progressivo (lazy/infinite scrolling dei record).
-	 * @return un oggetto {@link Page} contenente il sottoinsieme dello storico del veicolo, pronto per l'esposizione.
-	 */
-	Page<Shipment> findByVehicle_licensePlate(String licensePlate, Pageable pageable);
 }

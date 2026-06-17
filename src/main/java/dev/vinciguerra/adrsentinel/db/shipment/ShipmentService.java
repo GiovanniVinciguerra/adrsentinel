@@ -184,42 +184,6 @@ public class ShipmentService extends AbstractGenericService {
 	}
 	
 	/**
-	 * Recupera lo storico paginato delle Spedizioni (Shipments) effettuate da uno specifico Veicolo.
-	 * <p>
-	 * <b>Design della Query (Entity-Based Filtering):</b><br>
-	 * Questo strato di servizio applica il pattern della navigazione a oggetti. Accettando come parametro 
-	 * l'intera entità {@link Vehicle} anziché una stringa primitiva, si delega a Hibernate il compito 
-	 * di estrapolare la chiave primaria (Primary Key) per costruire una query SQL basata sulla 
-	 * Foreign Key (es. {@code WHERE vehicle_id = ?}). Questo garantisce l'uso ottimale degli indici 
-	 * B-Tree del database relazionale.
-	 * </p>
-	 * <p>
-	 * <b>Sicurezza della Memoria (Big Data Ready):</b><br>
-	 * Poiché un singolo veicolo operativo può generare decine di migliaia di distinte di spedizione 
-	 * nel corso della sua vita utile, l'incapsulamento della query in un costrutto {@link Pageable} 
-	 * funge da valvola di sicurezza. Impone al database l'estrazione parziale (LIMIT/OFFSET), 
-	 * mantenendo il consumo di RAM del server costantemente basso e prevedibile.
-	 * </p>
-	 * <p>
-	 * <b>Osservabilità Avanzata (Human-Readable Logging):</b><br>
-	 * La direttiva di logging implementa una best practice diagnostica: mentre il motore di ricerca 
-	 * lavora per ID numerici relazionali, il logger estrae dinamicamente la targa 
-	 * ({@code vehicle.getLicensePlate()}). Questo garantisce che le tracce su sistemi di monitoraggio 
-	 * (es. ELK, Datadog, Splunk) parlino il linguaggio del dominio di business, facilitando enormemente 
-	 * l'analisi e il troubleshooting da parte degli operatori di supporto.
-	 * </p>
-	 * @param licensePlate  La targa del veicolo di cui si desidera estrarre lo storico.
-	 * @param pageable L'involucro contenente i limiti della finestra di ricerca (numero pagina e grandezza) 
-	 * e gli eventuali criteri di ordinamento richiesti dal Presentation Layer.
-	 * @return Un raccoglitore {@link Page} contenente le entità {@link Shipment} filtrate per il veicolo 
-	 * richiesto, oltre ai metadati di paginazione necessari al client per renderizzare l'interfaccia.
-	 */
-	public Page<Shipment> getByVehicle(String licensePlate, Pageable pageable) {
-		logger.info("[DataBase CALL] Paginated search for the Shipment by Vehicle license plate: {}", licensePlate);
-		return shipmentRepository.findByVehicle_licensePlate(licensePlate, pageable);
-	}
-	
-	/**
 	 * Persiste una nuova spedizione o aggiorna lo stato di una esistente (Upsert).
 	 * <p>
 	 * <b>Motore Write-Through:</b><br>

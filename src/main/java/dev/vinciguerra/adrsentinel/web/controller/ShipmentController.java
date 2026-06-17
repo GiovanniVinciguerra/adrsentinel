@@ -20,7 +20,6 @@ import dev.vinciguerra.adrsentinel.db.shipment.Shipment.ShipmentStatus;
 import dev.vinciguerra.adrsentinel.web.annotation.ValidatorLocalDate;
 import dev.vinciguerra.adrsentinel.web.annotation.ValidatorUUID;
 import dev.vinciguerra.adrsentinel.web.annotation.shipment.ValidatorShipmentStatus;
-import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorLicensePlate;
 import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentRequestDTO;
 import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentResponseDTO;
 import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentUpdateDTO;
@@ -91,20 +90,6 @@ public class ShipmentController {
 	@GetMapping("/status/{status}")
 	public ResponseEntity<Page<ShipmentResponseDTO>> getByStatus(@PathVariable @ValidatorShipmentStatus String status, Pageable pageable) {
 		Page<Shipment> page = shipmentService.getByShipmentStatus(Enum.valueOf(ShipmentStatus.class, status), pageable);
-		Page<ShipmentResponseDTO> response = page.map(ShipmentResponseDTO::fromEntity);
-		return ResponseEntity.ok(response);
-	}
-	
-	/**
-	 * Ricerca tutte le spedizioni assegnate a un determinato veicolo della flotta.
-	 * @param licensePlate La targa alfanumerica del veicolo, normalizzata e validata da 
-	 * {@code @ValidatorLicensePlate} (es. nessuna spaziatura, solo maiuscole).
-	 * @param pageable Configurazione di paginazione.
-	 * @return Un payload HTTP 200 (OK) con le spedizioni associate al mezzo.
-	 */
-	@GetMapping("/vehicle/{licensePlate}")
-	public ResponseEntity<Page<ShipmentResponseDTO>> getByVehicle(@PathVariable @ValidatorLicensePlate String licensePlate, Pageable pageable) {
-		Page<Shipment> page = shipmentService.getByVehicle(licensePlate, pageable);
 		Page<ShipmentResponseDTO> response = page.map(ShipmentResponseDTO::fromEntity);
 		return ResponseEntity.ok(response);
 	}
