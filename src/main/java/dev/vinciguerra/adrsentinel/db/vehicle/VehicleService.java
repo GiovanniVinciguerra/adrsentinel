@@ -16,8 +16,8 @@ import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle.VehicleCategory.LoadType;
 import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle.VehicleCategory.VehicleApproval;
 import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle.VehicleCategory.VehicleType;
 import dev.vinciguerra.adrsentinel.exception.ResourceNotFoundException;
+import dev.vinciguerra.adrsentinel.web.dto.UpdateActiveStatusDTO;
 import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleRequestDTO;
-import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleUpdateActiveStatusDTO;
 import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleUpdateAdrApprovalDTO;
 import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleUpdateDTO;
 
@@ -204,14 +204,14 @@ public class VehicleService extends AbstractGenericService {
 	 * isolandola per favorire l'indicizzazione e le ricerche mirate tramite sistemi di log 
 	 * monitoring (es. stack ELK o Datadog).
 	 * </p>
-	 * @param licensePlate La targa alfanumerica del veicolo (chiave logica di business) da modificare.
+	 * @param licensePlate La targa alfanumerica del veicolo (chiave logica di business).
 	 * @param updateDto Il payload di richiesta contenente il nuovo stato desiderato ({@code active: true/false}).
 	 * @return L'entità {@link Vehicle} aggiornata, gestita (Managed) dal Persistence Context di Hibernate.
 	 * @throws ResourceNotFoundException Se la targa fornita non corrisponde ad alcuna anagrafica 
 	 * presente a sistema (approccio Fail-Fast).
 	 */
 	@Transactional
-	public Vehicle updateActiveStatusByLicensePlate(String licensePlate, VehicleUpdateActiveStatusDTO updateDto) throws ResourceNotFoundException {
+	public Vehicle updateActiveStatusByLicensePlate(String licensePlate, UpdateActiveStatusDTO updateDto) throws ResourceNotFoundException {
 		logger.info("[DataBase CALL] Updating Vehicle details with licensePlate: {}", licensePlate);
 		Vehicle vehicle = vehicleRepository.findByLicensePlate(licensePlate)
 			.orElseThrow(() -> new ResourceNotFoundException("Vehicle not found: " + licensePlate));
@@ -269,8 +269,35 @@ public class VehicleService extends AbstractGenericService {
 		return updatedVehicle;
 	}
 	
+	/**
+	 * Aggiorna lo stato di transito ({@code inTransit}) di un veicolo specifico identificato dal suo ID.
+	 * <p>
+	 * Il metodo è annotato con {@code @Transactional}, garantendo che l'intera operazione 
+	 * (recupero, modifica e salvataggio) avvenga all'interno di una singola transazione 
+	 * di lettura/scrittura sul database.
+	 * <p>
+	 * <b>Flusso di esecuzione:</b>
+	 * <ol>
+	 * <li>Registra un log informativo a livello INFO indicando l'inizio dell'operazione sul database.</li>
+	 * <li>Interroga il {@code vehicleRepository} per recuperare l'entità {@link Vehicle}. Se il veicolo 
+	 * non esiste, interrompe il flusso lanciando una {@link ResourceNotFoundException}.</li>
+	 * <li>Salva lo stato precedente del veicolo (nello specifico, il valore di {@code maxUsefulWeightkg}) 
+	 * in una variabile immutabile ({@code final}) prima di applicare qualsiasi modifica.</li>
+	 * <li>Applica il nuovo stato di transito al veicolo e invoca il salvataggio tramite il repository.</li>
+	 * <li><b>Sincronizzazione della Cache:</b> Per prevenire problemi di inconsistenza dei dati 
+	 * (es. aggiornare la cache ma fallire il commit sul DB), il metodo registra un hook tramite 
+	 * {@link TransactionSynchronizationManager}. L'aggiornamento della cache 
+	 * ({@code syncCacheAfterUpdate}) viene eseguito <i>esclusivamente</i> dopo che la transazione 
+	 * SQL ha effettuato il commit con successo.</li>
+	 * </ol>
+	 * @param id     L'identificativo univoco (Primary Key) del veicolo da aggiornare.
+	 * @param status Il nuovo stato booleano da assegnare al flag {@code inTransit} 
+	 * ({@code true} se in transito, {@code false} altrimenti).
+	 * @return L'entità {@link Vehicle} aggiornata e persistita nel database.
+	 * @throws ResourceNotFoundException Se nessun veicolo corrisponde all'ID fornito.
+	 */
 	@Transactional
-	public Vehicle updateInTransitStatusById(Long id, boolean status) {
+	public Vehicle updateInTransitStatusById(Long id, boolean status) throws ResourceNotFoundException {
 		logger.info("[DataBase CALL] Updating Vehicle inTransit with id: {}", id);
 		Vehicle vehicle = vehicleRepository.findById(id)
 			.orElseThrow(() -> new ResourceNotFoundException("Vehicle not found: " + id));

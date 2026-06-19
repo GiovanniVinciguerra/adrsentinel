@@ -1,4 +1,4 @@
-package dev.vinciguerra.adrsentinel.web.dto.vehicle;
+package dev.vinciguerra.adrsentinel.web.dto;
 
 import jakarta.validation.constraints.NotNull;
 
@@ -32,4 +32,4 @@ import jakarta.validation.constraints.NotNull;
  * @version 1.0 (Strict Validated Output Payload)
  * @since 1.0
  */
-public record VehicleUpdateActiveStatusDTO(@NotNull(message = "Malformed payload: active status is required") Boolean active) {}
+public record UpdateActiveStatusDTO(@NotNull(message = "Malformed payload: active status is required") Boolean active) {}

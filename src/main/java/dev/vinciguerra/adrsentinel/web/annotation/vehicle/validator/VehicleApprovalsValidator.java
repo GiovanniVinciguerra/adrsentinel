@@ -25,28 +25,30 @@ public class VehicleApprovalsValidator implements ConstraintValidator<ValidatorV
 	 * Esegue l'ispezione profonda (Deep Inspection) della collezione fornita dal payload JSON.
 	 * <p><b>Flusso di Validazione e Regole di Business:</b></p>
 	 * <ul>
-	 * <li><b>1. Tolleranza dell'Assenza (Optionality):</b> Se il set è {@code null}, la validazione 
-	 * ha esito positivo. Questo supporta il caso d'uso di un veicolo privo di omologazioni ADR, 
-	 * delegando la creazione di un Set vuoto al layer di mappatura sottostante (Service).</li>
-	 * <li><b>2. Esecuzione Implicita (Empty Set):</b> Grazie all'architettura snella del ciclo {@code for-each}, 
-	 * se il client invia un array vuoto ({@code []}), il corpo del ciclo viene naturalmente bypassato 
-	 * con un costo computazionale trascurabile (O(1)), ritornando immediatamente {@code true}.</li>
-	 * <li><b>3. Integrità del Contenuto (Blank Check):</b> Impedisce la presenza di valori {@code null}, 
-	 * stringhe vuote o composte da soli spazi bianchi (grazie a {@code isBlank()}) all'interno dell'array.</li>
+	 * <li><b>1. Obbligatorietà del Dato (Strict Presence):</b> Il set non ammette l'assenza ({@code null}). 
+	 * Se il client omette il nodo JSON associato, la validazione fallisce immediatamente agendo da 
+	 * barriera <i>Fail-Fast</i>. Per rappresentare il caso d'uso di un veicolo privo di omologazioni ADR, 
+	 * il client è obbligato a inviare esplicitamente un array vuoto ({@code []}).</li>
+	 * <li><b>2. Esecuzione Implicita (Empty Set):</b> Grazie all'architettura del ciclo {@code for-each}, 
+	 * se il payload contiene un array vuoto ({@code []}), il corpo dell'iterazione viene naturalmente 
+	 * bypassato. L'operazione si conclude in tempo costante (O(1)) ritornando {@code true}, 
+	 * validando correttamente l'assenza di certificazioni.</li>
+	 * <li><b>3. Integrità del Contenuto (Blank Check):</b> Invalida il payload alla presenza di elementi 
+	 * {@code null}, stringhe vuote o sequenze composte da soli spazi bianchi all'interno della collezione.</li>
 	 * <li><b>4. Risoluzione a Dizionario (Enum Dictionary Match):</b> Tenta il casting sicuro verso 
 	 * l'enumerazione di dominio {@link VehicleApproval}. La gestione tramite blocco {@code try-catch} 
-	 * agisce da <i>Fail-Fast</i>: al primo elemento non riconosciuto, l'intero payload viene 
-	 * invalidato (HTTP 400).</li>
+	 * garantisce che, al primo valore non mappabile nel dizionario ADR, l'intera richiesta venga 
+	 * respinta (HTTP 400).</li>
 	 * </ul>
 	 * @param values La collezione di stringhe grezze proveniente dal Data Transfer Object (Request Payload).
 	 * @param context Il contesto di validazione fornito dal framework (Spring/Hibernate Validator).
-	 * @return {@code true} se la collezione è assente, vuota o contiene esclusivamente costanti Enum valide; 
-	 * {@code false} se contiene valori nulli, vuoti o stringhe non presenti nel dominio.
+	 * @return {@code true} se la collezione è istanziata (anche vuota) e contiene esclusivamente costanti Enum valide; 
+	 * {@code false} se la collezione è {@code null}, o se uno dei suoi elementi risulta nullo, vuoto o non appartenente al dominio.
 	 */
 	@Override
 	public boolean isValid(Set<String> values, ConstraintValidatorContext context) {
 		if(values == null)
-			return true;
+			return false;
 		for(String value : values) {
 			if(value == null || value.trim().isBlank())
 				return false;

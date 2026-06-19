@@ -2,7 +2,6 @@ package dev.vinciguerra.adrsentinel.web.dto.vehicle;
 
 import java.util.Set;
 import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorVehicleApprovals;
-import jakarta.validation.constraints.NotEmpty;
 
 /**
  * Data Transfer Object (DTO) in ingresso (Request Payload) ultraleggero, progettato 
@@ -27,4 +26,4 @@ import jakarta.validation.constraints.NotEmpty;
  * @version 1.0 (Strict Validated Input Payload)
  * @since 1.0
  */
-public record VehicleUpdateAdrApprovalDTO(@NotEmpty(message = "Malformed payload: approvals are required") Set<@ValidatorVehicleApprovals String> approvals) {}
+public record VehicleUpdateAdrApprovalDTO(@ValidatorVehicleApprovals Set<String> approvals) {}
