@@ -121,16 +121,6 @@ public class Driver {
 	)
 	private LocalDate licenseExpireDate;
 	/**
-	 * Flag che indica se l'autista è in possesso della Carta di Qualificazione del Conducente (CQC).
-	 * Campo obbligatorio, valore di default nel DDL impostato a {@code false}.
-	 */
-	@Column(
-		name = "cqc",
-		nullable = false
-	)
-	@ColumnDefault("false")
-	private boolean cqc;
-	/**
 	 * Data di scadenza della Carta di Qualificazione del Conducente (CQC).
 	 * Campo opzionale (può essere null se l'autista non possiede il CQC).
 	 */
@@ -275,14 +265,6 @@ public class Driver {
 		this.licenseExpireDate = licenseExpireDate;
 	}
 
-	public boolean isCqc() {
-		return cqc;
-	}
-
-	public void setCqc(boolean cqc) {
-		this.cqc = cqc;
-	}
-
 	public LocalDate getCqcExpireDate() {
 		return cqcExpireDate;
 	}
@@ -349,9 +331,9 @@ public class Driver {
 		StringBuilder builder = new StringBuilder();
 		builder.append("Driver [id=").append(id).append(", fullName=").append(fullName).append(", taxCode=")
 			.append(taxCode).append(", phoneNumber=").append(phoneNumber).append(", license=").append(license)
-			.append(", licenseExpireDate=").append(licenseExpireDate).append(", cqc=").append(cqc)
-			.append(", cqcExpireDate=").append(cqcExpireDate).append(", driverApprovals=").append(driverApprovals)
-			.append(", active=").append(active).append(", inTransit=").append(inTransit).append("]");
+			.append(", licenseExpireDate=").append(licenseExpireDate).append(", cqcExpireDate=").append(cqcExpireDate)
+			.append(", driverApprovals=").append(driverApprovals).append(", active=").append(active)
+			.append(", inTransit=").append(inTransit).append("]");
 		return builder.toString();
 	}
 }

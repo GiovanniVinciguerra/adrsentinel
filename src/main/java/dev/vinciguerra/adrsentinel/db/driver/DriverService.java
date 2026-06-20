@@ -1,5 +1,6 @@
 package dev.vinciguerra.adrsentinel.db.driver;
 
+import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -14,6 +15,7 @@ import dev.vinciguerra.adrsentinel.db.driver.Driver.DriverApproval;
 import dev.vinciguerra.adrsentinel.exception.ResourceNotFoundException;
 import dev.vinciguerra.adrsentinel.web.dto.UpdateActiveStatusDTO;
 import dev.vinciguerra.adrsentinel.web.dto.driver.DriverUpdateAdrApprovalDTO;
+import dev.vinciguerra.adrsentinel.web.dto.driver.DriverUpdateDTO;
 
 public class DriverService extends AbstractGenericService {
 	private final DriverRepository driverRepository;
@@ -45,6 +47,23 @@ public class DriverService extends AbstractGenericService {
 			public void afterCommit() { syncCacheAfterInsertOrUpdate(savedDriver); }
 		});
 		return savedDriver;
+	}
+	
+	@Transactional
+	public Driver updateDetailsByLicense(String license, DriverUpdateDTO updateDto) throws ResourceNotFoundException {
+		logger.info("[DataBase CALL] Updating Driver details with license: {}", license);
+		Driver driver = driverRepository.findByLicense(license)
+			.orElseThrow(() -> new ResourceNotFoundException("Driver not found: " + license));
+		driver.setFullName(updateDto.fullName());
+		driver.setPhoneNumber(updateDto.phoneNumber());
+		driver.setLicenseExpireDate(LocalDate.parse(updateDto.licenseExpireDate()));
+		driver.setCqcExpireDate(LocalDate.parse(updateDto.cqcExpireDate()));
+		Driver updatedDriver = driverRepository.save(driver);
+		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+			@Override
+			public void afterCommit() { syncCacheAfterInsertOrUpdate(updatedDriver); }
+		});
+		return updatedDriver;
 	}
 	
 	/**
