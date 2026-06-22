@@ -50,7 +50,7 @@ import dev.vinciguerra.adrsentinel.db.vehicle.VehicleSnapshot;
  */
 public record VehicleResponseDTO(String licensePlate, VehicleCategoryResponseDTO vehicleCategory, Integer maxWeightkg,
 		Integer maxUsefulWeightkg, Float heightm, Float widthm, Float lengthm, Float wheelbasem, Integer nAxles, Boolean active, Boolean inTransit,
-		boolean historicalData) {
+		Boolean historicalData) {
 	/**
 	 * Factory Method statico per la conversione (Mapping) e l'aggregazione di un'entità 
 	 * di dominio {@link Vehicle} nel suo corrispondente Data Transfer Object in uscita 

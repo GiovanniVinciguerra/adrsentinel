@@ -2,10 +2,14 @@ package dev.vinciguerra.adrsentinel.db.shipment;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.hibernate.annotations.ColumnDefault;
+
+import dev.vinciguerra.adrsentinel.db.driver.Driver;
 import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle;
 import dev.vinciguerra.adrsentinel.exception.BadRequestException;
 import jakarta.persistence.CollectionTable;
@@ -20,6 +24,8 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OrderColumn;
 import jakarta.persistence.PrePersist;
@@ -169,6 +175,20 @@ public class Shipment {
 		foreignKey = @ForeignKey(name = "fk_shipment_vehicle")
 	)
 	private Vehicle vehicle;
+	/**
+	 * Gli autisti assegnati a questa specifica spedizione.
+	 * <p>
+	 * Può essere {@code empty} se questa Shipment non è più nello stato {@code PLANNED}, nel qual caso 
+	 * per gli autisti fa fede lo snapshot degli stessi.
+	 * </p>
+	 */
+	@ManyToMany(fetch = FetchType.EAGER)
+	@JoinTable(
+		name = "shipment_driver_assignment",
+		joinColumns = @JoinColumn(name = "shipment_id"),
+		inverseJoinColumns = @JoinColumn(name = "driver_id")
+	)
+	private Set<Driver> drivers = new HashSet<Driver>();
 	
 	/**
 	 * Hook Orchestratore (Coordinator) per gli eventi di scrittura del database.
@@ -294,6 +314,14 @@ public class Shipment {
 	
 	public void setVehicle(Vehicle vehicle) {
 		this.vehicle = vehicle;
+	}
+	
+	public Set<Driver> getDrivers() {
+		return drivers;
+	}
+	
+	public void setDrivers(Set<Driver> drivers) {
+		this.drivers = drivers;
 	}
 	
 	/** Calcola l'hash code basandosi esclusivamente sulla Business Key ({@code trackingNumber}). */

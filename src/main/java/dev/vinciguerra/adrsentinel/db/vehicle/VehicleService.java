@@ -3,6 +3,8 @@ package dev.vinciguerra.adrsentinel.db.vehicle;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
+
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -257,10 +259,11 @@ public class VehicleService extends AbstractGenericService {
 		Vehicle vehicle = vehicleRepository.findByLicensePlate(licensePlate)
 			.orElseThrow(() -> new ResourceNotFoundException("Vehicle not found: " + licensePlate));
 		final Integer oldMaxUsefulWeight = vehicle.getMaxUsefulWeightkg();
-		Set<VehicleApproval> approvals = new HashSet<VehicleApproval>();
-		for(String approval : updateDto.approvals())
-			approvals.add(Enum.valueOf(VehicleApproval.class, approval));
-		vehicle.getVehicleCategory().setVehicleApprovals(approvals);
+		Set<VehicleApproval> newApprovals = updateDto.approvals().stream()
+			.map(newApproval -> Enum.valueOf(VehicleApproval.class, newApproval))
+			.collect(Collectors.toSet());
+		vehicle.getVehicleCategory().getVehicleApprovals().clear();
+		vehicle.getVehicleCategory().getVehicleApprovals().addAll(newApprovals);
 		Vehicle updatedVehicle = vehicleRepository.save(vehicle);
 		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
 			@Override
