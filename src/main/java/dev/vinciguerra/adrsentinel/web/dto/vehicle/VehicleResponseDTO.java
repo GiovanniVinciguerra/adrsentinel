@@ -44,6 +44,9 @@ import dev.vinciguerra.adrsentinel.db.vehicle.VehicleSnapshot;
  * @param adrCertified Indica se il veicolo è legalmente certificato e idoneo al trasporto ADR secondo la normativa vigente.
  * @param active Flag booleano che indica se il veicolo è attivo ({@code true}) oppure no ({@code false}). Può essere {@code null} nel caso in cui 
  * il veicolo rappresentato sia preso dallo storico {@link VehicleSnapshot}, in cui non è presente un campo {@code active}.
+ * @param inTrnasit Flag booleano che indica se il conducente è attualmente impegnato in un viaggio.
+ * @param historicalData Flag booleano che indica se il record restituito fa parte di un archivio storico (snapshot) 
+ * piuttosto che rappresentare lo stato anagrafico corrente.
  * @author Giovanni Vinciguerra
  * @version 1.0 (Strict Validated Output Payload)
  * @since 1.0

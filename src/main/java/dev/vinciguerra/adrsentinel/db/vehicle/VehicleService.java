@@ -452,9 +452,9 @@ public class VehicleService extends AbstractGenericService {
 		category.setVehicleType(Enum.valueOf(VehicleType.class, dto.vehicleType()));
 		category.setLoadType(Enum.valueOf(LoadType.class, dto.loadType()));
 		if(dto.vehicleApprovals() != null) {
-			Set<VehicleApproval> approvals = new HashSet<VehicleApproval>();
-			for(String approval : dto.vehicleApprovals())
-				approvals.add(Enum.valueOf(VehicleApproval.class, approval));
+			Set<VehicleApproval> approvals = dto.vehicleApprovals().stream()
+				.map(approval -> Enum.valueOf(VehicleApproval.class, approval))
+				.collect(Collectors.toSet());
 			category.setVehicleApprovals(approvals);
 		} else
 			category.setVehicleApprovals(new HashSet<VehicleApproval>());

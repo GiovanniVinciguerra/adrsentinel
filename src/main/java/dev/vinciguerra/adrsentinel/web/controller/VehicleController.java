@@ -109,6 +109,8 @@ public class VehicleController {
 	@PostMapping
 	public ResponseEntity<VehicleResponseDTO> create(@RequestBody @Valid VehicleRequestDTO vehicleRequestDTO) {
 		Vehicle vehicleToSave = vehicleService.mapToEntity(vehicleRequestDTO);
+		vehicleToSave.setActive(true);
+		vehicleToSave.setInTransit(false);
 		Vehicle savedVehicle = vehicleService.save(vehicleToSave);
 		return ResponseEntity.status(HttpStatus.CREATED).body(VehicleResponseDTO.fromEntity(savedVehicle));
 	}

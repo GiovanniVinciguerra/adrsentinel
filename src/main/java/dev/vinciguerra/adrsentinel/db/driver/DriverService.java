@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -13,8 +14,10 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import dev.vinciguerra.adrsentinel.db.AbstractGenericService;
 import dev.vinciguerra.adrsentinel.db.CaffeineCacheConfiguration;
 import dev.vinciguerra.adrsentinel.db.driver.Driver.DriverApproval;
+import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle;
 import dev.vinciguerra.adrsentinel.exception.ResourceNotFoundException;
 import dev.vinciguerra.adrsentinel.web.dto.UpdateActiveStatusDTO;
+import dev.vinciguerra.adrsentinel.web.dto.driver.DriverRequestDTO;
 import dev.vinciguerra.adrsentinel.web.dto.driver.DriverUpdateAdrApprovalDTO;
 import dev.vinciguerra.adrsentinel.web.dto.driver.DriverUpdateDTO;
 
@@ -309,5 +312,45 @@ public class DriverService extends AbstractGenericService {
 			savedDriver,
 			CacheOperation.LIST_RECORD
 		);
+	}
+	
+	/**
+	 * Esegue la conversione (Mapping) strutturale dal contratto API in ingresso 
+	 * (Request Payload) al modello di dominio relazionale (JPA Entity).
+	 * <p><b>Contesto Architetturale (Anti-Corruption Layer e DTO Pattern):</b></p>
+	 * Questo metodo funge da traduttore e isolante tra i livelli dell'applicazione. 
+	 * Garantisce che il livello di persistenza (Database/Hibernate) non venga mai "contaminato" 
+	 * dalle strutture dati usate per il trasporto HTTP. L'entità restituita si trova 
+	 * in stato <i>Transient</i> (non possiede ancora un ID e non è tracciata dall'EntityManager), 
+	 * risultando perfettamente pulita e pronta per essere passata al layer transazionale (Repository).
+	 * <p><b>Composizione Sicura del Grafo (Enum Hydration):</b></p>
+	 * L'istanziazione dell'oggetto {@code Set<DriverApproval>} avviene sfruttando 
+	 * la conversione forte di Java ({@code Enum.valueOf()}). Questo meccanismo agisce come 
+	 * un'ulteriore rete di sicurezza (Fail-Fast Validation): se il client dovesse eludere 
+	 * la validazione perimetrale e inviare una stringa non conforme al dizionario ADR 
+	 * (es. un tipo veicolo inventato), il mapping fallirà istantaneamente sollevando 
+	 * un'eccezione, proteggendo l'integrità referenziale del database.
+	 * @param dto Il Data Transfer Object contenente i dati grezzi e validati 
+	 * provenienti dal Controller REST.
+	 * @return Una nuova istanza dell'entità {@link Vehicle}, completamente idratata 
+	 * con le caratteristiche e normative, pronta per l'operazione di {@code save()}.
+	 */
+	public Driver mapToEntity(DriverRequestDTO dto) {
+		Driver driver = new Driver();
+		driver.setFullName(dto.fullName());
+		driver.setTaxCode(dto.taxCode());
+		driver.setPhoneNumber(dto.phoneNumber());
+		driver.setLicense(dto.license());
+		driver.setLicenseExpireDate(LocalDate.parse(dto.licenseExpireDate()));
+		driver.setCqcExpireDate(LocalDate.parse(dto.cqcExpireDate()));
+		if(dto.driverApprovals() != null) {
+			Set<DriverApproval> approvals = dto.driverApprovals().stream()
+				.map(approval -> Enum.valueOf(DriverApproval.class, approval))
+				.collect(Collectors.toSet());
+			driver.setDriverApprovals(approvals);
+		} else {
+			driver.setDriverApprovals(new HashSet<DriverApproval>());
+		}
+		return driver;
 	}
 }

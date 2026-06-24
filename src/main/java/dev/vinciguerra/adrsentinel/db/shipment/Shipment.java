@@ -8,7 +8,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.hibernate.annotations.ColumnDefault;
-
 import dev.vinciguerra.adrsentinel.db.driver.Driver;
 import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle;
 import dev.vinciguerra.adrsentinel.exception.BadRequestException;

@@ -7,7 +7,29 @@ import dev.vinciguerra.adrsentinel.web.annotation.driver.ValidatorLicense;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 
+/**
+ * Implementazione concreta della logica di validazione per l'annotazione custom {@link ValidatorLicense}.
+ * <p>Questa classe definisce il motore di validazione formale per i numeri di patente di guida 
+ * rilasciati negli Stati Membri dell'Unione Europea e in alcuni Paesi extra-UE (come Regno Unito, 
+ * Svizzera, Norvegia e Islanda).</p>
+ * <p><b>Strategia di Validazione:</b></p>
+ * <p>Il validatore adotta un approccio "agnostico" rispetto alla nazione: non richiede che il client 
+ * specifichi il Paese di emissione. La stringa in input viene considerata valida se, dopo un processo 
+ * di igienizzazione (sanitization), risulta conforme ad <b>almeno uno</b> dei pattern Regex definiti 
+ * nel dizionario interno.</p>
+ * @author Giovanni Vinciguerra
+ * @version 1.0
+ * @since 3.0
+ * @see ValidatorLicense
+ */
 public class LicenseValidator implements ConstraintValidator<ValidatorLicense, String> {
+	/**
+     * Dizionario in memoria precompilato contenente le espressioni regolari (Regex) associate 
+     * ai formati delle patenti di guida nazionali.
+     * <p>L'uso di {@link Pattern#compile(String)} all'interno di un blocco statico garantisce 
+     * che le espressioni vengano compilate una sola volta al caricamento della classe, 
+     * ottimizzando le performance durante le richieste concorrenti.</p>
+     */
 	private static final Map<String, Pattern> LICENSE_PATTERNS = new HashMap<String, Pattern>();
 
     static {
@@ -78,6 +100,24 @@ public class LicenseValidator implements ConstraintValidator<ValidatorLicense, S
         LICENSE_PATTERNS.put("IS", Pattern.compile("^\\d{10}$"));
     }
 	
+    /**
+     * Valida la patente di guida fornita in input applicando una catena di controlli sequenziali.
+     * <p><b>Fasi dell'algoritmo di validazione:</b></p>
+     * <ol>
+     * <li><b>Pre-controllo:</b> Verifica immediata della presenza del dato (fallisce se nullo o stringa vuota).</li>
+     * <li><b>Igienizzazione (Sanitization):</b> Rimozione dei caratteri separatori comunemente inseriti dagli utenti 
+     * (spazi, virgole, punti, trattini, slash, underscore) tramite la Regex <code>[\s,\.\-/_]+</code>.</li>
+     * <li><b>Normalizzazione:</b> Conversione forzata in caratteri maiuscoli (Uppercase).</li>
+     * <li><b>Boundary Check:</b> Scarto immediato di stringhe con lunghezza fuori dal range consentito dai 
+     * formati europei (minimo 5, massimo 20 caratteri) per evitare elaborazioni Regex inutili su dati palesemente errati.</li>
+     * <li><b>Pattern Matching:</b> Ricerca parallela all'interno del dizionario. Restituisce <code>true</code> 
+     * alla prima occorrenza valida trovata (metodo <code>anyMatch</code>).</li>
+     * </ol>
+     * @param value   La stringa inviata dal client rappresentante il numero di patente da validare.
+     * @param context Il contesto di validazione che fornisce le API per personalizzare l'errore generato.
+     * @return <code>true</code> se la stringa (dopo la sanitizzazione) matcha il formato di almeno 
+     * uno dei Paesi censiti, <code>false</code> altrimenti.
+     */
 	@Override
 	public boolean isValid(String value, ConstraintValidatorContext context) {
 		if(value == null || value.isBlank())
