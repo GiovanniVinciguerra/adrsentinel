@@ -18,8 +18,8 @@ import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle.VehicleCategory.LoadType;
 import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle.VehicleCategory.VehicleApproval;
 import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle.VehicleCategory.VehicleType;
 import dev.vinciguerra.adrsentinel.exception.ResourceNotFoundException;
-import dev.vinciguerra.adrsentinel.web.dto.UpdateActiveStatusDTO;
 import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleRequestDTO;
+import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleUpdateActiveStatusDTO;
 import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleUpdateAdrApprovalDTO;
 import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleUpdateDTO;
 
@@ -213,7 +213,7 @@ public class VehicleService extends AbstractGenericService {
 	 * presente a sistema (approccio Fail-Fast).
 	 */
 	@Transactional
-	public Vehicle updateActiveStatusByLicensePlate(String licensePlate, UpdateActiveStatusDTO updateDto) throws ResourceNotFoundException {
+	public Vehicle updateActiveStatusByLicensePlate(String licensePlate, VehicleUpdateActiveStatusDTO updateDto) throws ResourceNotFoundException {
 		logger.info("[DataBase CALL] Updating Vehicle details with licensePlate: {}", licensePlate);
 		Vehicle vehicle = vehicleRepository.findByLicensePlate(licensePlate)
 			.orElseThrow(() -> new ResourceNotFoundException("Vehicle not found: " + licensePlate));

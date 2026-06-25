@@ -15,9 +15,9 @@ import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle;
 import dev.vinciguerra.adrsentinel.db.vehicle.VehicleService;
 import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorLicensePlate;
 import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorMaxUsefulWeight;
-import dev.vinciguerra.adrsentinel.web.dto.UpdateActiveStatusDTO;
 import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleRequestDTO;
 import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleResponseDTO;
+import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleUpdateActiveStatusDTO;
 import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleUpdateAdrApprovalDTO;
 import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleUpdateDTO;
 import jakarta.validation.Valid;
@@ -145,7 +145,7 @@ public class VehicleController {
 	 * <li><b>URI Validation:</b> L'annotazione custom {@code @ValidatorLicensePlate} ispeziona la Path Variable, 
 	 * bloccando istantaneamente (HTTP 400) formati di targa errati o tentativi di iniezione di caratteri non ammessi.</li>
 	 * <li><b>Payload Validation:</b> L'annotazione {@code @Valid} innesca il motore di validazione (Hibernate Validator) 
-	 * sul corpo della richiesta JSON, garantendo che l'oggetto {@link UpdateActiveStatusDTO} 
+	 * sul corpo della richiesta JSON, garantendo che l'oggetto {@link VehicleUpdateActiveStatusDTO} 
 	 * non sia malformato e contenga effettivamente il campo booleano richiesto.</li>
 	 * </ul>
 	 * </p>
@@ -155,7 +155,7 @@ public class VehicleController {
 	 */
 	@PutMapping("/active-status/{licensePlate}")
 	public ResponseEntity<VehicleResponseDTO> updateVehicleActiveStatus(@PathVariable @ValidatorLicensePlate String licensePlate,
-			@RequestBody @Valid UpdateActiveStatusDTO updateDto) {
+			@RequestBody @Valid VehicleUpdateActiveStatusDTO updateDto) {
 		Vehicle updatedVehicle = vehicleService.updateActiveStatusByLicensePlate(licensePlate, updateDto);
 		return ResponseEntity.ok(VehicleResponseDTO.fromEntity(updatedVehicle));
 	}
@@ -174,7 +174,8 @@ public class VehicleController {
 	 * @return HTTP {@code 200 OK} con l'oggetto veicolo aggiornato.
 	 */
 	@PutMapping("/adr-certified/{licensePlate}")
-	public ResponseEntity<VehicleResponseDTO> updateVehicleAdrCertified(@PathVariable @ValidatorLicensePlate String licensePlate, @RequestBody VehicleUpdateAdrApprovalDTO updateDto) {
+	public ResponseEntity<VehicleResponseDTO> updateVehicleAdrCertified(@PathVariable @ValidatorLicensePlate String licensePlate,
+			@RequestBody VehicleUpdateAdrApprovalDTO updateDto) {
 		Vehicle updatedVehicle = vehicleService.updateAdrCertifiedByLicensePlate(licensePlate, updateDto);
 		return ResponseEntity.ok(VehicleResponseDTO.fromEntity(updatedVehicle));
 	}

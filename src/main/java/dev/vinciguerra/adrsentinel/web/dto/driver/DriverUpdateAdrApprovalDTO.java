@@ -2,6 +2,7 @@ package dev.vinciguerra.adrsentinel.web.dto.driver;
 
 import java.util.Set;
 import dev.vinciguerra.adrsentinel.web.annotation.driver.ValidatorDriverApprovals;
+import dev.vinciguerra.adrsentinel.web.annotation.driver.ValidatorLicense;
 
 /**
  * Data Transfer Object (DTO) immutabile dedicato al trasporto delle informazioni necessarie 
@@ -18,6 +19,9 @@ import dev.vinciguerra.adrsentinel.web.annotation.driver.ValidatorDriverApproval
  * alterazioni accidentali o malevole dello stato durante l'attraversamento dei vari layer 
  * applicativi (Controller -> Service).
  * </p>
+ * @param Il numero di patente dell'autista a cui bisogna aggiornare le sue certificazioni ADR. 
+ * Per motivi di sicurezza il numero patente non è stato incorporato nell'URL, ma nel body della 
+ * RequestUpdate.
  * @param approvals La collezione contenente i codici alfanumerici delle nuove certificazioni ADR 
  * (es. base, cisterne, esplosivi) destinate a sovrascrivere l'attuale profilo del conducente.
  * <br><br>
@@ -32,4 +36,4 @@ import dev.vinciguerra.adrsentinel.web.annotation.driver.ValidatorDriverApproval
  * @version 1.0
  * @since 3.0
  */
-public record DriverUpdateAdrApprovalDTO(@ValidatorDriverApprovals Set<String> approvals) {}
+public record DriverUpdateAdrApprovalDTO(@ValidatorLicense String license, @ValidatorDriverApprovals Set<String> approvals) {}

@@ -2,6 +2,7 @@ package dev.vinciguerra.adrsentinel.web.dto.driver;
 
 import dev.vinciguerra.adrsentinel.web.annotation.ValidatorLocalDate;
 import dev.vinciguerra.adrsentinel.web.annotation.driver.ValidatorFullName;
+import dev.vinciguerra.adrsentinel.web.annotation.driver.ValidatorLicense;
 import dev.vinciguerra.adrsentinel.web.annotation.driver.ValidatorPhoneNumber;
 
 /**
@@ -20,6 +21,9 @@ import dev.vinciguerra.adrsentinel.web.annotation.driver.ValidatorPhoneNumber;
  * i criteri imposti dalle annotazioni, la richiesta viene bloccata (Fail-Fast) 
  * dal framework (restituendo tipicamente un HTTP 400 Bad Request) prima ancora 
  * di impegnare la logica di business.
+ * @param license Il numero patente dell'autista di cui bisogna aggiornare i dettagli. 
+ * Per motivi di sicurezza, il numero patente non viene esposto sul percorso (URL), ma 
+ * viene incorporato nel body della UpdateRequest.
  * @param fullName Il nome e cognome completo dell'autista. 
  * Validato tramite {@link ValidatorFullName} per garantirne la correttezza 
  * formale (es. limiti di lunghezza, assenza di caratteri speciali non ammessi).
@@ -33,5 +37,5 @@ import dev.vinciguerra.adrsentinel.web.annotation.driver.ValidatorPhoneNumber;
  * titolo abilitativo obbligatorio per il trasporto professionale di merci o persone. 
  * Validata tramite {@link ValidatorLocalDate}.
  */
-public record DriverUpdateDTO(@ValidatorFullName String fullName, @ValidatorPhoneNumber String phoneNumber,
+public record DriverUpdateDTO(@ValidatorLicense String license, @ValidatorFullName String fullName, @ValidatorPhoneNumber String phoneNumber,
 	@ValidatorLocalDate String licenseExpireDate, @ValidatorLocalDate String cqcExpireDate) {}

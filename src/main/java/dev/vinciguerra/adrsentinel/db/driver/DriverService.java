@@ -16,8 +16,8 @@ import dev.vinciguerra.adrsentinel.db.CaffeineCacheConfiguration;
 import dev.vinciguerra.adrsentinel.db.driver.Driver.DriverApproval;
 import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle;
 import dev.vinciguerra.adrsentinel.exception.ResourceNotFoundException;
-import dev.vinciguerra.adrsentinel.web.dto.UpdateActiveStatusDTO;
 import dev.vinciguerra.adrsentinel.web.dto.driver.DriverRequestDTO;
+import dev.vinciguerra.adrsentinel.web.dto.driver.DriverUpdateActiveStatusDTO;
 import dev.vinciguerra.adrsentinel.web.dto.driver.DriverUpdateAdrApprovalDTO;
 import dev.vinciguerra.adrsentinel.web.dto.driver.DriverUpdateDTO;
 
@@ -135,16 +135,15 @@ public class DriverService extends AbstractGenericService {
 	 * isolandolo per favorire l'indicizzazione e le ricerche mirate tramite sistemi di log 
 	 * monitoring (es. stack ELK o Datadog).
 	 * </p>
-	 * @param license Il numero di patente univoco dell'autista da modificare.
 	 * @param updateDto Il payload ({@link DriverUpdateDTO}) contenente i nuovi dati validati.
 	 * @return L'entità {@link Driver} aggiornata e salvata sul database.
 	 * @throws ResourceNotFoundException Se l'autista richiesto non è presente a sistema.
 	 */
 	@Transactional
-	public Driver updateDetailsByLicense(String license, DriverUpdateDTO updateDto) throws ResourceNotFoundException {
-		logger.info("[DataBase CALL] Updating Driver details with license: {}", license);
-		Driver driver = driverRepository.findByLicense(license)
-			.orElseThrow(() -> new ResourceNotFoundException("Driver not found: " + license));
+	public Driver updateDetailsByLicense(DriverUpdateDTO updateDto) throws ResourceNotFoundException {
+		logger.info("[DataBase CALL] Updating Driver details with license: {}", updateDto.license());
+		Driver driver = driverRepository.findByLicense(updateDto.license())
+			.orElseThrow(() -> new ResourceNotFoundException("Driver not found: " + updateDto.license()));
 		driver.setFullName(updateDto.fullName());
 		driver.setPhoneNumber(updateDto.phoneNumber());
 		driver.setLicenseExpireDate(LocalDate.parse(updateDto.licenseExpireDate()));
@@ -184,17 +183,16 @@ public class DriverService extends AbstractGenericService {
 	 * isolandolo per favorire l'indicizzazione e le ricerche mirate tramite sistemi di log 
 	 * monitoring (es. stack ELK o Datadog).
 	 * </p>
-	 * @param license Il numero di patente alfanumerico dell'autista (chiave logica di business).
 	 * @param updateDto Il payload di richiesta contenente il nuovo stato desiderato ({@code active: true/false}).
 	 * @return L'entità {@link Driver} aggiornata, gestita (Managed) dal Persistence Context di Hibernate.
 	 * @throws ResourceNotFoundException Se il numero patente fornito non corrisponde ad alcuna anagrafica 
 	 * presente a sistema (approccio Fail-Fast).
 	 */
 	@Transactional
-	public Driver updateActiveStatusByLicense(String license, UpdateActiveStatusDTO updateDto) throws ResourceNotFoundException {
-		logger.info("[DataBase CALL] Updating Driver details with license: {}", license);
-		Driver driver = driverRepository.findByLicense(license)
-			.orElseThrow(() -> new ResourceNotFoundException("Driver not found: " + license));
+	public Driver updateActiveStatusByLicense(DriverUpdateActiveStatusDTO updateDto) throws ResourceNotFoundException {
+		logger.info("[DataBase CALL] Updating Driver details with license: {}", updateDto.license());
+		Driver driver = driverRepository.findByLicense(updateDto.license())
+			.orElseThrow(() -> new ResourceNotFoundException("Driver not found: " + updateDto.license()));
 		driver.setActive(updateDto.active());
 		Driver updatedDriver = driverRepository.save(driver);
 		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
@@ -227,16 +225,15 @@ public class DriverService extends AbstractGenericService {
 	 * isolandolo per favorire l'indicizzazione e le ricerche mirate tramite sistemi di log 
 	 * monitoring (es. stack ELK o Datadog).
 	 * </p>
-	 * @param license Il numero di patente dell'autista.
 	 * @param updateDto Il payload contenente il set aggiornato di certificazioni ADR.
 	 * @return L'entità {@link Driver} aggiornata con le nuove abilitazioni.
 	 * @throws ResourceNotFoundException Se l'autista non viene trovato.
 	 */
 	@Transactional
-	public Driver updateAdrCertifiedByLicense(String license, DriverUpdateAdrApprovalDTO updateDto) throws ResourceNotFoundException {
-		logger.info("[DataBase CALL] Updating Driver adrCertified with license: {}", license);
-		Driver driver = driverRepository.findByLicense(license)
-			.orElseThrow(() -> new ResourceNotFoundException("Driver not found: " + license));
+	public Driver updateAdrCertifiedByLicense(DriverUpdateAdrApprovalDTO updateDto) throws ResourceNotFoundException {
+		logger.info("[DataBase CALL] Updating Driver adrCertified with license: {}", updateDto.license());
+		Driver driver = driverRepository.findByLicense(updateDto.license())
+			.orElseThrow(() -> new ResourceNotFoundException("Driver not found: " + updateDto.license()));
 		Set<DriverApproval> approvals = new HashSet<DriverApproval>();
 		for(String approval : updateDto.approvals())
 			approvals.add(Enum.valueOf(DriverApproval.class, approval));

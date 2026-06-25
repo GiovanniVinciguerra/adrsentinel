@@ -1,10 +1,11 @@
-package dev.vinciguerra.adrsentinel.web.dto;
+package dev.vinciguerra.adrsentinel.web.dto.driver;
 
+import dev.vinciguerra.adrsentinel.web.annotation.driver.ValidatorLicense;
 import jakarta.validation.constraints.NotNull;
 
 /**
  * Data Transfer Object (DTO) immutabile utilizzato per veicolare la richiesta di modifica 
- * dello stato operativo di un veicolo (Pattern Architetturale di Soft Delete / Riattivazione).
+ * dello stato operativo di un autista (Pattern Architetturale di Soft Delete / Riattivazione).
  * <p>
  * <b>Design Architetturale (Immutabilità e Sicurezza):</b><br>
  * L'utilizzo di un {@code record} nativo Java garantisce che il payload, una volta 
@@ -20,11 +21,14 @@ import jakarta.validation.constraints.NotNull;
  * e di respingerle istantaneamente con un errore HTTP 400 (Bad Request), proteggendo la logica 
  * di business sottostante da insidiose {@code NullPointerException}.
  * </p>
+ * @param license Il numero di patente dell'autista di cui aggiornare lo stato di attività.
+ * Per motivi di sicurezza il numero patente non è stato incorporato nell'URL, ma nel body 
+ * dell'UpdateRequest.
  * @param active Il nuovo stato operativo desiderato per il veicolo. 
  * <ul>
- * <li>{@code true}: Il veicolo viene reso (o confermato) pienamente operativo 
+ * <li>{@code true}: L'autista viene reso (o confermato) pienamente operativo 
  * e visibile per l'assegnazione a nuove spedizioni ({@code PLANNED}).</li>
- * <li>{@code false}: Il veicolo subisce una dismissione logica (Soft Delete), 
+ * <li>{@code false}: L'autista subisce una dismissione logica (Soft Delete), 
  * scomparendo dai flussi operativi futuri pur mantenendo intatta 
  * la propria integrità relazionale per l'Audit Storico.</li>
  * </ul>
@@ -32,4 +36,4 @@ import jakarta.validation.constraints.NotNull;
  * @version 1.0 (Strict Validated Output Payload)
  * @since 1.0
  */
-public record UpdateActiveStatusDTO(@NotNull(message = "Malformed payload: active status is required") Boolean active) {}
+public record DriverUpdateActiveStatusDTO(@ValidatorLicense String license, @NotNull(message = "Malformed payload: active status is required") Boolean active) {}
