@@ -161,7 +161,7 @@ public class Driver {
 	 * Campo obbligatorio, valore di default nel DDL impostato a {@code false}.
 	 */
 	@Column(
-		name = "active",
+		name = "inTransit",
 		nullable = false
 	)
 	@ColumnDefault("false")

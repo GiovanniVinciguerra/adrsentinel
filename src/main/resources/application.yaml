@@ -69,6 +69,11 @@ adr-sentinel:
     vehicle-snapshot:
       shipment-id:
         max-size: 100
+    driver:
+      license:
+        max-size: 100
+      all-driver:
+        max-size: 1
     driver-snapshot:
       shipment-id:
         max-size: 100
