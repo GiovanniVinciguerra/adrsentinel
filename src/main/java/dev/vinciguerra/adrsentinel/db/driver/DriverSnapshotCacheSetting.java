@@ -1,10 +1,10 @@
-package dev.vinciguerra.adrsentinel.db.vehicle;
+package dev.vinciguerra.adrsentinel.db.driver;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
  * Struttura dati tipizzata (Type-Safe Configuration) e intrinsecamente immutabile delegata 
- * al binding dei parametri infrastrutturali relativi alle cache del dominio {@link VehicleSnapshot}.
+ * al binding dei parametri infrastrutturali relativi alle cache del dominio {@link DriverSnapshot}.
  * <p><b>Contesto Architetturale (Configuration Binding):</b></p>
  * Sfruttando il motore {@code @ConfigurationProperties} di Spring Boot, questo {@code record} agisce 
  * come ponte contrattuale tra la configurazione esternata (es. {@code application.yml}) e l'infrastruttura Java. 
@@ -17,8 +17,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @version 1.0 (Type-Safe Fleet Caching Infrastructure)
  * @since 3.0
  */
-@ConfigurationProperties(prefix = "adr-sentinel.cache.vehicle-snapshot")
-public record VehicleSnapshotCacheSetting(CachePolicy shipmentId) {
+@ConfigurationProperties(prefix = "adr-sentinel.cache.driver-snapshot")
+public record DriverSnapshotCacheSetting(CachePolicy shipmentId) {
 	/**
 	 * Struttura dati contrattuale che definisce i vincoli fisici di una specifica regione di cache.
 	 * <p>

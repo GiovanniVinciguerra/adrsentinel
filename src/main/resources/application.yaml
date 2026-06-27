@@ -69,6 +69,9 @@ adr-sentinel:
     vehicle-snapshot:
       shipment-id:
         max-size: 100
+    driver-snapshot:
+      shipment-id:
+        max-size: 100
     shipment-route:
       route-uuid:
         max-size: 5000

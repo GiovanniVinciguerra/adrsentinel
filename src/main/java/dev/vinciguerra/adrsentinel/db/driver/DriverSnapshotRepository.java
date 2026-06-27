@@ -1,15 +1,15 @@
-package dev.vinciguerra.adrsentinel.db.vehicle;
+package dev.vinciguerra.adrsentinel.db.driver;
 
-import java.util.Optional;
+import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 /**
- * Interfaccia di Data Access Layer (DAO) per la gestione della persistenza dell'entità {@link VehicleSnapshot}.
+ * Interfaccia di Data Access Layer (DAO) per la gestione della persistenza dell'entità {@link DriverSnapshot}.
  * * <p><b>Ruolo Architetturale e Limitazioni Operative:</b></p>
  * Estendendo {@link JpaRepository}, la classe delega a Spring Data JPA l'implementazione a runtime 
  * (tramite proxy) delle operazioni di interazione col database. 
- * Dato che {@link VehicleSnapshot} rappresenta un record storico intrinsecamente <b>immutabile</b> 
+ * Dato che {@link DriverSnapshot} rappresenta un record storico intrinsecamente <b>immutabile</b> 
  * (Write-Once Record), l'utilizzo architetturalmente corretto di questa repository si limita a:
  * <ul>
  * <li><b>Creazione (Insert):</b> Persistenza del record generato al momento dell'avvio della spedizione.</li>
@@ -23,24 +23,19 @@ import org.springframework.stereotype.Repository;
  * @since 1.0
  */
 @Repository
-public interface VehicleSnapshotRepository extends JpaRepository<VehicleSnapshot, Long> {
+public interface DriverSnapshotRepository extends JpaRepository<DriverSnapshot, Long> {
 	/**
-	 * Recupera la fotografia legale (Snapshot) del veicolo interrogando il database 
-	 * tramite l'ID della spedizione ({@link Shipment}) a cui lo snapshot è vincolato.
+	 * Recupera la fotografia legale (Snapshot) degli autisti interrogando il database 
+	 * tramite l'ID della spedizione ({@code Shipment}) a cui lo snapshot è vincolato.
 	 * <p><b>Meccanismo di Querying (Property Traversal):</b></p>
 	 * Il metodo sfrutta il meccanismo di derivazione delle query di Spring Data. 
 	 * L'utilizzo mirato del carattere underscore ({@code _}) nel nome del metodo ({@code Shipment_Id}) 
 	 * forza esplicitamente il parser a navigare la proprietà relazionale {@code shipment} all'interno 
-	 * di {@code VehicleSnapshot} e ad applicare la clausola {@code WHERE} sul campo {@code id} dell'entità 
+	 * di {@code DriverSnapshot} e ad applicare la clausola {@code WHERE} sul campo {@code id} dell'entità 
 	 * target. Questo previene ambiguità di risoluzione qualora l'entità principale possedesse un campo 
 	 * nominato in modo simile.
-	 * <p><b>Null-Safety:</b></p>
-	 * Il tipo di ritorno {@link Optional} garantisce una progettazione difensiva, obbligando 
-	 * il chiamante (il Service Layer) a gestire in modo esplicito l'eventuale assenza del record 
-	 * nel database, prevenendo {@code NullPointerException} a runtime.
 	 * @param id L'identificativo primario (Primary Key) della spedizione di cui si ricerca lo snapshot veicolare.
-	 * @return Un contenitore {@link Optional} che avvolge il {@link VehicleSnapshot} se presente, 
-	 * oppure {@link Optional#empty()} se non esiste alcuno snapshot legato a quell'ID spedizione.
+	 * @return Un contenitore {@link List} che contiene gli snapshot dei Driver legati all'ID della spedizione.
 	 */
-	Optional<VehicleSnapshot> findByShipment_Id(Long id);
+	List<DriverSnapshot> findByShipment_Id(Long id);
 }

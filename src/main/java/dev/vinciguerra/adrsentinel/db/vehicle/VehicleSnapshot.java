@@ -1,5 +1,6 @@
 package dev.vinciguerra.adrsentinel.db.vehicle;
 
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import dev.vinciguerra.adrsentinel.db.shipment.Shipment;
@@ -229,6 +230,23 @@ public class VehicleSnapshot {
 
 	public Shipment getShipment() {
 		return shipment;
+	}
+
+	@Override
+	public int hashCode() {
+		return Objects.hash(licensePlateSnap);
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (obj == null)
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		VehicleSnapshot other = (VehicleSnapshot) obj;
+		return Objects.equals(licensePlateSnap, other.licensePlateSnap);
 	}
 
 	@Override

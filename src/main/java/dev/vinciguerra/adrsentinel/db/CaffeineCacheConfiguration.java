@@ -13,6 +13,7 @@ import dev.vinciguerra.adrsentinel.db.adrclass.AdrClassCacheSetting;
 import dev.vinciguerra.adrsentinel.db.adrclass.shipmentroute.ShipmentRouteCacheSetting;
 import dev.vinciguerra.adrsentinel.db.compatibilityrule.CompatibilityRuleCacheSetting;
 import dev.vinciguerra.adrsentinel.db.driver.DriverCacheSetting;
+import dev.vinciguerra.adrsentinel.db.driver.DriverSnapshotCacheSetting;
 import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumberCacheSetting;
 import dev.vinciguerra.adrsentinel.db.shipment.ShipmentCacheSetting;
 import dev.vinciguerra.adrsentinel.db.shipmentitem.ShipmentItemCacheSetting;
@@ -49,6 +50,7 @@ import dev.vinciguerra.adrsentinel.db.vehicle.VehicleSnapshotCacheSetting;
 	VehicleCacheSetting.class,
 	VehicleSnapshotCacheSetting.class,
 	DriverCacheSetting.class,
+	DriverSnapshotCacheSetting.class,
 	ShipmentRouteCacheSetting.class
 })
 public class CaffeineCacheConfiguration {
@@ -99,6 +101,8 @@ public class CaffeineCacheConfiguration {
 	public static final String ALL_DRIVER_CACHE = "all_driver";
 	/** Chiave statica globale per l'estrazione dalla cache di tutti gli autisti. */
 	public static final String ALL_DRIVER_KEY = "all_driver_key";
+	/** Identificatore della regione di memoria per il raggruppamento degli storici dell'autista associato a una data spedizione. */
+	public static final String DRIVER_SNAPSHOT_BY_SHIPMENT_ID_CACHE = "driver_snapshot_by_shipment_id";
 	/** Identificatore della regione di memoria per il raggruppamento (UUID) globale dei percorsi stradali. */
 	public static final String SHIPMENT_ROUTE_BY_ROUTE_UUID_CACHE = "shipment_route_by_route_uuid";
 	/** Identificatore della regione di memoria per il raggruppamento (Shipment.trackingNumber) globale dei percorsi stradali. */
@@ -116,7 +120,11 @@ public class CaffeineCacheConfiguration {
 	 * @param compatibilityRuleCacheSetting le property di capacity planning per la matrice di segregazione.
 	 * @param onuNumberCacheSetting le property di capacity planning per il catalogo delle merci pericolose.
 	 * @param shipmentCacheSetting le property di capacity planning per i dati transazionali (viaggi).
+	 * @param shipmentItemCacheSetting le property di capacity planning per gli articoli contenuti nelle spedizioni.
 	 * @param vehicleCacheSetting le property di capacity planning per la flotta aziendale.
+	 * @param vehicleSnapshotCacheSetting le property di capacity planning per i dati storicizzati dei veicoli.
+	 * @param driverCacheSetting le property di capacity planning per l'anagrafica dei conducenti.
+	 * @param driverSnapshotCacheSetting le property di capacity planning per i dati storicizzati dei conducenti.
 	 * @param shipmentRouteCacheSetting le property di capacity planning per le rotte seguite dai veicoli.
 	 * @return l'istanza di {@link CacheManager} pronta per essere utilizzata dai proxy di Spring.
 	 */
@@ -124,7 +132,7 @@ public class CaffeineCacheConfiguration {
 	public CacheManager cacheManager(AdrClassCacheSetting adrClassSetting, CompatibilityRuleCacheSetting compatibilityRuleCacheSetting, 
 			OnuNumberCacheSetting onuNumberCacheSetting, ShipmentCacheSetting shipmentCacheSetting, ShipmentItemCacheSetting shipmentItemCacheSetting,
 			VehicleCacheSetting vehicleCacheSetting, VehicleSnapshotCacheSetting vehicleSnapshotCacheSetting, DriverCacheSetting driverCacheSetting,
-			ShipmentRouteCacheSetting shipmentRouteCacheSetting) {
+			DriverSnapshotCacheSetting driverSnapshotCacheSetting, ShipmentRouteCacheSetting shipmentRouteCacheSetting) {
 		SimpleCacheManager cacheManager = new SimpleCacheManager();
 		CaffeineCache adrClassClassCodeCache = buildCache(
 			ADR_CLASS_BY_CLASS_CODE_CACHE,
@@ -198,6 +206,10 @@ public class CaffeineCacheConfiguration {
 			ALL_DRIVER_KEY,
 			driverCacheSetting.allDriver().maxSize()
 		);
+		CaffeineCache driverSnapshotByShipmentIdCache = buildCache(
+			DRIVER_SNAPSHOT_BY_SHIPMENT_ID_CACHE,
+			driverSnapshotCacheSetting.shipmentId().maxSize()
+		);
 		CaffeineCache shipmentRouteByRouteUUIDCache = buildCache(
 			SHIPMENT_ROUTE_BY_ROUTE_UUID_CACHE,
 			shipmentRouteCacheSetting.routeUUID().maxSize()
@@ -226,6 +238,7 @@ public class CaffeineCacheConfiguration {
 				vehicleSnapshotByShipmentIdCache,
 				driverByLicenseCache,
 				allDriverCache,
+				driverSnapshotByShipmentIdCache,
 				shipmentRouteByRouteUUIDCache,
 				shipmentRouteByShipmentCache
 			)

@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Set;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
@@ -14,6 +15,10 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import dev.vinciguerra.adrsentinel.db.AbstractGenericService;
 import dev.vinciguerra.adrsentinel.db.CaffeineCacheConfiguration;
+import dev.vinciguerra.adrsentinel.db.driver.Driver;
+import dev.vinciguerra.adrsentinel.db.driver.DriverService;
+import dev.vinciguerra.adrsentinel.db.driver.DriverSnapshot;
+import dev.vinciguerra.adrsentinel.db.driver.DriverSnapshotService;
 import dev.vinciguerra.adrsentinel.db.shipment.Shipment.ShipmentStatus;
 import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle;
 import dev.vinciguerra.adrsentinel.db.vehicle.VehicleService;
@@ -57,17 +62,22 @@ public class ShipmentService extends AbstractGenericService {
 	private final ShipmentRepository shipmentRepository;
 	private final VehicleService vehicleService;
 	private final VehicleSnapshotService vehicleSnapshotService;
+	private final DriverService driverService;
+	private final DriverSnapshotService driverSnapshotService;
 	
 	/**
 	 * Costruttore con Dependency Injection nativa di Spring.
 	 * @param shipmentRepository il livello di accesso ai dati fisici (Database).
 	 * @param cacheManager il gestore dell'infrastruttura di memoria (iniettato nella superclasse).
 	 */
-	public ShipmentService(ShipmentRepository shipmentRepository, VehicleService vehicleService, VehicleSnapshotService vehicleSnapshotService, CacheManager cacheManager) {
+	public ShipmentService(ShipmentRepository shipmentRepository, VehicleService vehicleService, VehicleSnapshotService vehicleSnapshotService, DriverService driverService,
+			DriverSnapshotService driverSnapshotService, CacheManager cacheManager) {
 		super(cacheManager);
 		this.shipmentRepository = shipmentRepository;
 		this.vehicleService = vehicleService;
 		this.vehicleSnapshotService = vehicleSnapshotService;
+		this.driverService = driverService;
+		this.driverSnapshotService = driverSnapshotService;
 	}
 	
 	// --- SEZIONE 1: BOUNDED DATA (CACHED) ---
@@ -268,11 +278,12 @@ public class ShipmentService extends AbstractGenericService {
 	 * <li><b>Mutazione di Stato e Logica di Dominio:</b> Converte rigorosamente la stringa del DTO nel 
 	 * valore {@link ShipmentStatus} e applica specifici side-effect in base al nuovo stato:
 	 * <ul>
-	 * <li>{@code PLANNED}: Imposta il veicolo ({@link Vehicle}) associato in stato di transito.</li>
-	 * <li>{@code TRANSIT}: Genera e persiste uno snapshot storico ({@link VehicleSnapshot}) del veicolo 
-	 * associato per cristallizzarne i dati al momento della partenza. Successivamente, <b>scollega</b> 
-	 * la spedizione dal veicolo master (impostandolo a {@code null}) permettendo al veicolo di seguire 
-	 * il proprio ciclo di vita indipendente.</li>
+	 * <li>{@code PLANNED}: Imposta il veicolo ({@link Vehicle}) e gli autisti ({@link Driver}) associati in stato di transito.</li>
+	 * <li>{@code TRANSIT}: Genera e persiste uno snapshot storico ({@link VehicleSnapshot}) del veicolo e degli autisti 
+	 * ({@link DriverSnapshot})
+	 * associati per cristallizzarne i dati al momento della partenza. Successivamente, <b>scollega</b> 
+	 * la spedizione dal veicolo master (impostandolo a {@code null}) e dagli autisti (impostando {@code Set::clear}) permettendo al 
+	 * veicolo di seguire e agli autisti di seguire il proprio ciclo di vita indipendenti.</li>
 	 * <li><b>Altri Stati (es. Terminali):</b> Utilizza lo snapshot salvato in precedenza per risalire 
 	 * alla targa del veicolo originale e ripristinarne lo stato di disponibilità (non più in transito).</li>
 	 * </ul>
@@ -297,29 +308,34 @@ public class ShipmentService extends AbstractGenericService {
 		shipment.setShipmentStatus(Enum.valueOf(ShipmentStatus.class, updateStatusDTO.status()));
 		if(shipment.getShipmentStatus() == ShipmentStatus.PLANNED) {
 			Vehicle vehicle = shipment.getVehicle();
+			Set<Driver> drivers = shipment.getDrivers();
 			/* Veicolo in transito (attributo inTransit = true) */
 			vehicleService.updateInTransitStatusById(vehicle.getId(), true);
 			/* Driver in transito (attributo inTransit = true) */
-			
+			drivers.stream().forEach(driver -> driverService.updateInTransitStatusById(driver.getId(), false));
 		} else if(shipment.getShipmentStatus() == ShipmentStatus.TRANSIT) {
+			logger.info("Shipment [{}] has changed status to {}", shipment.getTrackingNumber(), shipment.getShipmentStatus().name());
 			/* Snapshot del Vehicle */
-			logger.info(
-				"Shipment [{}] has changed status to {}. Snapshot action taken on associated vehicle [{}].",
-				shipment.getTrackingNumber(),
-				shipment.getShipmentStatus().name(),
-				shipment.getVehicle().getLicensePlate()
-			);
-			VehicleSnapshot snapshot = new VehicleSnapshot(shipment);
-			vehicleSnapshotService.save(snapshot);
+			logger.info("Snapshot action taken on associated vehicle [{}].", shipment.getVehicle().getLicensePlate());
+			VehicleSnapshot vehicleSnapshot = new VehicleSnapshot(shipment);
+			vehicleSnapshotService.save(vehicleSnapshot);
 			shipment.setVehicle(null); /* Scollega questo Shipment dal Veicolo master che vive di vita propria. */
 			/* Snapshot del Driver */
-			
+			shipment.getDrivers().stream().forEach(driver -> logger.info("Snapshot action taken on associated driver [{}].", driver.getLicense()));
+			Set<DriverSnapshot> driverSnapshots = DriverSnapshot.fromDrivers(shipment);
+			driverSnapshots.stream().forEach(driverSnap -> driverSnapshotService.save(driverSnap));
+			shipment.getDrivers().clear(); /* Scollega questo Shipment dai Driver master che vivono di vita propria. */
 			/* Snapshot del Customer */
 			
 		} else {
+			/* Il veicolo master ritorna non in transito */
 			VehicleSnapshot vehicleSnap = vehicleSnapshotService.getByShipmentId(shipment.getId());
 			Vehicle vehicle = vehicleService.getByLicensePlate(vehicleSnap.getLicensePlateSnap());
 			vehicleService.updateInTransitStatusById(vehicle.getId(), false);
+			/* Gli autisti master ritornano non in transito */
+			List<DriverSnapshot> driverSnaps = driverSnapshotService.getByShipmentId(shipment.getId());
+			List<Driver> drivers = driverSnaps.stream().map(driverSnap -> driverService.getByLicense(driverSnap.getLicenseSnap())).toList();
+			drivers.stream().forEach(driver -> driverService.updateInTransitStatusById(driver.getId(), false));
 		}
 		Shipment updatedShipment = shipmentRepository.save(shipment);
 		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
