@@ -62,6 +62,45 @@ public class TaxCodeValidator implements ConstraintValidator<ValidatorTaxCode, S
         TIN_PATTERNS.put("RO", Pattern.compile("^\\d{13}$"));
         // Irlanda (IE): PPS No - 7 cifre seguite da 1 o 2 lettere
         TIN_PATTERNS.put("IE", Pattern.compile("^\\d{7}[A-Z]{1,2}$"));
+        // Bulgaria (BG): EGN o PN - 10 cifre
+        TIN_PATTERNS.put("BG", Pattern.compile("^\\d{10}$"));
+        // Cipro (CY): TIC (Tax Identification Code) - 8 cifre seguite da 1 lettera
+        TIN_PATTERNS.put("CY", Pattern.compile("^\\d{8}[A-Z]$"));
+        // Croazia (HR): OIB - 11 cifre
+        TIN_PATTERNS.put("HR", Pattern.compile("^\\d{11}$"));
+        // Danimarca (DK): CPR - 10 cifre
+        TIN_PATTERNS.put("DK", Pattern.compile("^\\d{10}$"));
+        // Estonia (EE): Isikukood - 11 cifre
+        TIN_PATTERNS.put("EE", Pattern.compile("^\\d{11}$"));
+        // Finlandia (FI): Henkilötunnus (10 o 11 caratteri)
+        // Nota: Il normalizzatore rimuoverà i secolari '-' e '+', ma lascerà la lettera 'A'.
+        // Copre entrambi gli scenari: 6 cifre + (lettera opzionale) + 3 cifre + 1 alfanumerico di controllo.
+        TIN_PATTERNS.put("FI", Pattern.compile("^\\d{6}[A-Z]?\\d{3}[A-Z0-9]$"));
+        // Grecia (GR): AFM - 9 cifre 
+        // Nota architetturale: Per le P.IVA VIES si usa "EL", ma per i Codici Fiscali 
+        // delle persone fisiche lo standard ISO e l'OCSE usano "GR". Li mappa entrambi per sicurezza.
+        TIN_PATTERNS.put("GR", Pattern.compile("^\\d{9}$"));
+        TIN_PATTERNS.put("EL", Pattern.compile("^\\d{9}$"));
+        // Lettonia (LV): Personas kods - 11 cifre
+        TIN_PATTERNS.put("LV", Pattern.compile("^\\d{11}$"));
+        // Lituania (LT): Asmens kodas - 11 cifre
+        TIN_PATTERNS.put("LT", Pattern.compile("^\\d{11}$"));
+        // Lussemburgo (LU): Matricule - 13 cifre
+        TIN_PATTERNS.put("LU", Pattern.compile("^\\d{13}$"));
+        // Malta (MT): ID Card (da 1 a 7 cifre + 1 lettera finale) o numero per stranieri (9 cifre)
+        TIN_PATTERNS.put("MT", Pattern.compile("^(\\d{1,7}[A-Z]|\\d{9})$"));
+        // Repubblica Ceca (CZ) & Slovacchia (SK): Rodné číslo - 9 o 10 cifre
+        TIN_PATTERNS.put("CZ", Pattern.compile("^\\d{9,10}$"));
+        TIN_PATTERNS.put("SK", Pattern.compile("^\\d{9,10}$"));
+        // Slovenia (SI): Davčna številka - 8 cifre
+        TIN_PATTERNS.put("SI", Pattern.compile("^\\d{8}$"));
+        // Ungheria (HU): Adóazonosító jel - 10 cifre
+        TIN_PATTERNS.put("HU", Pattern.compile("^\\d{10}$"));
+        // --- PAESI EXTRA-UE (AREA SCHENGEN / EEA) ---
+        // Norvegia (NO): Fødselsnummer o D-nummer - 11 cifre
+        TIN_PATTERNS.put("NO", Pattern.compile("^\\d{11}$"));
+        // Islanda (IS): Kennitala - 10 cifre
+        TIN_PATTERNS.put("IS", Pattern.compile("^\\d{10}$"));
     }
 	
 	/**

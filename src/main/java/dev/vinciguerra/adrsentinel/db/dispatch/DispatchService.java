@@ -1,18 +1,27 @@
 package dev.vinciguerra.adrsentinel.db.dispatch;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import dev.vinciguerra.adrsentinel.db.adrclass.AdrClass;
+import dev.vinciguerra.adrsentinel.db.adrclass.AdrClassService;
+import dev.vinciguerra.adrsentinel.db.adrclass.shipmentroute.ShipmentRoute;
+import dev.vinciguerra.adrsentinel.db.adrclass.shipmentroute.ShipmentRouteService;
 import dev.vinciguerra.adrsentinel.db.compatibilityrule.CompatibilityRule;
 import dev.vinciguerra.adrsentinel.db.compatibilityrule.CompatibilityRuleService;
+import dev.vinciguerra.adrsentinel.db.driver.Driver;
+import dev.vinciguerra.adrsentinel.db.driver.Driver.DriverApproval;
+import dev.vinciguerra.adrsentinel.db.driver.DriverService;
 import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumber;
 import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumberService;
 import dev.vinciguerra.adrsentinel.db.onunumber.TransportMode;
@@ -24,10 +33,13 @@ import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle.VehicleCategory.VehicleApp
 import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle.VehicleCategory.VehicleType;
 import dev.vinciguerra.adrsentinel.db.vehicle.VehicleService;
 import dev.vinciguerra.adrsentinel.exception.ResourceNotFoundException;
-import dev.vinciguerra.adrsentinel.web.dto.dispatch.DispatchRequestDTO;
-import dev.vinciguerra.adrsentinel.web.dto.dispatch.DispatchResponseDTO;
-import dev.vinciguerra.adrsentinel.web.dto.dispatch.OnuItemRequestDTO;
+import dev.vinciguerra.adrsentinel.web.dto.dispatch.VehicleDispatchRequestDTO;
+import dev.vinciguerra.adrsentinel.web.dto.dispatch.VehicleDispatchRequestDTO.OnuItemRequestDTO;
 import dev.vinciguerra.adrsentinel.web.dto.dispatch.VehicleDispatchResponseDTO;
+import dev.vinciguerra.adrsentinel.web.dto.dispatch.VehicleDispatchResponseDTO.VehicleAssignmentResponseDTO;
+import dev.vinciguerra.adrsentinel.web.dto.driver.DriverResponseDTO;
+import dev.vinciguerra.adrsentinel.web.dto.dispatch.DriverDispatchRequestDTO;
+import dev.vinciguerra.adrsentinel.web.dto.dispatch.DriverDispatchResponseDTO;
 import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleResponseDTO;
 
 /**
@@ -61,9 +73,13 @@ public class DispatchService {
 	 */
 	private record EnrichedOnuItem(OnuItemRequestDTO dto, OnuNumber entity, TransportMode mode) {}
 	
+	private final AdrClassService adrClassService;
 	private final CompatibilityRuleService compatibilityRuleService;
 	private final OnuNumberService onuNumberService;
+	private final ShipmentRouteService shipmentRouteService;
 	private final VehicleService vehicleService;
+	private final DriverService driverService;
+	
 	/**
 	 * Set immutabile contenente i codici ONU di Categoria di Trasporto 1 
 	 * che richiedono un moltiplicatore normativo eccezionale (x50).
@@ -75,10 +91,14 @@ public class DispatchService {
 	 * @param onuNumberService Servizio per la validazione e il recupero dei numeri ONU tramite chiave naturale.
 	 * @param vehicleService Servizio per l'interrogazione della flotta aziendale.
 	 */
-	public DispatchService(CompatibilityRuleService compatibilityRuleService, OnuNumberService onuNumberService, VehicleService vehicleService) {
+	public DispatchService(AdrClassService adrClassService, CompatibilityRuleService compatibilityRuleService, OnuNumberService onuNumberService,
+			ShipmentRouteService shipmentRouteService, VehicleService vehicleService, DriverService driverService) {
+		this.adrClassService = adrClassService;
 		this.compatibilityRuleService = compatibilityRuleService;
 		this.onuNumberService = onuNumberService;
+		this.shipmentRouteService = shipmentRouteService;
 		this.vehicleService = vehicleService;
+		this.driverService = driverService;
 	}
 	
 	/**
@@ -88,13 +108,13 @@ public class DispatchService {
 	 * performance ottimali e prevenire dirty reads durante l'estrazione della flotta e delle regole.
 	 * </p>
 	 * @param dispatchRequestDTO Il payload contenente gli articoli da spedire (inclusi pesi, modi di trasporto e codici ONU).
-	 * @return Un {@link DispatchResponseDTO} contenente la lista dei viaggi programmati (dispatches), ognuno assegnato a un veicolo univoco.
+	 * @return Un {@link VehicleDispatchResponseDTO} contenente la lista dei viaggi programmati (dispatches), ognuno assegnato a un veicolo univoco.
 	 * @throws ResourceNotFoundException Se una merce non è censita, se il carico supera la capacità del mezzo più grande, 
 	 * o se la flotta idonea si esaurisce prima di aver allocato tutti i cluster (Out of Resources).
 	 */
 	@Transactional(readOnly = true)
-	public DispatchResponseDTO dispatcher(DispatchRequestDTO dispatchRequestDTO) throws ResourceNotFoundException {
-		List<OnuItemRequestDTO> itemsToShip = dispatchRequestDTO.items();
+	public VehicleDispatchResponseDTO vehicleDispatcher(VehicleDispatchRequestDTO request) throws ResourceNotFoundException {
+		List<OnuItemRequestDTO> itemsToShip = request.items();
 		// FASE 1 Arrichimento dati e costruzione grafo
 		List<EnrichedOnuItem> enrichedOnuItems = new ArrayList<EnrichedOnuItem>();
 		Map<AdrClass, List<AdrClass>> compatibilityGraph = new HashMap<AdrClass, List<AdrClass>>();
@@ -128,7 +148,7 @@ public class DispatchService {
 			}
 		}
 		// FASE 3 e 4 Regola 1000 punti e Matchmaking Veicolo
-		List<VehicleDispatchResponseDTO> dispatchResults = new ArrayList<VehicleDispatchResponseDTO>();
+		List<VehicleAssignmentResponseDTO> dispatchResults = new ArrayList<VehicleAssignmentResponseDTO>();
 		Set<Vehicle> alreadyAssignedVehicles = new HashSet<Vehicle>();
 		for(List<EnrichedOnuItem> cluster : safeClusters) {
 			int clusterTotalWeight_kg = 0;
@@ -161,7 +181,7 @@ public class DispatchService {
 			if(selectedVehicle == null)
 				throw new ResourceNotFoundException("No suitable vehicle found for payload.");
 			dispatchResults.add(
-				new VehicleDispatchResponseDTO(
+				new VehicleAssignmentResponseDTO(
 					VehicleResponseDTO.fromEntity(selectedVehicle),
 					onuNumbersCode,
 					clusterTotalWeight_kg,
@@ -171,7 +191,100 @@ public class DispatchService {
 			alreadyAssignedVehicles.add(selectedVehicle);
 		}
 		// FASE 5 Ritorno della response impacchettata
-		return new DispatchResponseDTO(dispatchResults);
+		return new VehicleDispatchResponseDTO(dispatchResults);
+	}
+	
+	/**
+	 * Motore Decisionale per l'assegnazione degli Autisti (Driver Dispatcher).
+	 * Valuta la durata del viaggio per l'assegnazione del doppio autista e applica 
+	 * rigorosamente i controlli normativi per CQC e certificazioni ADR (Capitolo 8.2).
+	 * @param request I parametri del viaggio e del veicolo già validato.
+	 * @return Un {@link DriverDispatchResponseDTO} con 1 o 2 autisti assegnati.
+	 * @throws ResourceNotFoundException Se la flotta autisti idonea è esaurita oppure se non trova una risorsa richiesta.
+	 */
+	@Transactional(readOnly = true)
+	public DriverDispatchResponseDTO driverDispatcher(DriverDispatchRequestDTO request) {
+		ShipmentRoute route = shipmentRouteService.getByRouteUUID(request.routeUUID());
+		// 1. Calcolo del numero di autisti (Relaxed Rule: 2 autisti se durata viaggio > 10 ore)
+		int requiredDriversCount = route.getEtaMinutes() > 600 ? 2 : 1;
+		// 1.5 Ottiene le AdrClass
+		Set<AdrClass> adrClasses = request.adrClasses()
+			.stream()
+			.map(adrClassCode -> adrClassService.getByClassCode(adrClassCode))
+			.collect(Collectors.toSet());
+		// 1.6 Estrapola i classCode da ogni AdrClass
+		Set<String> adrClassCodes = adrClasses.stream()
+			.map(AdrClass::getClassCode)
+			.collect(Collectors.toSet());
+		// 1.7 Ottiene il veicolo
+		Vehicle vehicle = vehicleService.getByLicensePlate(request.licensePlate());
+		// 2. Calcolo dei requisiti normativi
+		boolean requiresCqc = vehicle.getMaxWeightkg() > 3500;
+		Set<DriverApproval> requiredApprovals = calculateRequiredDriverApprovals(
+			request.isExempt(),
+			vehicle.getVehicleCategory().getVehicleApprovals(),
+			adrClassCodes
+		);
+		// 3. Recupero degli autisti presenti nel DB
+		List<Driver> drivers = driverService.getAllDriver();
+		// 4. Filtraggio normativo e ottimizzazione
+		List<Driver> compliantDrivers = drivers.stream()
+			.filter(driver -> driver.isActive() && !driver.isInTransit() && isDriverCompliant(driver, requiresCqc, requiredApprovals))
+			// OPTIMIZATION TRICK: Ordiniamo gli autisti in base al numero di certificazioni possedute (crescente).
+			// In questo modo assegniamo prima gli autisti "base" ai viaggi semplici, 
+			// preservando gli autisti con patentini TANK/EXPLOSIVE per le missioni più complesse.
+			.sorted(Comparator.comparingInt(driver -> driver.getDriverApprovals().size()))
+			.toList();
+		if(compliantDrivers.isEmpty())
+			throw new ResourceNotFoundException("Insufficient drivers available.");
+		// 5. Estrazione e pacchettizzazione
+		List<DriverResponseDTO> selectedDrivers = compliantDrivers.stream()
+			.limit(requiredDriversCount)
+			.map(DriverResponseDTO::fromEntity)
+			.toList();
+		return new DriverDispatchResponseDTO(selectedDrivers);
+	}
+	
+	/**
+	 * Calcola l'esatto set di specializzazioni ADR richieste all'autista in base al 
+	 * carico e al veicolo, conformemente al Capitolo 8.2 della normativa ADR.
+	 */
+	private Set<DriverApproval> calculateRequiredDriverApprovals(boolean isExempt, Set<VehicleApproval> vehicleApprovals, Set<String> adrClassCodes) {
+		// Se si applica l'esenzione 1000 punti, per legge non è richiesto alcun patentino ADR
+		if(isExempt)
+			return EnumSet.noneOf(DriverApproval.class);
+		// Se non è esente, il patentino BASE è sempre obbligatorio
+		Set<DriverApproval> required = EnumSet.of(DriverApproval.BASIC);
+		// Controllo Cisterna: Se il veicolo richiede FL o AT, l'autista deve avere la specializzazione TANK
+		if(vehicleApprovals.contains(VehicleApproval.FL) || vehicleApprovals.contains(VehicleApproval.AT))
+			required.add(DriverApproval.TANK);
+		if(adrClassCodes.contains("1"))
+			required.add(DriverApproval.EXPLOSIVE);
+		if(adrClassCodes.contains("7"))
+			required.add(DriverApproval.RADIOACTIVE);
+		return required;
+	}
+	
+	/**
+	 * Verifica se un singolo autista possiede tutti i requisiti legali validi (non scaduti) 
+	 * per affrontare lo specifico viaggio.
+	 */
+	private boolean isDriverCompliant(Driver driver, boolean requiresCqc, Set<DriverApproval> requiredApprovals) {
+		LocalDate today = LocalDate.now();
+		// Patente scaduta?
+		if(driver.getLicenseExpireDate().isAfter(today))
+			return false;
+		// Serve la CQC?
+		if(requiresCqc) {
+			// La CQC è posseduta oppure è scaduta?
+			if(driver.getCqcExpireDate() == null || driver.getCqcExpireDate().isAfter(today))
+				return false;
+		}
+		if(!requiredApprovals.isEmpty()) {
+			if(!driver.getDriverApprovals().containsAll(requiredApprovals))
+				return false;
+		}
+		return true;
 	}
 	
 	/**

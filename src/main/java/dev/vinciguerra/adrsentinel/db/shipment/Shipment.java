@@ -2,12 +2,18 @@ package dev.vinciguerra.adrsentinel.db.shipment;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.collection.spi.PersistentMap;
+import org.hibernate.collection.spi.PersistentSet;
+import dev.vinciguerra.adrsentinel.db.customer.Customer;
+import dev.vinciguerra.adrsentinel.db.customer.Customer.CustomerRole;
 import dev.vinciguerra.adrsentinel.db.driver.Driver;
 import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle;
 import dev.vinciguerra.adrsentinel.exception.BadRequestException;
@@ -26,6 +32,8 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.MapKeyColumn;
+import jakarta.persistence.MapKeyEnumerated;
 import jakarta.persistence.OrderColumn;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
@@ -183,11 +191,36 @@ public class Shipment {
 	 */
 	@ManyToMany(fetch = FetchType.EAGER)
 	@JoinTable(
-		name = "shipment_driver_assignment",
+		name = "shipment_driver_assignment", // Tabella ponte sul DB
 		joinColumns = @JoinColumn(name = "shipment_id"),
 		inverseJoinColumns = @JoinColumn(name = "driver_id")
 	)
 	private Set<Driver> drivers = new HashSet<Driver>();
+	/**
+	 * I customer (Destinatario, Mittente, Vettore) assegnati a questa specifica spedizione.
+	 * <p>
+	 * Può essere {@code empty} se questa Shipment non è più nello stato {@code PLANNED}, nel qual caso 
+	 * per i customer fa fede lo snapshot degli stessi.
+	 * </p>
+	 * <p>
+	 * Viene creata una tabella ponte {@code shipment_customer_role} per gestire il ruolo (Destinario, Mittente, 
+	 * Vettore) dello specifico Customer. Questa caratteristica è stata modellata in questo modo, per l'esigenza di 
+	 * separare il ruolo, specifico per ogni spedizione, dall'oggetto Customer che vive un ciclo di vita proprio.
+	 * </p>
+	 * <p>
+	 * Per natura della {@link Map} ogni spedizione avrà un singolo Destinatario, Mittente e Vettore. Questo 
+	 * comportamento built-in permette di rispettare automaticamente il dominio della logistica.
+	 * </p>
+	 */
+	@ManyToMany(fetch = FetchType.EAGER)
+	@JoinTable(
+		name = "shipment_customer_role", // Tabella ponte sul DB
+		joinColumns = @JoinColumn(name = "shipment_id"),
+		inverseJoinColumns = @JoinColumn(name = "customer_id")
+	)
+	@MapKeyColumn(name = "customer_role")
+	@MapKeyEnumerated(EnumType.STRING)
+	private Map<CustomerRole, Customer> customers = new EnumMap<CustomerRole, Customer>(CustomerRole.class);
 	
 	/**
 	 * Hook Orchestratore (Coordinator) per gli eventi di scrittura del database.
@@ -319,10 +352,32 @@ public class Shipment {
 		return drivers;
 	}
 	
+	/**
+	 * Questo setter ha la particolarità di verificare se il valore in input è {@code null}. Nel qual caso sceglie 
+	 * volutamente di non fare niente, in modo da evitare di rompere {@link PersistentSet} di Hibernate e rendere 
+	 * l'oggetto non gestisto (Dirty Checking)
+	 */
 	public void setDrivers(Set<Driver> drivers) {
-		this.drivers = drivers;
+		if(drivers == null) { /* do nothing */ }
+		else
+			this.drivers = drivers;
 	}
 	
+	public Map<CustomerRole, Customer> getCustomers() {
+		return customers;
+	}
+
+	/**
+	 * Questo setter ha la particolarità di verificare se il valore in input è {@code null}. Nel qual caso sceglie 
+	 * volutamente di non fare niente, in modo da evitare di rompere {@link PersistentMap} di Hibernate e rendere 
+	 * l'oggetto non gestisto (Dirty Checking)
+	 */
+	public void setCustomers(Map<CustomerRole, Customer> customers) {
+		if(customers == null) { /* do nothing */ }
+		else
+			this.customers = customers;
+	}
+
 	/** Calcola l'hash code basandosi esclusivamente sulla Business Key ({@code trackingNumber}). */
 	@Override
 	public int hashCode() {

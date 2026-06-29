@@ -1,10 +1,15 @@
 package dev.vinciguerra.adrsentinel.web.dto.shipment;
 
 import java.util.List;
+import java.util.Set;
 import dev.vinciguerra.adrsentinel.web.annotation.ValidatorLocalDateTime;
+import dev.vinciguerra.adrsentinel.web.annotation.customer.ValidatorCustomerRole;
+import dev.vinciguerra.adrsentinel.web.annotation.customer.ValidatorVatNumber;
+import dev.vinciguerra.adrsentinel.web.annotation.driver.ValidatorLicense;
 import dev.vinciguerra.adrsentinel.web.annotation.shipment.ValidatorAddress;
 import dev.vinciguerra.adrsentinel.web.annotation.shipment.ValidatorShipmentStatus;
 import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorLicensePlate;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 
 /**
@@ -38,4 +43,9 @@ import jakarta.validation.constraints.NotEmpty;
  * @since 1.0
  */
 public record ShipmentRequestDTO(@ValidatorLocalDateTime String date, @ValidatorShipmentStatus String status, @ValidatorAddress String origin, 
-	@NotEmpty(message = "Malformed payload: Destinations list is required") List<@ValidatorAddress String> destinations, @ValidatorLicensePlate String vehicleLicensePlate) {}
+		@NotEmpty(message = "Malformed payload: Destinations list is required") List<@ValidatorAddress String> destinations, @ValidatorLicensePlate String vehicleLicensePlate,
+		@NotEmpty(message = "Malformed payload: invalid parameter. Drivers is empy.") Set<@ValidatorLicense String> drivers,
+		@NotEmpty(message = "Malformed payload: invalid parameter: Customers is empty") Set<@Valid CustomerContainerDTO> customers) {
+	/* TODO validator */
+	public record CustomerContainerDTO(@ValidatorCustomerRole String role, @ValidatorVatNumber String vatNumber) {}
+}

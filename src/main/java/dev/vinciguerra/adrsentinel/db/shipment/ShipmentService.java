@@ -3,8 +3,11 @@ package dev.vinciguerra.adrsentinel.db.shipment;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
@@ -15,6 +18,9 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import dev.vinciguerra.adrsentinel.db.AbstractGenericService;
 import dev.vinciguerra.adrsentinel.db.CaffeineCacheConfiguration;
+import dev.vinciguerra.adrsentinel.db.customer.Customer;
+import dev.vinciguerra.adrsentinel.db.customer.Customer.CustomerRole;
+import dev.vinciguerra.adrsentinel.db.customer.CustomerService;
 import dev.vinciguerra.adrsentinel.db.driver.Driver;
 import dev.vinciguerra.adrsentinel.db.driver.DriverService;
 import dev.vinciguerra.adrsentinel.db.driver.DriverSnapshot;
@@ -64,6 +70,7 @@ public class ShipmentService extends AbstractGenericService {
 	private final VehicleSnapshotService vehicleSnapshotService;
 	private final DriverService driverService;
 	private final DriverSnapshotService driverSnapshotService;
+	private final CustomerService customerService;
 	
 	/**
 	 * Costruttore con Dependency Injection nativa di Spring.
@@ -71,13 +78,14 @@ public class ShipmentService extends AbstractGenericService {
 	 * @param cacheManager il gestore dell'infrastruttura di memoria (iniettato nella superclasse).
 	 */
 	public ShipmentService(ShipmentRepository shipmentRepository, VehicleService vehicleService, VehicleSnapshotService vehicleSnapshotService, DriverService driverService,
-			DriverSnapshotService driverSnapshotService, CacheManager cacheManager) {
+			DriverSnapshotService driverSnapshotService, CustomerService customerService, CacheManager cacheManager) {
 		super(cacheManager);
 		this.shipmentRepository = shipmentRepository;
 		this.vehicleService = vehicleService;
 		this.vehicleSnapshotService = vehicleSnapshotService;
 		this.driverService = driverService;
 		this.driverSnapshotService = driverSnapshotService;
+		this.customerService = customerService;
 	}
 	
 	// --- SEZIONE 1: BOUNDED DATA (CACHED) ---
@@ -420,25 +428,51 @@ public class ShipmentService extends AbstractGenericService {
 	 * <p><b>Contesto Architetturale (Data Mapper Pattern):</b></p>
 	 * Questo metodo agisce come strato anti-corruzione (Anti-Corruption Layer) tra l'interfaccia 
 	 * API (frontend) e il modello dati JPA (backend). Assicura che la logica di persistenza riceva 
-	 * un oggetto strutturalmente coerente e pronto per il database.
-	 * <p><b>Risoluzione delle Relazioni (Lookup & Hydration):</b></p>
-	 * Il mapping non è puramente scalare (copia 1 a 1). Per l'associazione con il veicolo, 
-	 * il metodo esegue una query di <i>lookup</i>. Utilizza la Business Key (targa) fornita dal DTO 
-	 * per interrogare il {@code vehicleService} e agganciare all'entità {@link Shipment} 
-	 * l'istanza corretta e gestita di {@link Vehicle}.
-	 * <p><b>Gestione Rigorosa degli Enum:</b></p>
-	 * La conversione dello stato logistico avviene tramite la funzione nativa {@code Enum.valueOf}. 
+	 * un oggetto strutturalmente coerente, aggregando i dati e risolvendo i riferimenti al database.
+	 * * <p><b>Risoluzione delle Relazioni (Lookup & Hydration):</b></p>
+	 * Il mapping non è puramente scalare (copia 1 a 1). Il metodo esegue una complessa "idratazione" 
+	 * dell'aggregato recuperando le entità relazionate tramite le rispettive chiavi di business:
+	 * <ul>
+	 * <li><b>Veicolo (Vehicle):</b> Interrogato tramite la targa (Business Key).</li>
+	 * <li><b>Equipaggio (Drivers):</b> Risoluzione massiva tramite Stream. Converte un {@code Set} di numeri 
+	 * di patente nelle corrispondenti entità {@link Driver}, garantendo l'assegnazione dell'equipaggio 
+	 * (singolo o multiplo) stabilito dal motore decisionale.</li>
+	 * <li><b>Attori Logistici (Customers):</b> Implementa un mapping bidimensionale ottimizzato. 
+	 * Elabora il container DTO appiattito, convertendo dinamicamente il ruolo testuale nell'enum 
+	 * {@link CustomerRole} e risolvendo la Partita IVA nell'anagrafica pura {@link Customer}. 
+	 * Il risultato viene iniettato in una {@link EnumMap} per garantire le massime performance 
+	 * di accesso e per popolare correttamente la tabella ponte sul database.</li>
+	 * </ul>
+	 * <p><b>Gestione Rigorosa degli Enum e del Tempo:</b></p>
+	 * La conversione dello stato logistico e dei ruoli avviene tramite la funzione nativa {@code Enum.valueOf}. 
 	 * Questa operazione è intrinsecamente case-sensitive e richiede una corrispondenza esatta 
 	 * tra la stringa del DTO e la costante enumerata Java.
-	 * @param dto Il payload di richiesta contenente i dati anagrafici e logistici della spedizione. 
+	 * @param dto Il payload di richiesta contenente i dati scalari e i riferimenti logistici della spedizione. 
 	 * Si assume che i campi obbligatori siano già stati sanificati e verificati 
 	 * (es. tramite annotazioni {@code @Valid}).
-	 * @return Una nuova istanza di {@link Shipment} in stato <i>Transient</i> (non ancora gestita dall'EntityManager).
+	 * @return Una nuova istanza di {@link Shipment} in stato <i>Transient</i> (non ancora gestita dall'EntityManager), 
+	 * completamente idratata e pronta per la persistenza.
 	 */
 	public Shipment mapToEntity(ShipmentRequestDTO dto) {
 		Shipment shipment = new Shipment();
 		Vehicle vehicle = vehicleService.getByLicensePlate(dto.vehicleLicensePlate());
+		Set<Driver> drivers = dto.drivers()
+			.stream()
+			.map(license -> driverService.getByLicense(license))
+			.collect(Collectors.toSet());
+		Map<CustomerRole, Customer> customers = dto.customers()
+			.stream()
+			.collect(Collectors
+				.toMap(
+					container -> Enum.valueOf(CustomerRole.class, container.role()),
+					container -> customerService.getByVatNumber(container.vatNumber()),
+					(existing, replacement) -> existing,
+					() -> new EnumMap<CustomerRole, Customer>(CustomerRole.class)
+				)
+			);
 		shipment.setVehicle(vehicle);
+		shipment.setDrivers(drivers);
+		shipment.setCustomers(customers);
 		shipment.setShipmentDate(LocalDateTime.parse(dto.date()));
 		shipment.setShipmentStatus(Enum.valueOf(ShipmentStatus.class, dto.status()));
 		shipment.setOriginAddress(dto.origin());

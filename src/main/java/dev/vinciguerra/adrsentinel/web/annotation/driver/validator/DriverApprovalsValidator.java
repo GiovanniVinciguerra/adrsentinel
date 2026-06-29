@@ -57,6 +57,8 @@ public class DriverApprovalsValidator implements ConstraintValidator<ValidatorDr
 			} catch(IllegalArgumentException error) {
 				return false;
 			}
+			if(value.length() > 255)
+				return false;
 		}
 		return true;
 	}
