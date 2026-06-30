@@ -7,7 +7,41 @@ import dev.vinciguerra.adrsentinel.web.annotation.customer.ValidatorVatNumber;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 
+/**
+ * Validatore JSR-380 (Hibernate Validator) customizzato per il controllo rigoroso 
+ * delle Partite IVA Europee (VAT Number) e transfrontaliere.
+ * <p>
+ * <b>Contesto Architetturale:</b><br>
+ * All'interno del dominio logistico, la correttezza della Partita IVA è un requisito legale vitale 
+ * per la fatturazione elettronica e la redazione dei Documenti di Trasporto (CMR/DDT). 
+ * Questa classe agisce come barriera di ingresso (Anti-Corruption Layer), assicurando che i dati 
+ * immessi rispettino gli standard ufficiali del sistema <b>VIES (VAT Information Exchange System)</b>.
+ * </p>
+ * <p>
+ * <b>Scelte Progettuali e Performance:</b>
+ * <ul>
+ * <li><b>Lookup in O(1):</b> Invece di iterare su una lista di regole, il validatore estrae il 
+ * Country Code a 2 lettere e accede direttamente all'espressione regolare pre-compilata ({@link Pattern}) 
+ * tramite una {@link HashMap} statica, garantendo prestazioni ottimali anche con elevati carichi di richieste.</li>
+ * <li><b>UX e Data Cleansing:</b> Implementa una fase di normalizzazione preventiva. Permette agli operatori 
+ * di inserire le Partite IVA con spazi o formattazioni visive (es. "IT 0123456-7890"), sanificando 
+ * il dato "in volo" prima di applicare le regole espressioni regolari.</li>
+ * <li><b>Casi Limite Logistici:</b> Supporta nativamente le eccezioni del sistema VIES, come 
+ * l'uso del prefisso {@code EL} per la Grecia (anziché GR) e il protocollo post-Brexit {@code XI} 
+ * per l'Irlanda del Nord, essenziale per il libero scambio delle merci.</li>
+ * </ul>
+ * </p>
+ * @author Giovanni Vinciguerra
+ * @version 1.0
+ * @since 3.0
+ * @see ValidatorVatNumber
+ */
 public class VatNumberValidator implements ConstraintValidator<ValidatorVatNumber, String> {
+	/**
+	 * Mappa statica pre-caricata in memoria contenente le espressioni regolari ufficiali 
+	 * per i 27 Stati Membri dell'UE, più l'Irlanda del Nord. I pattern sono compilati al 
+	 * momento del caricamento della classe per massimizzare le performance a runtime.
+	 */
 	private static final Map<String, Pattern> VAT_PATTERNS = new HashMap<String, Pattern>();
 	
 	static {
@@ -71,6 +105,14 @@ public class VatNumberValidator implements ConstraintValidator<ValidatorVatNumbe
         VAT_PATTERNS.put("XI", Pattern.compile("^XI(\\d{9}|\\d{12})$"));
 	}
 	
+	/**
+	 * Valuta la correttezza formale e semantica della Partita IVA fornita.
+	 * @param value La stringa grezza ricevuta dal client (es. dal payload di una richiesta REST).
+	 * @param context Il contesto di validazione JSR-380, utilizzabile per sovrascrivere messaggi d'errore.
+	 * @return {@code true} se la stringa rappresenta una Partita IVA europea formalmente valida, 
+	 * {@code false} se risulta nulla, vuota, di lunghezza incoerente o se non supera i controlli 
+	 * basati sulle espressioni regolari del paese di appartenenza.
+	 */
 	@Override
 	public boolean isValid(String value, ConstraintValidatorContext context) {
 		// 1. Fail-Fast sui nulli o vuoti

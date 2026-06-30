@@ -6,35 +6,36 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 import java.lang.annotation.Documented;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
-import dev.vinciguerra.adrsentinel.web.annotation.customer.validator.CustomerRoleValidator;
+import dev.vinciguerra.adrsentinel.web.annotation.customer.validator.CustomerContainerValidator;
 import jakarta.validation.Constraint;
 import jakarta.validation.Payload;
 
 /**
- * Annotazione custom per la validazione JSR-380 (Jakarta Bean Validation) dei ruoli logistici.
+ * Annotazione custom per la validazione JSR-380 (Jakarta Bean Validation) del payload logistico.
  * <p>
- * <b>Contesto Architetturale (Anti-Corruption Layer):</b><br>
- * Questa annotazione viene applicata ai campi testuali (String) dei Data Transfer Object (DTO) 
- * per garantire che il valore in ingresso corrisponda esattamente a una delle costanti 
- * dell'enumerazione {@link dev.vinciguerra.adrsentinel.model.Customer.CustomerRole}.
+ * <b>Scopo nel Dominio Architetturale:</b><br>
+ * Questa annotazione agisce come punto di innesco per lo strato di Anti-Corruption. Garantisce che 
+ * la configurazione degli attori coinvolti in una spedizione rispetti rigorosamente le regole di business.
+ * Nello specifico, delega l'ispezione strutturale della collezione al {@link CustomerContainerValidator}, 
+ * il quale verifica la presenza del modello logistico a "Triangolazione": esattamente un Mittente (SENDER), 
+ * un Destinatario (RECEIVER) e un Vettore (CARRIER).
  * </p>
  * <p>
- * <b>Integrazione con il framework:</b><br>
- * Quando intercettata da Spring/Hibernate Validator, l'annotazione delega il controllo logico 
- * al {@link CustomerRoleValidator}. Questo meccanismo previene che stringhe malformate, vuote o 
- * semanticamente errate (es. "MAGAZZINIERE" o "sender" minuscolo) penetrino nel Service Layer, 
- * bloccando la richiesta HTTP a monte con un errore strutturale (400 Bad Request).
+ * <b>Integrazione con Spring Boot:</b><br>
+ * Progettata per essere applicata sui campi (FIELD) o sui parametri (PARAMETER) dei Data Transfer Object (DTO). 
+ * Quando il framework intercetta questa annotazione (spinta da {@code @Valid}), invoca automaticamente 
+ * il validatore associato, rigettando le richieste malformate prima che possano inquinare il Service Layer.
  * </p>
  * @author Giovanni Vinciguerra
  * @version 1.0
  * @since 3.0
- * @see CustomerRoleValidator
+ * @see CustomerContainerValidator
  */
 @Documented
 @Retention(RUNTIME)
 @Target({ FIELD, PARAMETER })
-@Constraint(validatedBy = { CustomerRoleValidator.class})
-public @interface ValidatorCustomerRole {
+@Constraint(validatedBy = { CustomerContainerValidator.class })
+public @interface ValidatorCustomerContainer {
 	/**
 	 * Definisce il messaggio di errore predefinito che verrà restituito al client 
 	 * (es. esposto tramite {@code MethodArgumentNotValidException} nel GlobalExceptionHandler) 
@@ -50,7 +51,7 @@ public @interface ValidatorCustomerRole {
 	 * </p>
 	 * @return il messaggio testuale che descrive la violazione del vincolo.
 	 */
-	String message() default "Malformed payload: invalid customer role.";
+	String message() default "Malformed payload: invalid customer configuration.";
 	/**
 	 * Permette di partizionare l'esecuzione di questa validazione raggruppandola logicamente 
 	 * (Validation Groups).

@@ -10,6 +10,26 @@ import dev.vinciguerra.adrsentinel.web.annotation.customer.validator.VatNumberVa
 import jakarta.validation.Constraint;
 import jakarta.validation.Payload;
 
+/**
+ * Annotazione custom per la validazione JSR-380 (Jakarta Bean Validation) delle Partite IVA Europee.
+ * <p>
+ * <b>Contesto Architetturale:</b><br>
+ * Questa annotazione viene applicata ai campi testuali dei Data Transfer Object (DTO) per garantire 
+ * che le chiavi fiscali fornite dai client (es. durante la creazione di un'azienda o di una spedizione) 
+ * siano sintatticamente e formalmente valide.
+ * </p>
+ * <p>
+ * <b>Integrazione con il framework:</b><br>
+ * L'annotazione agisce come <i>trigger</i>. Quando intercettata dal framework di validazione di Spring, 
+ * delega l'effettiva logica di ispezione al {@link VatNumberValidator}. Quest'ultimo verificherà che 
+ * la stringa rispetti lo standard del sistema VIES (VAT Information Exchange System), controllando 
+ * il Country Code e applicando la specifica espressione regolare della nazione di competenza.
+ * </p>
+ * @author Giovanni Vinciguerra
+ * @version 1.0
+ * @since 3.0
+ * @see VatNumberValidator
+ */
 @Documented
 @Retention(RUNTIME)
 @Target({ FIELD, PARAMETER })
