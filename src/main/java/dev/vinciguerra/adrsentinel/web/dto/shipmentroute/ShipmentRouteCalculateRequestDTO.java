@@ -1,10 +1,11 @@
 package dev.vinciguerra.adrsentinel.web.dto.shipmentroute;
 
 import java.util.List;
+
+import dev.vinciguerra.adrsentinel.web.annotation.ValidatorAddress;
 import dev.vinciguerra.adrsentinel.web.annotation.onunumber.ValidatorOnuNumberCode;
 import dev.vinciguerra.adrsentinel.web.annotation.onunumber.ValidatorOnuNumberName;
 import dev.vinciguerra.adrsentinel.web.annotation.onunumber.ValidatorPackingGroup;
-import dev.vinciguerra.adrsentinel.web.annotation.shipment.ValidatorAddress;
 import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorLicensePlate;
 import jakarta.validation.constraints.NotEmpty;
 

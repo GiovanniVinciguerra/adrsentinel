@@ -85,7 +85,7 @@ public class Customer {
 		nullable = false
 	)
 	@ColumnDefault("true")
-    private boolean active = true;
+    private boolean active;
 	
 	public Long getId() {
 		return id;

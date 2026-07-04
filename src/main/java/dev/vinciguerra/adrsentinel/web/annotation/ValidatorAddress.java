@@ -1,4 +1,4 @@
-package dev.vinciguerra.adrsentinel.web.annotation.shipment;
+package dev.vinciguerra.adrsentinel.web.annotation;
 
 import static java.lang.annotation.ElementType.FIELD;
 import static java.lang.annotation.ElementType.PARAMETER;
@@ -7,7 +7,8 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 import java.lang.annotation.Documented;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
-import dev.vinciguerra.adrsentinel.web.annotation.shipment.validator.AddressValidator;
+
+import dev.vinciguerra.adrsentinel.web.annotation.validator.AddressValidator;
 import jakarta.validation.Constraint;
 import jakarta.validation.Payload;
 

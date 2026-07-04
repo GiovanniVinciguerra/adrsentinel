@@ -1,6 +1,7 @@
 package dev.vinciguerra.adrsentinel.web.controller;
 
 import java.util.List;
+import java.util.Set;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -12,6 +13,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import dev.vinciguerra.adrsentinel.db.driver.Driver;
 import dev.vinciguerra.adrsentinel.db.driver.DriverService;
+import dev.vinciguerra.adrsentinel.db.driver.DriverSnapshot;
+import dev.vinciguerra.adrsentinel.db.driver.DriverSnapshotService;
+import dev.vinciguerra.adrsentinel.db.shipment.Shipment;
+import dev.vinciguerra.adrsentinel.db.shipment.Shipment.ShipmentStatus;
+import dev.vinciguerra.adrsentinel.db.shipment.ShipmentService;
+import dev.vinciguerra.adrsentinel.web.annotation.ValidatorUUID;
 import dev.vinciguerra.adrsentinel.web.dto.driver.DriverRequestDTO;
 import dev.vinciguerra.adrsentinel.web.dto.driver.DriverResponseDTO;
 import dev.vinciguerra.adrsentinel.web.dto.driver.DriverSearchRequestDTO;
@@ -42,14 +49,18 @@ import jakarta.validation.Valid;
 @RequestMapping("/adr-sentinel/drivers")
 @Validated
 public class DriverController {
+	private final ShipmentService shipmentService;
 	private final DriverService driverService;
+	private final DriverSnapshotService driverSnapshotService;
 	
 	/**
 	 * Costruttore per la Dependency Injection (IoC) del servizio di dominio.
 	 * @param driverService Il servizio contenente la logica di business per le entità Driver.
 	 */
-	public DriverController(DriverService driverService) {
+	public DriverController(ShipmentService shipmentService, DriverService driverService, DriverSnapshotService driverSnapshotService) {
+		this.shipmentService = shipmentService;
 		this.driverService = driverService;
+		this.driverSnapshotService = driverSnapshotService;
 	}
 	
 	/**
@@ -93,6 +104,58 @@ public class DriverController {
 	}
 	
 	/**
+	 * Recupera la lista degli autisti assegnati a una specifica spedizione, interrogando 
+	 * dinamicamente la corretta fonte di verità in base allo stato logistico attuale.
+	 * <p><b>Contesto Architetturale (Router dei Dati):</b></p>
+	 * Questo endpoint funge da "Smart Router" per l'estrazione dei dati. In accordo con le regole 
+	 * della macchina a stati del dominio logistico, l'entità master (Autisti) viene 
+	 * fisicamente scollegata dalla spedizione non appena questa abbandona lo stato iniziale. 
+	 * Pertanto, il metodo adatta la sua strategia di fetch per garantire sempre la coerenza del dato:
+	 * <ul>
+	 * <li><b>Stato Attivo ({@code PLANNED}):</b> La spedizione è ancora in fase di pianificazione. 
+	 * La risorsa master è fisicamente collegata all'entità {@link Shipment}. I dati vengono estratti 
+	 * navigando direttamente le relazioni JPA ({@code shipment.getDrivers()}).</li>
+	 * <li><b>Stati Storici ({@code TRANSIT}, {@code DELIVERED}, {@code CANCELED}):</b> La spedizione 
+	 * ha lasciato la fase di pianificazione, i legami con il master originale sono stati recisi 
+	 * e il "manifest" è stato congelato. I dati vengono recuperati interrogando lo storico 
+	 * immutabile ({@link DriverSnapshot}) tramite il {@code driverSnapshotService}.</li>
+	 * </ul>
+	 * <p><b>Flusso Operativo:</b></p>
+	 * <ol>
+	 * <li>Lookup della spedizione tramite la sua Business Key ({@code trackingNumber}).</li>
+	 * <li>Valutazione condizionale dello stato ({@link ShipmentStatus}).</li>
+	 * <li>Estrazione delle entità (Master o Snapshot) e proiezione dei dati nel 
+	 * Data Transfer Object ({@link DriverResponseDTO}) tramite method reference ({@code fromEntity}).</li>
+	 * </ol>
+	 * @param trackingNumber Identificativo univoco (validato come UUID tramite {@code @ValidatorUUID}) 
+	 * della spedizione di cui si richiedono gli autisti.
+	 * @return Una {@link ResponseEntity} contenente la lista di {@link DriverResponseDTO}. La lista può 
+	 * essere vuota se non ci sono autisti assegnati, ma restituisce sempre lo status 200 (OK) 
+	 * in caso di esecuzione corretta.
+	 * @throws ResourceNotFoundException (o eccezione analoga sollevata da {@code shipmentService}) 
+	 * se il {@code trackingNumber} non esiste a sistema.
+	 * @throws ConstraintViolationException (sollevata a monte a livello di dispatcher) se il 
+	 * {@code trackingNumber} non rispetta il formato UUID richiesto.
+	 */
+	@GetMapping("/{trackingNumber}")
+	public ResponseEntity<List<DriverResponseDTO>> getByShipmentTrackingNumber(@ValidatorUUID String trackingNumber) {
+		Shipment shipment = shipmentService.getByTrackingNumber(trackingNumber);
+		List<DriverResponseDTO> response;
+		if(shipment.getShipmentStatus() != ShipmentStatus.PLANNED) {
+			List<DriverSnapshot> snaps = driverSnapshotService.getByShipmentId(shipment.getId());
+			response = snaps.stream()
+				.map(DriverResponseDTO::fromEntity)
+				.toList();
+		} else {
+			Set<Driver> drivers = shipment.getDrivers();
+			response = drivers.stream()
+				.map(DriverResponseDTO::fromEntity)
+				.toList();
+		}
+		return ResponseEntity.ok(response);
+	}
+	
+	/**
 	 * Registra un nuovo conducente a sistema elaborando il payload di richiesta del client.
 	 * <p><b>Regole di Business Applicate:</b></p>
 	 * <ul>
@@ -117,8 +180,8 @@ public class DriverController {
 	 * Aggiorna i dati anagrafici e documentali di un conducente preesistente, identificato dalla sua patente.
 	 * <p>La logica di aggiornamento (aggiornamento completo o parziale) viene delegata al {@link DriverService}. 
 	 * Entrambi i parametri di input (path variable e body) sono rigorosamente validati.</p>
-	 * @param license   La patente attuale del conducente da aggiornare (validata tramite {@code @ValidatorLicense}).
-	 * @param updateDto Il payload contenente le informazioni aggiornate (es. nuovo telefono, rinnovo patente).
+	 * @param updateDto Il payload contenente le informazioni aggiornate (es. nuovo telefono, rinnovo patente) e il 
+	 * numero patente. 
 	 * @return Una {@link ResponseEntity} contenente HTTP 200 (OK) e il profilo del conducente aggiornato.
 	 */
 	@PutMapping
@@ -131,8 +194,7 @@ public class DriverController {
 	 * Endpoint granulare per l'aggiornamento esclusivo dello stato operativo del conducente (es. Sospensione / Riattivazione).
 	 * <p>Questo endpoint favorisce un design REST orientato ai task (Task-Based API), permettendo 
 	 * modifiche di stato rapide senza dover reinviare l'intera anagrafica del driver.</p>
-	 * @param license   La patente del conducente bersaglio.
-	 * @param updateDto Il DTO mirato contenente esclusivamente i nuovi flag di stato operativo.
+	 * @param updateDto Il DTO mirato contenente esclusivamente i nuovi flag di stato operativo e il numero patente.
 	 * @return Una {@link ResponseEntity} contenente HTTP 200 (OK) e il profilo del conducente con lo stato modificato.
 	 */
 	@PutMapping("/active-status")
@@ -143,7 +205,7 @@ public class DriverController {
 	
 	/**
 	 * Endpoint granulare per la gestione e l'aggiornamento delle certificazioni/abilitazioni (es. rinnovo CQC o certificati ADR).
-	 * @param license   La patente del conducente bersaglio.
+	 * @param license La patente del conducente bersaglio.
 	 * @param updateDto Il DTO contenente il set di certificazioni ADR o abilitazioni da applicare. 
 	 * (Nota architetturale: se necessario, assicurarsi che il payload sia convalidato tramite annotazioni).
 	 * @return Una {@link ResponseEntity} contenente HTTP 200 (OK) e il profilo del conducente aggiornato.

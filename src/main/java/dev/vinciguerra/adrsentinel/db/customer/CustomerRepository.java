@@ -43,24 +43,23 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
 	 */
 	Optional<Customer> findByVatNumber(String vatNumber);
 	/**
-	 * Esegue una ricerca parziale e *Case-Insensitive* sulla Ragione Sociale delle aziende registrate.
-	 * <p>
-	 * <b>Traduzione SQL:</b> {@code SELECT * FROM customer WHERE UPPER(company_name) LIKE UPPER('%?%')}
-	 * </p>
-	 * <p>
-	 * <b>Caso d'uso (UX/UI):</b><br>
-	 * Questo metodo è progettato specificamente per alimentare i componenti di <b>Autocomplete</b> 
-	 * o le barre di ricerca dinamiche sul Front-End. Permette agli operatori logistici di trovare 
-	 * un'azienda digitando solo una frazione del nome (es. "logist" troverà "Logistica Srl", 
-	 * "Pippo LOGISTICA", ecc.), indipendentemente dalle maiuscole e minuscole.
-	 * </p>
-	 * <p>
-	 * Restituisce una {@link List} poiché la colonna {@code company_name} non è univoca e potrebbero 
-	 * esistere molteplici aziende omonime o con nomi simili (gestione delle omonimie).
-	 * </p>
-	 * @param companyName Il frammento di testo (substring) da ricercare all'interno della Ragione Sociale.
-	 * @return Una lista di entità {@code Customer} che contengono la stringa cercata. Restituisce una 
-	 * lista vuota (e mai {@code null}) se nessuna corrispondenza viene trovata.
+	 * Esegue una ricerca per corrispondenza esatta (Exact Match) sulla Ragione Sociale delle aziende registrate.
+	 * <p><b>Traduzione SQL:</b> {@code SELECT * FROM customer WHERE company_name = ?}</p>
+	 * <p><b>Contesto Architetturale e Caching:</b></p>
+	 * Abbandonando la ricerca parziale (LIKE) in favore del match esatto, questo metodo diventa strutturalmente
+	 * idoneo per l'applicazione di policy di <b>Caching</b>. La chiave di cache diviene deterministica e finita,
+	 * abbattendo il rischio di "Cache Explosion" tipico delle ricerche testuali parziali e rendendo triviale
+	 * la logica di invalidation (Key Shifting) in caso di mutazioni anagrafiche.
+	 * <p><b>Domain-Driven Design (DDD) e Gestione delle Omonimie:</b></p>
+	 * Il tipo di ritorno è intenzionalmente una {@link List} (e non un {@code Optional}). Nel dominio logistico
+	 * e societario reale, la <i>Business Key</i> univoca assoluta è la Partita IVA ({@code vatNumber}).
+	 * È lecito e frequente avere a database molteplici entità giuridiche con l'esatta medesima ragione sociale
+	 * (es. omonimie territoriali o filiali di uno stesso gruppo societario con identificatori fiscali distinti).
+	 * Restituendo una collezione, il sistema previene crash a runtime (es. {@code NonUniqueResultException}
+	 * sollevate da Hibernate) demandando la discriminazione finale alla logica di business o all'operatore.
+	 * @param companyName La stringa esatta (case-sensitive, in base al dialetto del DB) rappresentante la Ragione Sociale.
+	 * @return Una lista di entità {@link Customer} che corrispondono esattamente al nome fornito. Restituisce una lista 
+	 * vuota (mai {@code null}) se nessuna corrispondenza viene trovata.
 	 */
-	List<Customer> findByCompanyNameContainingIgnoreCase(String companyName);
+	List<Customer> findByCompanyName(String companyName);
 }

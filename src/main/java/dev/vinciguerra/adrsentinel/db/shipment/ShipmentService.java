@@ -267,7 +267,7 @@ public class ShipmentService extends AbstractGenericService {
 	/**
 	 * Esegue l'aggiornamento chirurgico dello stato logistico di una spedizione esistente, 
 	 * garantendo l'allineamento transazionale tra Database e Memoria Cache, e orchestrando 
-	 * il ciclo di vita delle entità correlate (Veicoli e Snapshot).
+	 * il ciclo di vita delle entità correlate (Veicoli, Autisti e Snapshot).
 	 * <p><b>Contesto Architetturale e Transazionalità:</b></p>
 	 * Il metodo opera all'interno di un contesto {@code @Transactional}. L'aggiornamento sul 
 	 * database (via Hibernate) e la successiva mutazione della memoria RAM (Caffeine) sono 
@@ -275,7 +275,7 @@ public class ShipmentService extends AbstractGenericService {
 	 * <i>Post-Commit</i> tramite {@link TransactionSynchronizationManager}. Questo previene 
 	 * scenari di "Dirty Read" o disallineamenti: se la transazione sul DB fallisce (Rollback), 
 	 * la cache non viene inquinata.
-	 * <p><b>Flusso Operativo e Trucco Architetturale (Cache Compass):</b></p>
+	 * <p><b>Flusso Operativo e Macchina a Stati:</b></p>
 	 * <ol>
 	 * <li><b>Lookup:</b> Recupera l'entità tramite la sua Business Key (Tracking Number).</li>
 	 * <li><b>State Capture (La Bussola della Cache):</b> Estrae e congela in memoria la data di spedizione 
@@ -283,74 +283,108 @@ public class ShipmentService extends AbstractGenericService {
 	 * essa viene passata al motore di cache ({@code syncCacheAfterUpdate}) per permettergli di 
 	 * valutare l'assenza di un "Key Shift" e agire con una sostituzione (Upsert) sicura e 
 	 * localizzata all'interno della corretta lista in RAM.</li>
-	 * <li><b>Mutazione di Stato e Logica di Dominio:</b> Converte rigorosamente la stringa del DTO nel 
-	 * valore {@link ShipmentStatus} e applica specifici side-effect in base al nuovo stato:
+	 * <li><b>Validazione Nodi Pozzo:</b> Verifica che lo stato non sia già terminale ({@code DELIVERED} o {@code CANCELED}). 
+	 * In tal caso, rifiuta immediatamente qualsiasi mutazione.</li>
+	 * <li><b>Mutazione di Stato e Logica di Dominio:</b> Applica le seguenti rigide regole di transizione:
 	 * <ul>
-	 * <li>{@code PLANNED}: Imposta il veicolo ({@link Vehicle}) e gli autisti ({@link Driver}) associati in stato di transito.</li>
-	 * <li>{@code TRANSIT}: Genera e persiste uno snapshot storico ({@link VehicleSnapshot}) del veicolo e degli autisti 
-	 * ({@link DriverSnapshot})
-	 * associati per cristallizzarne i dati al momento della partenza. Successivamente, <b>scollega</b> 
-	 * la spedizione dal veicolo master (impostandolo a {@code null}) e dagli autisti (impostando {@code Set::clear}) permettendo al 
-	 * veicolo di seguire e agli autisti di seguire il proprio ciclo di vita indipendenti.</li>
-	 * <li><b>Altri Stati (es. Terminali):</b> Utilizza lo snapshot salvato in precedenza per risalire 
-	 * alla targa del veicolo originale e ripristinarne lo stato di disponibilità (non più in transito).</li>
+	 * <li><b>Uscita da {@code PLANNED}:</b> Rappresenta il trigger univoco per la storicizzazione. Indipendentemente 
+	 * dalla destinazione ({@code TRANSIT} o {@code CANCELED}), genera e persiste uno snapshot storico 
+	 * ({@link VehicleSnapshot}, {@link DriverSnapshot}) per cristallizzare i dati. Successivamente, 
+	 * <b>scollega</b> la spedizione dai master ({@link Vehicle} e {@link Driver}), permettendo loro di seguire 
+	 * un ciclo di vita indipendente. Nel caso specifico della transizione verso {@code TRANSIT}, blocca le risorse 
+	 * fisiche impostandole in stato di transito ({@code inTransit = true}).</li>
+	 * <li><b>Uscita da {@code TRANSIT}:</b> Al termine del viaggio (verso {@code DELIVERED} o {@code CANCELED}), 
+	 * le risorse bloccate vengono liberate. Il sistema attinge esclusivamente agli snapshot precedentemente generati 
+	 * (unica fonte di verità del "manifest") per recuperare le entità master originali e ripristinare il loro 
+	 * stato di disponibilità ({@code inTransit = false}).</li>
 	 * </ul>
 	 * </li>
 	 * <li><b>Persistenza:</b> Salva l'entità aggiornata e registra la sincronizzazione della cache.</li>
 	 * </ol>
+	 * <p>
+	 * Tutti i passaggi di stato consentiti e mappati da questo metodo sono:
+	 * <ul>
+	 * <li>{@code PLANNED -to-> TRANSIT -to-> DELIVERED}</li>
+	 * <li>{@code PLANNED -to-> CANCELLED}</li>
+	 * <li>{@code TRANSIT -to-> CANCELLED}</li>
+	 * </ul>
+	 * </p>
 	 * @param trackingNumber La Business Key (Targa alfanumerica) che identifica univocamente la spedizione nel sistema.
-	 * @param updateStatusDTO Il payload contenente il nuovo stato logistico (es. "TRANSIT", "DELIVERED").
+	 * @param updateStatusDTO Il payload contenente il nuovo stato logistico (es. "TRANSIT", "DELIVERED", "CANCELED").
 	 * @return L'istanza aggiornata di {@link Shipment}, ricaricata col nuovo stato e persistita.
-	 * @throws ResourceNotFoundException Se il {@code trackingNumber} fornito non trova riscontro nel database.
-	 * @throws IllegalArgumentException Se la stringa di stato fornita nel DTO non corrisponde esattamente 
-	 * (tramite {@code Enum.valueOf}) a nessuna costante definita in {@link ShipmentStatus}.
-	 * @throws RuntimeException (o derivate) se negli stati terminali non viene trovato un {@link VehicleSnapshot} 
-	 * associato all'ID della spedizione, o se il veicolo originale non è più presente.
+	 * @throws ResourceNotFoundException Se il {@code trackingNumber} fornito non trova riscontro nel database. Oppure se 
+	 * gli snapshot del veicolo e degli autisti non sono presenti nel Database.
+	 * @throws IllegalShipmentStateException Se si tenta di alterare uno stato terminale (Nodo Pozzo) o se la 
+	 * transizione richiesta viola i vincoli della macchina a stati (es. {@code PLANNED -> DELIVERED} o {@code TRANSIT -> PLANNED}).
 	 */
 	@Transactional
-	public Shipment updateStatusByTrackingNumber(String trackingNumber, ShipmentUpdateStatusDTO updateStatusDTO) {
+	public Shipment updateStatusByTrackingNumber(String trackingNumber, ShipmentUpdateStatusDTO updateStatusDTO) throws IllegalShipmentStateException {
 		logger.info("[DataBase CALL] Updating Shipment status with trackingNumber: {}", trackingNumber);
 		Shipment shipment = shipmentRepository.findByTrackingNumber(trackingNumber)
 			.orElseThrow(() -> new ResourceNotFoundException("Shipment not found: " + trackingNumber));
+		ShipmentStatus oldStatus = shipment.getShipmentStatus();
+		ShipmentStatus newStatus = Enum.valueOf(ShipmentStatus.class, updateStatusDTO.status());
 		LocalDate oldDate = shipment.getShipmentDate().toLocalDate();
-		shipment.setShipmentStatus(Enum.valueOf(ShipmentStatus.class, updateStatusDTO.status()));
-		if(shipment.getShipmentStatus() == ShipmentStatus.PLANNED) {
-			Vehicle vehicle = shipment.getVehicle();
-			Set<Driver> drivers = shipment.getDrivers();
-			/* Veicolo in transito (attributo inTransit = true) */
-			vehicleService.updateInTransitStatusById(vehicle.getId(), true);
-			/* Driver in transito (attributo inTransit = true) */
-			drivers.stream().forEach(driver -> driverService.updateInTransitStatusById(driver.getId(), false));
-		} else if(shipment.getShipmentStatus() == ShipmentStatus.TRANSIT) {
-			logger.info("Shipment [{}] has changed status to {}", shipment.getTrackingNumber(), shipment.getShipmentStatus().name());
-			/* Snapshot del Vehicle */
-			logger.info("Snapshot action taken on associated vehicle [{}].", shipment.getVehicle().getLicensePlate());
-			VehicleSnapshot vehicleSnapshot = new VehicleSnapshot(shipment);
-			vehicleSnapshotService.save(vehicleSnapshot);
-			shipment.setVehicle(null); /* Scollega questo Shipment dal Veicolo master che vive di vita propria. */
-			/* Snapshot del Driver */
-			shipment.getDrivers().stream().forEach(driver -> logger.info("Snapshot action taken on associated driver [{}].", driver.getLicense()));
-			Set<DriverSnapshot> driverSnapshots = DriverSnapshot.fromDrivers(shipment);
-			driverSnapshots.stream().forEach(driverSnap -> driverSnapshotService.save(driverSnap));
-			shipment.getDrivers().clear(); /* Scollega questo Shipment dai Driver master che vivono di vita propria. */
-			/* Snapshot del Customer */
-			
-		} else {
-			/* Il veicolo master ritorna non in transito */
-			VehicleSnapshot vehicleSnap = vehicleSnapshotService.getByShipmentId(shipment.getId());
-			Vehicle vehicle = vehicleService.getByLicensePlate(vehicleSnap.getLicensePlateSnap());
-			vehicleService.updateInTransitStatusById(vehicle.getId(), false);
-			/* Gli autisti master ritornano non in transito */
-			List<DriverSnapshot> driverSnaps = driverSnapshotService.getByShipmentId(shipment.getId());
-			List<Driver> drivers = driverSnaps.stream().map(driverSnap -> driverService.getByLicense(driverSnap.getLicenseSnap())).toList();
-			drivers.stream().forEach(driver -> driverService.updateInTransitStatusById(driver.getId(), false));
+		// 1. GESTIONE STATI TERMINALI (Nodi Pozzo)
+		if(oldStatus == ShipmentStatus.DELIVERED || oldStatus == ShipmentStatus.CANCELLED) {
+			throw new IllegalShipmentStateException(
+				String.format(
+					"Update status denied: previous status is %s. No changes are permitted.",
+					oldStatus
+				)
+			);
 		}
-		Shipment updatedShipment = shipmentRepository.save(shipment);
-		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-			@Override
-			public void afterCommit() { syncCacheAfterUpdate(updatedShipment, oldDate); }
-		});
-		return updatedShipment;
+		// 2. LOGICA IN USCITA DALLO STATO INIZIALE (PLANNED)
+	    if (oldStatus == ShipmentStatus.PLANNED) {
+	    	// Da PLANNED posso andare solo in TRANSIT o CANCELED
+	        if (newStatus == ShipmentStatus.DELIVERED || newStatus == ShipmentStatus.PLANNED) {
+	            throw new IllegalShipmentStateException(
+	                String.format("Update status denied: cannot transition from PLANNED to %s. Allowed: TRANSIT, CANCELED.", newStatus)
+	            );
+	        }
+	        // Se la spedizione entra effettivamente in transito, blocco le risorse
+	        if (newStatus == ShipmentStatus.TRANSIT) {
+	        	vehicleService.updateInTransitStatusById(shipment.getVehicle().getId(), true);
+	        	shipment.getDrivers().forEach(driver -> driverService.updateInTransitStatusById(driver.getId(), true));
+	        }
+	        // Se va in CANCELED, non tocca 'inTransit' (le risorse non sono mai partite, rimangono false)
+	        // Indipendentemente da TRANSIT o CANCELED, stiamo lasciando lo stato PLANNED.
+	        // È questo l'unico momento in cui creo lo snapshot e scollego definitivamente i master.
+	        logger.info("Shipment [{}] leaving PLANNED state. Executing one-time snapshot and detachment.", trackingNumber);
+	        vehicleSnapshotService.save(new VehicleSnapshot(shipment));
+	        shipment.setVehicle(null);
+	        DriverSnapshot.fromDrivers(shipment).forEach(driverSnapshotService::save);
+	        shipment.getDrivers().clear();
+	        /* TODO snapshot dei customer */
+	        
+	    } else if(oldStatus == ShipmentStatus.TRANSIT) { // 3. LOGICA IN USCITA DALLO STATO OPERATIVO (TRANSIT)
+	    	// Da TRANSIT può andare solo in DELIVERED o CANCELED
+	        if (newStatus == ShipmentStatus.PLANNED || newStatus == ShipmentStatus.TRANSIT) {
+	            throw new IllegalShipmentStateException(
+	                String.format("Update status denied: cannot transition from TRANSIT to %s. Allowed: DELIVERED, CANCELED.", newStatus)
+	            );
+	        }
+	        // Il viaggio è finito (o con successo o annullato).
+	        // I master sono già stati scollegati durante l'uscita da PLANNED.
+	        // Devo usare gli snapshot (fonte di verità) per sbloccare i veicoli e gli autisti originali.
+	        logger.info("Shipment [{}] leaving TRANSIT state. Releasing inTransit lock on resources.", trackingNumber);
+	        VehicleSnapshot vehicleSnap = vehicleSnapshotService.getByShipmentId(shipment.getId());
+	        Vehicle vehicleMaster = vehicleService.getByLicensePlate(vehicleSnap.getLicensePlateSnap());
+	        vehicleService.updateInTransitStatusById(vehicleMaster.getId(), false);
+	        List<DriverSnapshot> driverSnaps = driverSnapshotService.getByShipmentId(shipment.getId());
+	        driverSnaps.forEach(driverSnap -> {
+	        	Driver driverMaster = driverService.getByLicense(driverSnap.getLicenseSnap());
+	        	driverService.updateInTransitStatusById(driverMaster.getId(), false);
+	        });
+	    }
+	    // 4. PERSISTENZA E SINCRONIZZAZIONE CACHE
+	    shipment.setShipmentStatus(newStatus);
+	    Shipment updatedShipment = shipmentRepository.save(shipment);
+	    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+	        @Override
+	        public void afterCommit() { syncCacheAfterUpdate(updatedShipment, oldDate); }
+	    });
+	    return updatedShipment;
 	}
 	
 	/**

@@ -2,12 +2,13 @@ package dev.vinciguerra.adrsentinel.web.dto.shipment;
 
 import java.util.List;
 import java.util.Set;
+
+import dev.vinciguerra.adrsentinel.web.annotation.ValidatorAddress;
 import dev.vinciguerra.adrsentinel.web.annotation.ValidatorLocalDateTime;
 import dev.vinciguerra.adrsentinel.web.annotation.customer.ValidatorCustomerContainer;
 import dev.vinciguerra.adrsentinel.web.annotation.customer.ValidatorCustomerRole;
 import dev.vinciguerra.adrsentinel.web.annotation.customer.ValidatorVatNumber;
 import dev.vinciguerra.adrsentinel.web.annotation.driver.ValidatorLicense;
-import dev.vinciguerra.adrsentinel.web.annotation.shipment.ValidatorAddress;
 import dev.vinciguerra.adrsentinel.web.annotation.shipment.ValidatorShipmentStatus;
 import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorLicensePlate;
 import jakarta.validation.Valid;

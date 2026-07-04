@@ -4,7 +4,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
-
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -214,7 +213,7 @@ public class VehicleService extends AbstractGenericService {
 	 */
 	@Transactional
 	public Vehicle updateActiveStatusByLicensePlate(String licensePlate, VehicleUpdateActiveStatusDTO updateDto) throws ResourceNotFoundException {
-		logger.info("[DataBase CALL] Updating Vehicle details with licensePlate: {}", licensePlate);
+		logger.info("[DataBase CALL] Updating Vehicle active status with licensePlate: {}", licensePlate);
 		Vehicle vehicle = vehicleRepository.findByLicensePlate(licensePlate)
 			.orElseThrow(() -> new ResourceNotFoundException("Vehicle not found: " + licensePlate));
 		final Integer oldMaxUsefulWeight = vehicle.getMaxUsefulWeightkg();

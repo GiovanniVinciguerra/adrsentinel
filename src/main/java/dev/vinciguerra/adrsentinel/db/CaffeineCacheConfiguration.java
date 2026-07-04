@@ -12,6 +12,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import dev.vinciguerra.adrsentinel.db.adrclass.AdrClassCacheSetting;
 import dev.vinciguerra.adrsentinel.db.adrclass.shipmentroute.ShipmentRouteCacheSetting;
 import dev.vinciguerra.adrsentinel.db.compatibilityrule.CompatibilityRuleCacheSetting;
+import dev.vinciguerra.adrsentinel.db.customer.CustomerCacheSetting;
 import dev.vinciguerra.adrsentinel.db.driver.DriverCacheSetting;
 import dev.vinciguerra.adrsentinel.db.driver.DriverSnapshotCacheSetting;
 import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumberCacheSetting;
@@ -51,6 +52,7 @@ import dev.vinciguerra.adrsentinel.db.vehicle.VehicleSnapshotCacheSetting;
 	VehicleSnapshotCacheSetting.class,
 	DriverCacheSetting.class,
 	DriverSnapshotCacheSetting.class,
+	CustomerCacheSetting.class,
 	ShipmentRouteCacheSetting.class
 })
 public class CaffeineCacheConfiguration {
@@ -103,6 +105,14 @@ public class CaffeineCacheConfiguration {
 	public static final String ALL_DRIVER_KEY = "all_driver_key";
 	/** Identificatore della regione di memoria per il raggruppamento degli storici dell'autista associato a una data spedizione. */
 	public static final String DRIVER_SNAPSHOT_BY_SHIPMENT_ID_CACHE = "driver_snapshot_by_shipment_id";
+	/** Identificatore della regione di memoria per il raggruppamento dei clienti associati per vat number. */
+	public static final String CUSTOMER_BY_VAT_NUMBER_CACHE = "customer_by_vat_number";
+	/** Identificatore della regione di memoria per il raggruppamento dei clienti associati per company name. */
+	public static final String CUSTOMER_BY_COMPANY_NAME_CACHE = "customer_by_company_name";
+	/** Identificatore della regione di memoria per il raggruppamento di tutti i clienti. */
+	public static final String ALL_CUSTOMER_CACHE = "all_customer";
+	/** Chiave statica globale per l'estrazione dalla cache di tutti i clienti. */
+	public static final String ALL_CUSTOMER_KEY = "all_customer_key";
 	/** Identificatore della regione di memoria per il raggruppamento (UUID) globale dei percorsi stradali. */
 	public static final String SHIPMENT_ROUTE_BY_ROUTE_UUID_CACHE = "shipment_route_by_route_uuid";
 	/** Identificatore della regione di memoria per il raggruppamento (Shipment.trackingNumber) globale dei percorsi stradali. */
@@ -132,7 +142,8 @@ public class CaffeineCacheConfiguration {
 	public CacheManager cacheManager(AdrClassCacheSetting adrClassSetting, CompatibilityRuleCacheSetting compatibilityRuleCacheSetting, 
 			OnuNumberCacheSetting onuNumberCacheSetting, ShipmentCacheSetting shipmentCacheSetting, ShipmentItemCacheSetting shipmentItemCacheSetting,
 			VehicleCacheSetting vehicleCacheSetting, VehicleSnapshotCacheSetting vehicleSnapshotCacheSetting, DriverCacheSetting driverCacheSetting,
-			DriverSnapshotCacheSetting driverSnapshotCacheSetting, ShipmentRouteCacheSetting shipmentRouteCacheSetting) {
+			DriverSnapshotCacheSetting driverSnapshotCacheSetting, CustomerCacheSetting customerCacheSetting,
+			ShipmentRouteCacheSetting shipmentRouteCacheSetting) {
 		SimpleCacheManager cacheManager = new SimpleCacheManager();
 		CaffeineCache adrClassClassCodeCache = buildCache(
 			ADR_CLASS_BY_CLASS_CODE_CACHE,
@@ -210,6 +221,18 @@ public class CaffeineCacheConfiguration {
 			DRIVER_SNAPSHOT_BY_SHIPMENT_ID_CACHE,
 			driverSnapshotCacheSetting.shipmentId().maxSize()
 		);
+		CaffeineCache customerByVatNumberCache = buildCache(
+			CUSTOMER_BY_VAT_NUMBER_CACHE,
+			customerCacheSetting.vatNumber().maxSize()
+		);
+		CaffeineCache customerByCompanyNameCache = buildCache(
+			CUSTOMER_BY_COMPANY_NAME_CACHE,
+			customerCacheSetting.companyName().maxSize()
+		);
+		CaffeineCache allCustomerCache = buildCache(
+			ALL_CUSTOMER_CACHE,
+			customerCacheSetting.allCustomer().maxSize()
+		);
 		CaffeineCache shipmentRouteByRouteUUIDCache = buildCache(
 			SHIPMENT_ROUTE_BY_ROUTE_UUID_CACHE,
 			shipmentRouteCacheSetting.routeUUID().maxSize()
@@ -239,6 +262,9 @@ public class CaffeineCacheConfiguration {
 				driverByLicenseCache,
 				allDriverCache,
 				driverSnapshotByShipmentIdCache,
+				customerByVatNumberCache,
+				customerByCompanyNameCache,
+				allCustomerCache,
 				shipmentRouteByRouteUUIDCache,
 				shipmentRouteByShipmentCache
 			)

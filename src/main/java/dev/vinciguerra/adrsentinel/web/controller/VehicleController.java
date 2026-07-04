@@ -11,8 +11,14 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import dev.vinciguerra.adrsentinel.db.shipment.Shipment;
+import dev.vinciguerra.adrsentinel.db.shipment.Shipment.ShipmentStatus;
+import dev.vinciguerra.adrsentinel.db.shipment.ShipmentService;
 import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle;
 import dev.vinciguerra.adrsentinel.db.vehicle.VehicleService;
+import dev.vinciguerra.adrsentinel.db.vehicle.VehicleSnapshot;
+import dev.vinciguerra.adrsentinel.db.vehicle.VehicleSnapshotService;
+import dev.vinciguerra.adrsentinel.web.annotation.ValidatorUUID;
 import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorLicensePlate;
 import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorMaxUsefulWeight;
 import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleRequestDTO;
@@ -44,20 +50,23 @@ import jakarta.validation.Valid;
 @RequestMapping("/adr-sentinel/vehicles")
 @Validated
 public class VehicleController {
+	private final ShipmentService shipmentService;
 	private final VehicleService vehicleService;
+	private final VehicleSnapshotService vehicleSnapshotService;
 	
 	/**
 	 * Inietta le dipendenze necessarie tramite costruttore (Constructor Injection).
 	 * Questa pratica garantisce l'immutabilità del controller (thread-safety) e ne 
 	 * agevola i test unitari isolati (Mocking).
 	 */
-	public VehicleController(VehicleService vehicleService) {
+	public VehicleController(ShipmentService shipmentService, VehicleService vehicleService, VehicleSnapshotService vehicleSnapshotService) {
+		this.shipmentService = shipmentService;
 		this.vehicleService = vehicleService;
+		this.vehicleSnapshotService = vehicleSnapshotService;
 	}
 	
 	/**
 	 * Endpoint di aggregazione globale per recuperare l'intera flotta aziendale.
-	 *
 	 * <p><b>Design Pattern:</b> Utilizza le Stream API di Java per una proiezione 
 	 * funzionale ed efficiente (Mapping) dalla lista di Entity JPA alla lista di DTO 
 	 * in uscita, garantendo l'Information Hiding.</p>
@@ -96,6 +105,53 @@ public class VehicleController {
 		List<Vehicle> vehicles = vehicleService.getByMaxUsefulWeightGreaterThanEqual(maxUsefulWeight);
 		List<VehicleResponseDTO> response = vehicles.stream().map(VehicleResponseDTO::fromEntity).toList();
 		return ResponseEntity.ok(response);
+	}
+	
+	/**
+	 * Recupera i dati del veicolo assegnato a una specifica spedizione, agendo come un 
+	 * "Router dei Dati" per interrogare dinamicamente la corretta fonte di verità in base 
+	 * all'attuale stato logistico della spedizione.
+	 * <p><b>Contesto Architetturale e Isolamento del Manifest:</b></p>
+	 * Analogamente alla gestione degli autisti, la macchina a stati prevede che l'entità master 
+	 * venga fisicamente scollegata dalla spedizione non appena questa abbandona la fase iniziale. 
+	 * Questo paradigma garantisce l'immutabilità del manifest di viaggio e l'indipendenza 
+	 * del ciclo di vita dei mezzi. Il metodo implementa la seguente strategia di fetch:
+	 * <ul>
+	 * <li><b>Stato Attivo ({@code PLANNED}):</b> La spedizione è ancora in fase di organizzazione. 
+	 * Il veicolo master è correntemente associato all'entità {@link Shipment}. I dati vengono 
+	 * estratti navigando la relazione JPA ({@code shipment.getVehicle()}).</li>
+	 * <li><b>Stati Storici ({@code TRANSIT}, {@code DELIVERED}, {@code CANCELED}):</b> La spedizione 
+	 * è consolidata o chiusa. Il legame diretto con il master è stato reciso per liberare la risorsa 
+	 * a database. I dati del mezzo utilizzato vengono quindi recuperati interrogando lo storico 
+	 * immutabile ({@link VehicleSnapshot}) precedentemente generato, tramite il {@code vehicleSnapshotService}.</li>
+	 * </ul>
+	 * <p><b>Flusso Operativo:</b></p>
+	 * <ol>
+	 * <li>Lookup della spedizione tramite la sua Business Key ({@code trackingNumber}).</li>
+	 * <li>Valutazione condizionale dello stato ({@link ShipmentStatus}).</li>
+	 * <li>Estrazione dell'entità appropriata ({@link Vehicle} oppure {@link VehicleSnapshot}) 
+	 * e proiezione polimorfica nel Data Transfer Object ({@link VehicleResponseDTO}) avvalendosi 
+	 * dell'overloading del metodo {@code fromEntity}.</li>
+	 * </ol>
+	 * @param trackingNumber Identificativo univoco (validato formalmente come UUID tramite 
+	 * {@code @ValidatorUUID}) della spedizione di cui si richiede il veicolo.
+	 * @return Una {@link ResponseEntity} contenente il payload {@link VehicleResponseDTO}. Restituisce 
+	 * sempre lo status 200 (OK) a operazione completata con successo.
+	 * @throws ResourceNotFoundException (o eccezione analoga delegata a {@code shipmentService}) 
+	 * se il {@code trackingNumber} fornito non esiste a sistema.
+	 * @throws ConstraintViolationException (sollevata a livello di framework/dispatcher) se il 
+	 * {@code trackingNumber} non rispetta il formato UUID richiesto.
+	 */
+	@GetMapping("/shipment/{trackingNumber}")
+	public ResponseEntity<VehicleResponseDTO> getByShipmentTrackingNumber(@ValidatorUUID String trackingNumber) {
+		Shipment shipment = shipmentService.getByTrackingNumber(trackingNumber);
+		if(shipment.getShipmentStatus() != ShipmentStatus.PLANNED) {
+			VehicleSnapshot snap = vehicleSnapshotService.getByShipmentId(shipment.getId());
+			return ResponseEntity.ok(VehicleResponseDTO.fromEntity(snap));
+		} else {
+			Vehicle vehicle = shipment.getVehicle();
+			return ResponseEntity.ok(VehicleResponseDTO.fromEntity(vehicle));
+		}
 	}
 	
 	/**

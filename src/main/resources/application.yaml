@@ -77,6 +77,13 @@ adr-sentinel:
     driver-snapshot:
       shipment-id:
         max-size: 100
+    customer:
+      vat-number:
+        max-size: 100
+      company-name:
+        max-size: 100
+      all-customer:
+        max-size: 1
     shipment-route:
       route-uuid:
         max-size: 5000

@@ -20,7 +20,6 @@ import org.springframework.cache.CacheManager;
  * <li><b>Single Responsibility (per Enum):</b> Separa concettualmente le operazioni su record singoli da quelle su collezioni.</li>
  * <li><b>Lazy Loading Support:</b> Rispetta il caricamento ritardato delle liste: se una lista non è ancora in RAM, non la crea forzatamente.</li>
  * </ul>
- *
  * @author Giovanni Vinciguerra
  * @version 1.0
  * @since 1.0
@@ -43,7 +42,6 @@ public abstract class AbstractGenericService {
          */
 		LIST_RECORD
 	}
-	
 	/** Il gestore centralizzato della cache iniettato da Spring. */
 	protected final CacheManager cacheManager;
 	/** Logger dinamico configurato sulla classe figlia (a runtime 'getClass()' restituirà la classe concreta).*/

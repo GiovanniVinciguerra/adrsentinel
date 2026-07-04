@@ -1,7 +1,8 @@
-package dev.vinciguerra.adrsentinel.web.annotation.shipment.validator;
+package dev.vinciguerra.adrsentinel.web.annotation.validator;
 
 import java.util.regex.Pattern;
-import dev.vinciguerra.adrsentinel.web.annotation.shipment.ValidatorAddress;
+
+import dev.vinciguerra.adrsentinel.web.annotation.ValidatorAddress;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 

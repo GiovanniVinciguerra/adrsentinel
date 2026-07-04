@@ -1,8 +1,9 @@
 package dev.vinciguerra.adrsentinel.web.dto.shipment;
 
 import java.util.List;
+
+import dev.vinciguerra.adrsentinel.web.annotation.ValidatorAddress;
 import dev.vinciguerra.adrsentinel.web.annotation.ValidatorLocalDateTime;
-import dev.vinciguerra.adrsentinel.web.annotation.shipment.ValidatorAddress;
 import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorLicensePlate;
 import jakarta.validation.constraints.NotEmpty;
 

@@ -190,7 +190,7 @@ public class DriverService extends AbstractGenericService {
 	 */
 	@Transactional
 	public Driver updateActiveStatusByLicense(DriverUpdateActiveStatusDTO updateDto) throws ResourceNotFoundException {
-		logger.info("[DataBase CALL] Updating Driver details with license: {}", updateDto.license());
+		logger.info("[DataBase CALL] Updating Driver active status with license: {}", updateDto.license());
 		Driver driver = driverRepository.findByLicense(updateDto.license())
 			.orElseThrow(() -> new ResourceNotFoundException("Driver not found: " + updateDto.license()));
 		driver.setActive(updateDto.active());
