@@ -11,8 +11,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import dev.vinciguerra.adrsentinel.db.AbstractGenericService;
 import dev.vinciguerra.adrsentinel.db.adrclass.AdrClass;
 import dev.vinciguerra.adrsentinel.db.adrclass.AdrClassService;
 import dev.vinciguerra.adrsentinel.db.adrclass.shipmentroute.ShipmentRoute;
@@ -65,7 +67,7 @@ import dev.vinciguerra.adrsentinel.web.dto.vehicle.VehicleResponseDTO;
  * @since 1.0
  */
 @Service
-public class DispatchService {
+public class DispatchService extends AbstractGenericService {
 	/**
 	 * Record di supporto interno (Value Object contestuale) utilizzato per aggregare 
 	 * i dati di input (DTO) con i metadati anagrafici (Entity) e la modalità di trasporto,
@@ -85,14 +87,16 @@ public class DispatchService {
 	 * che richiedono un moltiplicatore normativo eccezionale (x50).
 	 */
 	private static final Set<String> SPECIAL_MULTIPLIER_ONU = Set.of("0081", "0082", "0084", "0241", "0331", "0332", "0482", "1005", "1053");
+	
 	/**
 	 * Inietta i servizi necessari per l'accesso ai dati anagrafici e logistici.
 	 * @param compatibilityRuleService Servizio per la lettura delle matrici di compatibilità tra classi ADR.
 	 * @param onuNumberService Servizio per la validazione e il recupero dei numeri ONU tramite chiave naturale.
 	 * @param vehicleService Servizio per l'interrogazione della flotta aziendale.
 	 */
-	public DispatchService(AdrClassService adrClassService, CompatibilityRuleService compatibilityRuleService, OnuNumberService onuNumberService,
-			ShipmentRouteService shipmentRouteService, VehicleService vehicleService, DriverService driverService) {
+	protected DispatchService(AdrClassService adrClassService, CompatibilityRuleService compatibilityRuleService, OnuNumberService onuNumberService,
+			ShipmentRouteService shipmentRouteService, VehicleService vehicleService, DriverService driverService, CacheManager cacheManager) {
+		super(cacheManager);
 		this.adrClassService = adrClassService;
 		this.compatibilityRuleService = compatibilityRuleService;
 		this.onuNumberService = onuNumberService;
