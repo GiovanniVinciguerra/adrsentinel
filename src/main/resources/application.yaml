@@ -84,6 +84,9 @@ adr-sentinel:
         max-size: 100
       all-customer:
         max-size: 1
+    customer-snapshot:
+      shipment-id:
+        max-size: 100
     shipment-route:
       route-uuid:
         max-size: 5000
