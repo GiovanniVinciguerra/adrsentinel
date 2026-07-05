@@ -1,6 +1,7 @@
 package dev.vinciguerra.adrsentinel.web.dto.customer;
 
 import dev.vinciguerra.adrsentinel.db.customer.Customer;
+import dev.vinciguerra.adrsentinel.db.customer.Customer.CustomerRole;
 import dev.vinciguerra.adrsentinel.db.customer.CustomerSnapshot;
 
 /**
@@ -56,6 +57,44 @@ public record CustomerResponseDTO(String companyName, String vatNumber, String l
 			entity.getVatNumber(),
 			entity.getLegalAddress(),
 			"NONE",
+			entity.isActive(),
+			false
+		);
+	}
+	
+	/**
+	 * Pattern "Static Factory Method" in overloading che converte un'entità anagrafica "viva" (Live Entity)
+	 * {@link Customer} nella sua rappresentazione DTO unificata destinata al client, arricchita del ruolo logistico.
+	 * <p><b>Dettaglio delle conversioni applicate (Live Entity -> DTO):</b></p>
+	 * <ul>
+	 * <li><b>Safe Null-Check:</b> Se l'entità in ingresso è {@code null}, il metodo restituisce {@code null}
+	 * in modo sicuro, prevenendo {@code NullPointerException} durante lo stream della mappa dei ruoli pre-partenza.</li>
+	 * <li><b>Proiezione Real-Time:</b> I dati estratti (Ragione Sociale, Partita IVA, Indirizzo Legale) rappresentano
+	 * l'anagrafica aziendale correntemente consolidata a database. Essendo tipicamente invocato durante la fase
+	 * di pianificazione ({@code PLANNED}), questi dati sono intrinsecamente mutabili prima della storicizzazione.</li>
+	 * <li><b>Iniezione del Contesto Logistico:</b> A differenza dell'entità master che è agnostica rispetto
+	 * alla spedizione, il parametro aggiuntivo {@link CustomerRole} inietta il contesto operativo di questo specifico
+	 * viaggio (es. SENDER, RECEIVER), de-serializzandolo in stringa primitiva tramite il metodo {@code name()}.</li>
+	 * <li><b>Propagazione Flag di Ciclo di Vita:</b> Essendo un record "vivo", lo stato di operatività corrente
+	 * dell'azienda ({@code isActive}) è pienamente valido, contestuale e determinante per la logica di business.
+	 * Viene pertanto propagato in chiaro verso il frontend.</li>
+	 * <li><b>Business Logic Implicita:</b> Il campo {@code historicalData} viene forzato rigidamente a {@code false}.
+	 * Questo marker architetturale segnala inequivocabilmente al client che i dati forniti costituiscono l'anagrafica
+	 * master attuale, rendendola (se l'utente possiede i permessi) teoricamente candidabile per mutazioni via API (PUT/PATCH).</li>
+	 * </ul>
+	 * @param entity L'entità {@link Customer} master estranea da cristallizzazione (pre-snapshot).
+	 * @param role Il ruolo logistico ({@link CustomerRole}) ricoperto dall'azienda all'interno della mappa di spedizione.
+	 * @return Un'istanza popolata di {@link CustomerResponseDTO}, o {@code null} se l'entità fornita è nulla.
+	 */
+	public static CustomerResponseDTO fromEntity(Customer entity, CustomerRole role) {
+		if(entity == null)
+			return null;
+		
+		return new CustomerResponseDTO(
+			entity.getCompanyName(),
+			entity.getVatNumber(),
+			entity.getLegalAddress(),
+			role.name(),
 			entity.isActive(),
 			false
 		);

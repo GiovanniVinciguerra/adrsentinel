@@ -21,6 +21,8 @@ import dev.vinciguerra.adrsentinel.db.CaffeineCacheConfiguration;
 import dev.vinciguerra.adrsentinel.db.customer.Customer;
 import dev.vinciguerra.adrsentinel.db.customer.Customer.CustomerRole;
 import dev.vinciguerra.adrsentinel.db.customer.CustomerService;
+import dev.vinciguerra.adrsentinel.db.customer.CustomerSnapshot;
+import dev.vinciguerra.adrsentinel.db.customer.CustomerSnapshotService;
 import dev.vinciguerra.adrsentinel.db.driver.Driver;
 import dev.vinciguerra.adrsentinel.db.driver.DriverService;
 import dev.vinciguerra.adrsentinel.db.driver.DriverSnapshot;
@@ -71,6 +73,7 @@ public class ShipmentService extends AbstractGenericService {
 	private final DriverService driverService;
 	private final DriverSnapshotService driverSnapshotService;
 	private final CustomerService customerService;
+	private final CustomerSnapshotService customerSnapshotService;
 	
 	/**
 	 * Costruttore con Dependency Injection nativa di Spring.
@@ -78,7 +81,7 @@ public class ShipmentService extends AbstractGenericService {
 	 * @param cacheManager il gestore dell'infrastruttura di memoria (iniettato nella superclasse).
 	 */
 	public ShipmentService(ShipmentRepository shipmentRepository, VehicleService vehicleService, VehicleSnapshotService vehicleSnapshotService, DriverService driverService,
-			DriverSnapshotService driverSnapshotService, CustomerService customerService, CacheManager cacheManager) {
+			DriverSnapshotService driverSnapshotService, CustomerService customerService, CustomerSnapshotService customerSnapshotService, CacheManager cacheManager) {
 		super(cacheManager);
 		this.shipmentRepository = shipmentRepository;
 		this.vehicleService = vehicleService;
@@ -86,6 +89,7 @@ public class ShipmentService extends AbstractGenericService {
 		this.driverService = driverService;
 		this.driverSnapshotService = driverSnapshotService;
 		this.customerService = customerService;
+		this.customerSnapshotService = customerSnapshotService;
 	}
 	
 	// --- SEZIONE 1: BOUNDED DATA (CACHED) ---
@@ -289,8 +293,8 @@ public class ShipmentService extends AbstractGenericService {
 	 * <ul>
 	 * <li><b>Uscita da {@code PLANNED}:</b> Rappresenta il trigger univoco per la storicizzazione. Indipendentemente 
 	 * dalla destinazione ({@code TRANSIT} o {@code CANCELED}), genera e persiste uno snapshot storico 
-	 * ({@link VehicleSnapshot}, {@link DriverSnapshot}) per cristallizzare i dati. Successivamente, 
-	 * <b>scollega</b> la spedizione dai master ({@link Vehicle} e {@link Driver}), permettendo loro di seguire 
+	 * ({@link VehicleSnapshot}, {@link DriverSnapshot}) e {@link CustomerSnapshot} per cristallizzare i dati. Successivamente, 
+	 * <b>scollega</b> la spedizione dai master ({@link Vehicle}, {@link Driver}), {@link Customer} , permettendo loro di seguire 
 	 * un ciclo di vita indipendente. Nel caso specifico della transizione verso {@code TRANSIT}, blocca le risorse 
 	 * fisiche impostandole in stato di transito ({@code inTransit = true}).</li>
 	 * <li><b>Uscita da {@code TRANSIT}:</b> Al termine del viaggio (verso {@code DELIVERED} o {@code CANCELED}), 
@@ -348,15 +352,15 @@ public class ShipmentService extends AbstractGenericService {
 	        	shipment.getDrivers().forEach(driver -> driverService.updateInTransitStatusById(driver.getId(), true));
 	        }
 	        // Se va in CANCELED, non tocca 'inTransit' (le risorse non sono mai partite, rimangono false)
-	        // Indipendentemente da TRANSIT o CANCELED, stiamo lasciando lo stato PLANNED.
-	        // È questo l'unico momento in cui creo lo snapshot e scollego definitivamente i master.
+	        // Indipendentemente da TRANSIT o CANCELED, sta lasciando lo stato PLANNED.
+	        // È questo l'unico momento in cui crea lo snapshot e scollega definitivamente i master.
 	        logger.info("Shipment [{}] leaving PLANNED state. Executing one-time snapshot and detachment.", trackingNumber);
 	        vehicleSnapshotService.save(new VehicleSnapshot(shipment));
 	        shipment.setVehicle(null);
 	        DriverSnapshot.fromDrivers(shipment).forEach(driverSnapshotService::save);
 	        shipment.getDrivers().clear();
-	        /* TODO snapshot dei customer */
-	        
+	        CustomerSnapshot.fromCustomers(shipment).forEach(customerSnapshotService::save);
+	        shipment.getCustomers().clear();
 	    } else if(oldStatus == ShipmentStatus.TRANSIT) { // 3. LOGICA IN USCITA DALLO STATO OPERATIVO (TRANSIT)
 	    	// Da TRANSIT può andare solo in DELIVERED o CANCELED
 	        if (newStatus == ShipmentStatus.PLANNED || newStatus == ShipmentStatus.TRANSIT) {
@@ -366,7 +370,7 @@ public class ShipmentService extends AbstractGenericService {
 	        }
 	        // Il viaggio è finito (o con successo o annullato).
 	        // I master sono già stati scollegati durante l'uscita da PLANNED.
-	        // Devo usare gli snapshot (fonte di verità) per sbloccare i veicoli e gli autisti originali.
+	        // Usa gli snapshot (fonte di verità) per sbloccare i veicoli e gli autisti originali.
 	        logger.info("Shipment [{}] leaving TRANSIT state. Releasing inTransit lock on resources.", trackingNumber);
 	        VehicleSnapshot vehicleSnap = vehicleSnapshotService.getByShipmentId(shipment.getId());
 	        Vehicle vehicleMaster = vehicleService.getByLicensePlate(vehicleSnap.getLicensePlateSnap());

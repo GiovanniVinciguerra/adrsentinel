@@ -1,6 +1,7 @@
 package dev.vinciguerra.adrsentinel.web.controller;
 
 import java.util.List;
+import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -11,8 +12,14 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import dev.vinciguerra.adrsentinel.db.customer.Customer;
+import dev.vinciguerra.adrsentinel.db.customer.Customer.CustomerRole;
 import dev.vinciguerra.adrsentinel.db.customer.CustomerService;
+import dev.vinciguerra.adrsentinel.db.customer.CustomerSnapshot;
+import dev.vinciguerra.adrsentinel.db.customer.CustomerSnapshotService;
+import dev.vinciguerra.adrsentinel.db.shipment.Shipment;
 import dev.vinciguerra.adrsentinel.db.shipment.ShipmentService;
+import dev.vinciguerra.adrsentinel.db.shipment.Shipment.ShipmentStatus;
+import dev.vinciguerra.adrsentinel.web.annotation.ValidatorUUID;
 import dev.vinciguerra.adrsentinel.web.dto.customer.CustomerRequestDTO;
 import dev.vinciguerra.adrsentinel.web.dto.customer.CustomerResponseDTO;
 import dev.vinciguerra.adrsentinel.web.dto.customer.CustomerSearchByNameRequestDTO;
@@ -41,15 +48,17 @@ import jakarta.validation.Valid;
 public class CustomerController {
 	private final ShipmentService shipmentService;
 	private final CustomerService customerService;
+	private final CustomerSnapshotService customerSnapshotService;
 	
 	/**
 	 * Inietta le dipendenze necessarie tramite costruttore (Constructor Injection).
 	 * Questa pratica garantisce l'immutabilità del controller (thread-safety) e ne 
 	 * agevola i test unitari isolati (Mocking).
 	 */
-	public CustomerController(ShipmentService shipmentService, CustomerService customerService) {
+	public CustomerController(ShipmentService shipmentService, CustomerService customerService, CustomerSnapshotService customerSnapshotService) {
 		this.shipmentService = shipmentService;
 		this.customerService = customerService;
+		this.customerSnapshotService = customerSnapshotService;
 	}
 	
 	/**
@@ -66,6 +75,51 @@ public class CustomerController {
 	}
 	
 	/**
+	 * Endpoint pubblico per il recupero degli attori anagrafici (Clienti) coinvolti in una specifica spedizione.
+	 * <p><b>Pattern "Router dei Dati" (State-Driven Data Routing):</b></p>
+	 * Questo metodo agisce da snodo architetturale nevralgico, condizionando la strategia di estrazione dati 
+	 * all'attuale posizione della spedizione all'interno della Macchina a Stati (State Machine). La biforcazione 
+	 * logica garantisce il rispetto assoluto del principio di immutabilità del manifest logistico:
+	 * <ul>
+	 * <li><b>Stato {@code PLANNED} (Anagrafica Viva):</b> Se il viaggio è ancora in fase di pianificazione, l'endpoint 
+	 * attinge alla mappa delle entità {@link Customer} "vive". In questa finestra temporale, le anagrafiche sono 
+	 * mutabili e soggette ad aggiornamenti pre-partenza.</li>
+	 * <li><b>Stati Operativi/Terminali (Anagrafica Storicizzata):</b> Non appena la spedizione abbandona lo stato 
+	 * iniziale (es. passa in {@code TRANSIT}, {@code DELIVERED} o {@code CANCELED}), il sistema dirotta in modo 
+	 * trasparente la lettura verso il Service dei {@link CustomerSnapshot}. Il client riceve la fotografia 
+	 * inalterabile degli attori logistici (es. Mittente, Destinatario) congelata all'istante esatto della partenza, 
+	 * ignorando qualsiasi mutazione anagrafica successiva.</li>
+	 * </ul>
+	 * <p><b>Polimorfismo del DTO e Astrazione del Client:</b></p>
+	 * Indipendentemente dalla sorgente dati (Relazionale "Live" o Registro "Append-Only" degli Snapshot), le entità 
+	 * vengono proiettate verso l'esterno utilizzando un unico contratto strutturale ({@link CustomerResponseDTO}). 
+	 * Questa maschera unificata (tramite i metodi di factory in overloading) assorbe l'intera complessità architetturale, 
+	 * offrendo al Frontend un'API omogenea e predicibile, comunicando la storicità del dato unicamente tramite 
+	 * il flag interno {@code historicalData}.
+	 * @param trackingNumber L'identificatore pubblico e univoco della spedizione (Business Key). La sicurezza 
+	 * alla frontiera e la prevenzione di query a vuoto sono garantite dall'annotazione {@code @ValidatorUUID}, che respinge 
+	 * (HTTP 400) formati non conformi.
+	 * @return Una {@link ResponseEntity} contenente la lista unificata degli attori logistici, con HTTP status 200 (OK).
+	 */
+	@GetMapping("/{trackingNumber}")
+	public ResponseEntity<List<CustomerResponseDTO>> getByShipmentTrackingNumber(@ValidatorUUID String trackingNumber) {
+		Shipment shipment = shipmentService.getByTrackingNumber(trackingNumber);
+		List<CustomerResponseDTO> response;
+		if(shipment.getShipmentStatus() != ShipmentStatus.PLANNED) {
+			List<CustomerSnapshot> snaps = customerSnapshotService.getByShipmentId(shipment.getId());
+			response = snaps.stream()
+				.map(CustomerResponseDTO::fromEntity)
+				.toList();
+		} else {
+			Map<CustomerRole, Customer> customers = shipment.getCustomers();
+			response = customers.entrySet().stream()
+				.map(entry -> CustomerResponseDTO.fromEntity(entry.getValue(), entry.getKey()))
+				.toList();
+		}
+		return ResponseEntity.ok(response);
+	}
+	
+	/**
 	 * Esegue una ricerca per corrispondenza esatta (Exact Match) sulla Ragione Sociale.
 	 * <p><b>Peculiarità Architetturale:</b></p>
 	 * L'endpoint sfrutta un payload strutturato (Body) in combinazione con un verbo GET. Sebbene atipica nello standard REST, 
@@ -74,7 +128,7 @@ public class CustomerController {
 	 * @param searchDto Il payload validato contenente la Ragione Sociale da ricercare.
 	 * @return Una {@link ResponseEntity} contenente una lista di DTO (gestione strutturale delle omonimie) con HTTP status 200 (OK).
 	 */
-	@GetMapping("/search-name")
+	@PostMapping("/search-name")
 	public ResponseEntity<List<CustomerResponseDTO>> getByCompanyName(@RequestBody @Valid CustomerSearchByNameRequestDTO searchDto) {
 		List<Customer> customers = customerService.getByCompanyName(searchDto.companyName());
 		List<CustomerResponseDTO> response = customers.stream().map(CustomerResponseDTO::fromEntity).toList();
