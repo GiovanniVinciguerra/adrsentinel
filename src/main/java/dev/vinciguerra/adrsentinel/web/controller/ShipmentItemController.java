@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import dev.vinciguerra.adrsentinel.db.shipmentitem.ShipmentItem;
 import dev.vinciguerra.adrsentinel.db.shipmentitem.ShipmentItemService;
 import dev.vinciguerra.adrsentinel.web.annotation.ValidatorUUID;
+import dev.vinciguerra.adrsentinel.web.dto.shipmentitem.ShipmentItemPackageUpdateDTO;
 import dev.vinciguerra.adrsentinel.web.dto.shipmentitem.ShipmentItemRequestDTO;
 import dev.vinciguerra.adrsentinel.web.dto.shipmentitem.ShipmentItemResponseDTO;
 import dev.vinciguerra.adrsentinel.web.dto.shipmentitem.ShipmentItemUpdateDTO;
@@ -125,6 +126,23 @@ public class ShipmentItemController {
 	public ResponseEntity<ShipmentItemResponseDTO> updateShipmentItemDetails(@PathVariable @ValidatorUUID String itemUUID,
 			@RequestBody @Valid ShipmentItemUpdateDTO updateDto) {
 		ShipmentItem updatedShipmentItem = shipmentItemService.updateDetailsByItemUUID(itemUUID, updateDto);
+		return ResponseEntity.ok(ShipmentItemResponseDTO.fromEntity(updatedShipmentItem));
+	}
+	
+	/**
+	 * Endpoint di mutazione (Aggiornamento Completo/Parziale) per la modifica 
+	 * del packaging di una riga di carico esistente.
+	 * <p><b>Design API:</b> Implementato tramite il verbo HTTP {@code PUT}. L'identificatore 
+	 * immutabile della risorsa bersaglio è passato nel Path (Best Practice REST), mentre 
+	 * l'intero stato mutabile è contenuto nel Body della richiesta.</p>
+	 * @param itemUUID L'identificativo pubblico (UUID) della riga di spedizione da aggiornare (Path Variable).
+	 * @param updateDto Il payload contenente i nuovi valori di imballaggio (Body), garantito sintatticamente valido.
+	 * @return Una {@link ResponseEntity} contenente HTTP 200 (OK) e la rappresentazione aggiornata dell'entità.
+	 */
+	@PutMapping("/package/{itemUUID}")
+	public ResponseEntity<ShipmentItemResponseDTO> updatePackageDetails(@PathVariable @ValidatorUUID String itemUUID,
+			@RequestBody @Valid ShipmentItemPackageUpdateDTO updateDto) {
+		ShipmentItem updatedShipmentItem = shipmentItemService.updatePackageDetailsByItemUUID(itemUUID, updateDto);
 		return ResponseEntity.ok(ShipmentItemResponseDTO.fromEntity(updatedShipmentItem));
 	}
 }

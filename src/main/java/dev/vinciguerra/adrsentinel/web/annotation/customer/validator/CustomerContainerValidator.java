@@ -21,7 +21,7 @@ import jakarta.validation.ConstraintValidatorContext;
  * esattamente tre attori distinti:
  * <ul>
  * <li>Esattamente un {@code SENDER} (Mittente).</li>
- * <li>Esattamente un {@code RECEIVER} (Destinatario).</li>
+ * <li>Almeno uno o più di uno {@code RECEIVER} (Destinatario).</li>
  * <li>Esattamente un {@code CARRIER} (Vettore responsabile del trasporto).</li>
  * </ul>
  * Qualsiasi deviazione da questo schema (es. assenza del vettore, ruoli duplicati o ruoli sconosciuti) 
@@ -53,8 +53,8 @@ public class CustomerContainerValidator implements ConstraintValidator<Validator
 		// 1. Controllo base: la collezione non deve essere nulla o vuota
 		if(value == null || value.isEmpty())
 			return false;
-		// 2. La collezione deve contenere esattamente 3 Customer (VatNumber)
-		if(value.size() != 3)
+		// 2. La collezione deve contenere almeno 3 Customer (VatNumber)
+		if(value.size() < 3)
 			return false;
 		int senderCount = 0;
 		int receiverCount = 0;
@@ -71,6 +71,6 @@ public class CustomerContainerValidator implements ConstraintValidator<Validator
 				default -> { return false; }
 			}
 		}
-		return senderCount == 1 && receiverCount == 1 && carrierCount == 1;
+		return senderCount == 1 && carrierCount == 1 && receiverCount >= 1;
 	}
 }

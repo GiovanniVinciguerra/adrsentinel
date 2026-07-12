@@ -1,5 +1,6 @@
 package dev.vinciguerra.adrsentinel.db.customer;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -111,7 +112,7 @@ public class CustomerSnapshot {
 	 * Pattern "Static Factory Method" che orchestra la generazione massiva degli snapshot per tutti i clienti coinvolti in un viaggio.
 	 * <p><b>Flusso di Mappatura e Vincolo Relazionale:</b></p>
 	 * Il metodo riceve in ingresso la spedizione "master", estrae la mappa dei clienti associati (chiave: {@link CustomerRole},
-	 * valore: {@link Customer}), itera sulle singole entry e istanzia un {@link CustomerSnapshot} per ciascuna di esse.
+	 * valore: {@link List<Customer>}), itera sulle singole entry e istanzia un {@link CustomerSnapshot} per ciascuna di esse.
 	 * Contestualmente, inietta in ogni snapshot il riferimento foreign-key ({@code shipment}) necessario a consolidare la
 	 * dipendenza Many-to-One sul database relazionale.
 	 * @param shipment L'entità Spedizione di cui si intendono cristallizzare gli attori logistici.
@@ -121,16 +122,18 @@ public class CustomerSnapshot {
 	public static Set<CustomerSnapshot> fromCustomers(Shipment shipment) throws IllegalArgumentException {
 		if(shipment == null)
 			throw new IllegalArgumentException("Unable to create customer snapshot. Shipment is null.");
-		Map<CustomerRole, Customer> customers = shipment.getCustomers();
+		Map<CustomerRole, List<Customer>> customers = shipment.getCustomerAsMap();
 		if(customers == null || customers.isEmpty())
 			throw new IllegalArgumentException("Unable to create multiple customer snapshot. Customers map is null or empty.");
 		return customers.entrySet()
 			.stream()
-			.map(entry -> {
-				CustomerSnapshot customerSnap = new CustomerSnapshot(entry.getValue(), entry.getKey());
-				customerSnap.shipment = shipment;
-				return customerSnap;
-			})
+			.flatMap(entry -> entry.getValue().stream()
+				.map(customer -> {
+					CustomerSnapshot customerSnap = new CustomerSnapshot(customer, entry.getKey());
+					customerSnap.shipment = shipment;
+					return customerSnap;
+				})
+			)
 			.collect(Collectors.toSet());
 	}
 

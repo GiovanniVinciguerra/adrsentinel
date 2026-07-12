@@ -9,7 +9,9 @@ import dev.vinciguerra.adrsentinel.web.annotation.customer.ValidatorCustomerCont
 import dev.vinciguerra.adrsentinel.web.annotation.customer.ValidatorCustomerRole;
 import dev.vinciguerra.adrsentinel.web.annotation.customer.ValidatorVatNumber;
 import dev.vinciguerra.adrsentinel.web.annotation.driver.ValidatorLicense;
+import dev.vinciguerra.adrsentinel.web.annotation.onunumber.ValidatorTunnelRestriction;
 import dev.vinciguerra.adrsentinel.web.annotation.shipment.ValidatorShipmentStatus;
+import dev.vinciguerra.adrsentinel.web.annotation.shipment.ValidatorShipmentReason;
 import dev.vinciguerra.adrsentinel.web.annotation.vehicle.ValidatorLicensePlate;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
@@ -36,6 +38,9 @@ import jakarta.validation.constraints.NotEmpty;
  * @param origin L'indirizzo toponomastico del sito di carico. Sottoposto a sanificazione 
  * anti-XSS e blocco di caratteri speciali non ammessi.
  * @param destinations Gli indirizzi toponomastici dei siti di scarico. Sanificati analogamente all'origine.
+ * @param tunnelRestriction La restrizione dei tunnel associata a questa spedizione in base al percorso seguito dal veicolo e 
+ * dalle merci ADR trasportate sottoposta a rigido controllo.
+ * @param transportReason La ragione per cui è stato effettuato il trasporto sottoposto a rigido controllo.
  * @param vehicleLicensePlate L'identificativo legale del mezzo assegnato. Sottoposto a 
  * rigida normalizzazione e standardizzazione europea (assenza di spazi, solo maiuscole).
  * @author Giovanni Vinciguerra
@@ -43,7 +48,9 @@ import jakarta.validation.constraints.NotEmpty;
  * @since 1.0
  */
 public record ShipmentRequestDTO(@ValidatorLocalDateTime String date, @ValidatorShipmentStatus String status, @ValidatorAddress String origin,  
-		@NotEmpty(message = "Malformed payload: destinations list is required") List<@ValidatorAddress String> destinations, @ValidatorLicensePlate String vehicleLicensePlate,
+		@NotEmpty(message = "Malformed payload: destinations list is required") List<@ValidatorAddress String> destinations,
+		@ValidatorTunnelRestriction String tunnelRestriction, @ValidatorShipmentReason String shipmentReason,
+		@ValidatorLicensePlate String vehicleLicensePlate,
 		@NotEmpty(message = "Malformed payload: invalid parameter. Drivers is empy.") Set<@ValidatorLicense String> drivers,
 		@ValidatorCustomerContainer List<@Valid CustomerContainerDTO> customers) {
 	/**

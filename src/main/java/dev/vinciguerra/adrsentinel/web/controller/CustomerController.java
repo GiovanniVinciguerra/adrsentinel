@@ -111,9 +111,13 @@ public class CustomerController {
 				.map(CustomerResponseDTO::fromEntity)
 				.toList();
 		} else {
-			Map<CustomerRole, Customer> customers = shipment.getCustomers();
-			response = customers.entrySet().stream()
-				.map(entry -> CustomerResponseDTO.fromEntity(entry.getValue(), entry.getKey()))
+			Map<CustomerRole, List<Customer>> customers = shipment.getCustomerAsMap();
+			response = customers.entrySet()
+				.stream()
+				.flatMap(entry -> entry.getValue()
+					.stream()
+					.map(customer -> CustomerResponseDTO.fromEntity(customer, entry.getKey()))
+				)
 				.toList();
 		}
 		return ResponseEntity.ok(response);

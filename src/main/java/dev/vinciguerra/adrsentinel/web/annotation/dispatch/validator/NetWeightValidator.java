@@ -25,30 +25,31 @@ import jakarta.validation.ConstraintValidatorContext;
  */
 public class NetWeightValidator implements ConstraintValidator<ValidatorNetWeight, Integer> {
 	/**
-	 * Valuta la conformità del peso netto fornito in input rispetto alle rigide regole 
-	 * del dominio logistico e matematico.
-	 * <p>
-	 * L'algoritmo di validazione procede per "imbuti" di sicurezza successivi:
+	 * Esegue la validazione formale e logistica sulla quantità intera in ingresso.
+	 * <p><b>Pipeline di Validazione (Approccio Fail-Fast):</b></p>
 	 * <ol>
-	 * <li><b>Controllo di Esistenza (Null-Safety):</b> Rifiuta esplicitamente i payload privi di valore. 
-	 * Questo rende il vincolo autosufficiente: un campo annotato con {@code @ValidatorNetWeight} 
-	 * è implicitamente considerato obbligatorio (comportandosi anche come un {@code @NotNull}).</li>
-	 * <li><b>Controllo di Integrità Fisica:</b> Assicura che il peso rappresenti una grandezza 
-	 * nel mondo reale, dovendo essere strettamente maggiore di zero.</li>
+	 * <li><i>Null-Safety:</i> Rifiuta immediatamente valori nulli ({@code value == null}). 
+	 * Garantisce che la quantità sia sempre esplicitamente dichiarata prima di consentire 
+	 * la persistenza o l'elaborazione del Documento di Trasporto.</li>
+	 * <li><i>Invariante di Dominio (Limite Inferiore):</i> Verifica che il valore sia 
+	 * strettamente maggiore di zero ({@code value > 0}). Una riga di spedizione con 
+	 * quantità nulla o negativa è semanticamente e fisicamente invalida.</li>
+	 * <li><i>Invariante di Dominio (Limite Superiore):</i> Verifica che la quantità non ecceda 
+	 * la soglia massima di sicurezza fissata a 44.000 ({@code value <= 44000}). Questo 
+	 * valore riflette la portata limite legale per il trasporto intermodale/combinato 
+	 * (44 tonnellate). Il vincolo agisce primariamente come "Typo Preventer", bloccando sul 
+	 * nascere errori macroscopici di digitazione nell'inserimento dati.</li>
 	 * </ol>
-	 * </p>
-	 * @param value l'oggetto {@link Float} che rappresenta il peso netto da validare 
-	 * (estratto tipicamente dalla deserializzazione del JSON).
-	 * @param context il contesto operativo in cui il vincolo viene valutato; fornisce API 
-	 * avanzate per manipolare dinamicamente i template dei messaggi di errore 
-	 * qualora si volessero disabilitare quelli di default.
-	 * @return {@code true} se e solo se il valore è presente, finito e strettamente positivo; 
-	 * {@code false} in tutti gli altri casi.
+	 * @param value Il valore quantitativo intero da sottoporre a verifica (es. chili o litri discreti).
+	 * @param context Il contesto strutturale fornito dal motore di validazione Jakarta, 
+	 * utilizzabile per l'eventuale costrutto di messaggi di violazione dinamici.
+	 * @return {@code true} se il valore è presente e rientra nel range operativo ammesso (da 1 a 44000 inclusi), 
+	 * {@code false} in caso di valore nullo o fuori dai limiti.
 	 */
 	@Override
 	public boolean isValid(Integer value, ConstraintValidatorContext context) {
 		if(value == null)
 			return false;
-		return value > 0;
+		return value > 0 && value <= 44000;
 	}
 }

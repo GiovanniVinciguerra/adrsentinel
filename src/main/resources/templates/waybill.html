@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8" />
+    <title>D.D.T. ADR Sentinel</title>
+    <style>
+        body { 
+            font-family: Helvetica, Arial, sans-serif; 
+            font-size: 10px; 
+            color: #222;
+        }
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-bottom: 10px; 
+            page-break-inside: avoid;
+        }
+        .data-table th, .data-table td { 
+            border: 1px solid #333; 
+            padding: 4px; 
+            text-align: left; 
+            vertical-align: top;
+        }
+        .data-table th { 
+            background-color: #e6e6e6; 
+            font-weight: bold;
+            font-size: 11px;
+        }
+        .layout-table td { 
+            border: none; 
+            vertical-align: top; 
+            padding: 3px 8px 3px 0; 
+        }
+        .section-title {
+            font-size: 12px;
+            font-weight: bold;
+            margin-top: 15px;
+            margin-bottom: 5px;
+            border-bottom: 2px solid #000;
+            padding-bottom: 2px;
+            text-transform: uppercase;
+        }
+        .adr-text {
+            font-weight: bold;
+            font-size: 11px;
+        }
+        .environmental-hazard {
+            color: #d9534f;
+            font-weight: bold;
+            font-size: 10px;
+            display: block;
+            margin-top: 2px;
+        }
+        .totals-row {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        .signature-box {
+            border-top: 1px solid #000;
+            padding-top: 3px;
+            text-align: center;
+            font-size: 10px;
+            margin-top: 25px;
+        }
+        .small-note {
+            font-size: 8px;
+            color: #555;
+            font-style: italic;
+        }
+        .receiver-block {
+            margin-bottom: 8px;
+            padding-bottom: 8px;
+            border-bottom: 1px dashed #999;
+        }
+        .receiver-block:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        .driver-block {
+            margin-bottom: 5px;
+            padding-bottom: 5px;
+            border-bottom: 1px dotted #ccc;
+        }
+        .driver-block:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+    </style>
+</head>
+<body>
+
+    <table class="layout-table" style="margin-bottom: 10px;">
+        <tr>
+            <td style="width: 80%;">
+                <h1 style="margin: 0; font-size: 18px;">DOCUMENTO DI TRASPORTO (D.D.T.)</h1>
+                <p style="margin: 3px 0 0 0; font-weight: bold;">Documento di trasporto merci pericolose redatto ai sensi del Cap. 5.4 ADR</p>
+                <p style="margin: 2px 0 0 0; font-size: 9px;">D.P.R. 472/96 e D.P.R. 696/96</p>
+            </td>
+            <td style="width: 20%; text-align: right;">
+                <img src="images/logo.png" alt="Logo Aziendale" style="max-width: 64px; max-height: 64px;" />
+            </td>
+        </tr>
+    </table>
+
+    <div class="section-title">1. Anagrafiche e Luoghi</div>
+    <table class="data-table">
+        <tr>
+            <td style="width: 50%;">
+                <strong>MITTENTE (Speditore):</strong><br/><br/>
+                <span th:text="${shipment.sender.name}">AdrChemicals S.p.A.</span><br/>
+                <span th:text="${shipment.sender.address}">Via delle Industrie, 12</span> - <span th:text="${shipment.sender.city}">Milano (MI)</span><br/>
+                P.IVA/CF: <span th:text="${shipment.sender.vat}">01234567890</span><br/>
+                <br/>
+                <strong>LUOGO DI CARICO:</strong><br/>
+                <span th:text="${shipment.loadingAddress}">Deposito Nord - Via Padana, 8 - Rho (MI)</span>
+            </td>
+            <td style="width: 50%;">
+                <strong>DESTINATARI E LUOGHI DI SCARICO:</strong><br/><br/>
+                <div th:each="receiver, iterStat : ${shipment.receivers}" class="receiver-block">
+                    <strong th:text="'Destinatario ' + ${iterStat.count} + ':'">Destinatario 1:</strong><br/>
+                    <span th:text="${receiver.name}">Rossi Vernici S.r.l.</span><br/>
+                    <span th:text="${receiver.address}">Via Roma, 45</span> - <span th:text="${receiver.city}">Torino (TO)</span><br/>
+                    P.IVA/CF: <span th:text="${receiver.vat}">09876543210</span><br/>
+                    <div th:if="${receiver.unloadingAddress != null}" style="margin-top: 3px;">
+                        <em>Scarico: </em><span th:text="${receiver.unloadingAddress}">Magazzino 3 - Via della Chimica, 1</span>
+                    </div>
+                </div>
+            </td>
+        </tr>
+    </table>
+
+    <div class="section-title">2. Riferimenti Spedizione</div>
+    <table class="data-table">
+        <tr>
+            <th>N° D.D.T.</th>
+            <th>Data D.D.T.</th>
+            <th>Causale Trasporto</th>
+        </tr>
+        <tr>
+            <td th:text="${documentNumber}">DDT-2026-0789</td>
+            <td th:text="${date}">06/07/2026</td>
+            <td th:text="${shipment.transportReason}">Vendita</td>
+        </tr>
+    </table>
+
+    <div class="section-title">3. Dettaglio Merci (Cap. 5.4.1 ADR)</div>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th style="width: 10%;">Q.tà Colli</th>
+                <th style="width: 15%;">Tipo Imballaggio</th>
+                <th style="width: 55%;">Descrizione ADR (UN, Designazione, Classe, Gruppo Imballaggio, Gallerie)</th>
+                <th style="width: 10%;">Q.tà Netta</th>
+                <th style="width: 10%;">Peso Lordo</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr th:each="item : ${shipment.items}">
+                <td style="text-align: center;" th:text="${item.packageCount}">10</td>
+                <td th:text="${item.packageType}">Fusti (1A1)</td>
+                <td>
+                    <span class="adr-text" th:text="${'UN ' + item.unNumber + ', ' + item.designation + ', ' + item.adrClass + ', ' + item.packingGroup + ', (' + item.tunnelRestrictionCode + ')'}">
+                        UN 1203, BENZINA, 3, II, (D/E)
+                    </span>
+                    <span class="environmental-hazard" th:if="${item.isEnvironmentallyHazardous}">
+                        PERICOLOSO PER L'AMBIENTE
+                    </span>
+                    <span class="small-note" th:if="${item.technicalName != null}" th:text="${'Nome tecnico: ' + item.technicalName}">
+                        Nome tecnico: Acido Solforico
+                    </span>
+                </td>
+                
+                <td style="text-align: right;">
+                    <span th:text="${item.quantity}">200.0</span>
+                    <span th:switch="${item.unitOfMeasure != null ? item.unitOfMeasure.toString() : ''}">
+                        <span th:case="'LITRE'">L</span>
+                        <span th:case="'KILOGRAM'">kg</span>
+                        <span th:case="'CUBIC_METRE'">m&sup3;</span>
+                    </span>
+                </td>
+                
+                <td style="text-align: right;" th:text="${item.grossWeight + ' kg'}">215.0 kg</td>
+            </tr>
+            <tr class="totals-row">
+                <td style="text-align: center;" th:text="${shipment.totalPackageCount}">15</td>
+                <td colspan="2" style="text-align: right;"><strong>TOTALE COMPLESSIVO LORDO:</strong></td>
+                <td style="text-align: right;">-</td>
+                <td style="text-align: right;" th:text="${shipment.totalGrossWeight + ' kg'}">765.0 kg</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="section-title">4. Dichiarazioni ADR / Esenzioni</div>
+    <table class="layout-table" style="background-color: #fdfdfd; border: 1px solid #333;">
+        <tr>
+            <td style="width: 50%; border-right: 1px solid #ccc;">
+                <strong>Calcolo Esenzione (1.1.3.6 ADR):</strong><br/>
+                <div th:if="${shipment.adrPoints != null}">
+                    Punti ADR Totali calcolati: <strong style="font-size: 13px;" th:text="${shipment.adrPoints}">1100</strong><br/>
+                    <span th:if="${shipment.adrPoints <= 1000}">"Trasporto che non supera i limiti di esenzione prescritti in 1.1.3.6"</span>
+                    <span th:if="${shipment.adrPoints > 1000}" style="color: #d9534f; font-weight: bold;">TRASPORTO IN PIENO REGIME ADR</span>
+                </div>
+                <div th:if="${shipment.adrPoints == null}">
+                    <em>Calcolo esenzione non applicato a questo trasporto.</em>
+                </div>
+            </td>
+            <td style="width: 50%;">
+                <strong>Note e Dichiarazioni:</strong><br/>
+                <span th:text="${shipment.specialNotes}">Nessuna nota aggiuntiva.</span>
+            </td>
+        </tr>
+    </table>
+
+    <br/>
+
+    <div class="section-title">5. Vettore e Dati Trasporto</div>
+    <table class="data-table">
+        <tr>
+            <td style="width: 40%;">
+                <strong>VETTORE:</strong><br/>
+                <span th:text="${shipment.carrier.name}">Trasporti Rapidi S.r.l.</span><br/>
+                <span th:text="${shipment.carrier.address}">Via Napoli, 1</span> - P.IVA: <span th:text="${shipment.carrier.vat}">11223344556</span>
+            </td>
+            
+            <td style="width: 30%;">
+                <strong>CONDUCENTI:</strong><br/>
+                <div th:each="driver, iterStat : ${shipment.drivers}" class="driver-block">
+                    <strong th:if="${iterStat.size > 1}" th:text="'Conducente ' + ${iterStat.count} + ':'">Conducente 1:</strong><br th:if="${iterStat.size > 1}"/>
+                    Nome: <span th:text="${driver.firstName + ' ' + driver.lastName}">Mario Bianchi</span><br/>
+                    Patente Guida: <span th:text="${driver.licenseNumber}">U12345678</span><br/>
+                    Patente ADR: <span th:text="${driver.adrLicense}">9876543</span>
+                </div>
+            </td>
+            
+            <td style="width: 30%;">
+                <strong>VEICOLO:</strong><br/>
+                Targa Motrice: <strong th:text="${shipment.truckPlate}">AB 123 CD</strong><br/>
+                Targa Rimorchio: <strong th:text="${shipment.trailerPlate}">XA 987 YZ</strong><br/>
+                Tracking: <span th:text="${shipment.trackingNumber}">TRK-88492011A</span>
+            </td>
+        </tr>
+    </table>
+
+    <p class="small-note">I conducenti dichiarano di aver ricevuto le Istruzioni Scritte di Sicurezza (Tremcard) ai sensi dell'ADR 5.4.3 e di disporre degli equipaggiamenti previsti.</p>
+
+    <table class="layout-table" style="margin-top: 30px;">
+        <tr>
+            <td style="width: 30%;">
+                <div class="signature-box">Firma Mittente / Caricatore</div>
+                <p class="small-note" style="text-align: center;">Data e Ora: .......................................</p>
+            </td>
+            <td style="width: 5%;"></td>
+            <td style="width: 30%;">
+                <div class="signature-box">Firme Vettore / Conducenti (Presa in carico)</div>
+                <p class="small-note" style="text-align: center;">Data e Ora: .......................................</p>
+            </td>
+            <td style="width: 5%;"></td>
+            <td style="width: 30%;">
+                <div class="signature-box">Firme Destinatari (Ricevuta merci integre)</div>
+                <p class="small-note" style="text-align: center;">Data e Ora: .......................................</p>
+            </td>
+        </tr>
+    </table>
+
+</body>
+</html>

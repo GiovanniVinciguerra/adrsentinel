@@ -1,5 +1,6 @@
 package dev.vinciguerra.adrsentinel.web.dto.shipmentitem;
 
+import dev.vinciguerra.adrsentinel.web.annotation.dispatch.ValidatorNetWeight;
 import dev.vinciguerra.adrsentinel.web.annotation.onunumber.ValidatorOnuNumberCode;
 import dev.vinciguerra.adrsentinel.web.annotation.onunumber.ValidatorOnuNumberName;
 import dev.vinciguerra.adrsentinel.web.annotation.onunumber.ValidatorPackingGroup;
@@ -39,5 +40,5 @@ import dev.vinciguerra.adrsentinel.web.annotation.shipmentitem.ValidatorUnitOfMe
  * @version 1.0 (Strict Validated Input Payload)
  * @since 1.0
  */
-public record ShipmentItemUpdateDTO(@ValidatorQuantity Float quantity, @ValidatorUnitOfMeasure String unitOfMeasure,
+public record ShipmentItemUpdateDTO(@ValidatorQuantity Integer quantity, @ValidatorNetWeight Integer netWeightkg, @ValidatorUnitOfMeasure String unitOfMeasure,
 	@ValidatorOnuNumberCode String onuCode, @ValidatorPackingGroup String packingGroup, @ValidatorOnuNumberName String name) {}

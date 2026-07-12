@@ -1,6 +1,7 @@
 package dev.vinciguerra.adrsentinel.web.dto.shipmentitem;
 
 import dev.vinciguerra.adrsentinel.db.shipmentitem.ShipmentItem;
+import dev.vinciguerra.adrsentinel.db.shipmentitem.ShipmentItem.PackageDetail;
 
 /**
  * Data Transfer Object (DTO) in uscita (Response Payload) che incapsula e trasporta 
@@ -23,14 +24,67 @@ import dev.vinciguerra.adrsentinel.db.shipmentitem.ShipmentItem;
  * e gerarchica, immediatamente renderizzabile nella User Interface senza richiedere ulteriori fetch.
  * @param uuid La Business Key pubblica e inalterabile (UUID) dell'articolo, utilizzata dai client 
  * per operazioni REST sicure (es. interrogazioni puntuali, update, delete) prevenendo attacchi IDOR.
- * @param quantity La grandezza fisica e quantitativa della materia caricata (es. 100.5).
+ * @param quantity La grandezza fisica e quantitativa della materia caricata (es. 100).
+ * @param netWeightkg La quantità espressa in kilogrammi della materia caricata (es. 100)
  * @param unitOfMeasure La stringa rappresentante l'unità di misura (es. "KG", "L"), derivata 
  * dalla decodifica sicura (Type Flattening) dell'Enum interno.
  * @author Giovanni Vinciguerra
  * @version 1.0 (Strict Validated Output Payload)
  * @since 1.0
  */
-public record ShipmentItemResponseDTO(String uuid, Float quantity, String unitOfMeasure) {
+public record ShipmentItemResponseDTO(String uuid, Integer quantity, Integer netWeightkg, String unitOfMeasure, ShipmentItemPackageDetailResponseDTO packageDetail) {
+	/**
+	 * Data Transfer Object (DTO) immutabile deputato alla serializzazione in uscita (Response Payload) 
+	 * dei dettagli fisici e di imballaggio di una riga di spedizione.
+	 * <p><b>Contesto Architetturale (Data Hiding &amp; Presentation Layer):</b></p>
+	 * Implementato nativamente come Java {@code record}, questo oggetto funge da strato di isolamento 
+	 * tra il Domain Model (le entità JPA gestite da Hibernate) e il client REST esterno. 
+	 * Il suo scopo primario è l'incapsulamento (Data Hiding): omette deliberatamente le chiavi 
+	 * primarie interne del database (es. ID sequenziali) e le dipendenze bidirezionali, esponendo 
+	 * al client esclusivamente dati sicuri, appiattiti (flat) e rilevanti per la business logic.
+	 * @param uuid L'identificativo pubblico (Business Key) generato dal sistema per questo specifico dettaglio 
+	 * di imballaggio, utilizzato dal client per successive operazioni di tracciamento o aggiornamento (Patch/Put).
+	 * @param packageCount Il numero totale dei colli fisici (es. 10).
+	 * @param packageType La tipologia di imballaggio convertita in formato testuale sicuro (es. "DRUM", "IBC").
+	 * @param onuPackingCode La lista dei codici di omologazione ONU associati all'imballaggio (es. "31HA1,4G").
+	 * @param packageWeightkg Il peso della tara dell'imballaggio espresso in chilogrammi (kg).
+	 * @author Giovanni Vinciguerra
+	 * @version 1.0 (Strict Validated Output Payload)
+	 * @since 1.0
+	 */
+	public record ShipmentItemPackageDetailResponseDTO(String uuid, Integer packageCount, String packageType, String onuPackingCode,
+			Float packageWeightkg) {
+		
+		/**
+		 * Costruttore statico (Static Factory Method) per la mappatura sicura dall'entità di dominio al DTO.
+		 * <p><b>Pipeline di Mappatura e Sicurezza:</b></p>
+		 * <ul>
+		 * <li><i>Null-Safety:</i> Gestisce nativamente i casi in cui i dettagli di imballaggio non siano 
+		 * ancora stati compilati (es. merci alla rinfusa o cisterne senza imballaggio), restituendo {@code null} 
+		 * in modo sicuro senza scatenare eccezioni di runtime ({@code NullPointerException}).</li>
+		 * <li><i>Enum Serialization:</i> Converte esplicitamente l'enumerazione {@code PackageType} del dominio 
+		 * nella sua rappresentazione testuale ({@code .name()}), garantendo una deserializzazione JSON nativa 
+		 * perfetta da parte di framework come Jackson.</li>
+		 * </ul>
+		 * @param entity L'oggetto di dominio {@code PackageDetail} (tipicamente un {@code @Embeddable}) 
+		 * estratto dal database tramite il Service Layer.
+		 * @return Una nuova istanza immutabile del DTO popolata con i dati dell'entità, 
+		 * oppure {@code null} se l'entità sorgente è assente.
+		 */
+		public static ShipmentItemPackageDetailResponseDTO fromEntity(PackageDetail entity) {
+			if(entity == null)
+				return null;
+			
+			return new ShipmentItemPackageDetailResponseDTO(
+				entity.getDetailUUID(),
+				entity.getPackageCount(),
+				entity.getPackageType().name(),
+				entity.getOnuPackingCode(),
+				entity.getPackagingWeightkg()
+			);
+		}
+	}
+	
 	/**
 	 * Factory Method statico per la conversione (Mapping) e l'aggregazione di un'entità 
 	 * di dominio {@link ShipmentItem} nel suo corrispondente Data Transfer Object in uscita 
@@ -62,7 +116,9 @@ public record ShipmentItemResponseDTO(String uuid, Float quantity, String unitOf
 		return new ShipmentItemResponseDTO(
 			entity.getItemUUID(),
 			entity.getQuantity(),
-			entity.getUnitOfMeasure().name()
+			entity.getNetWeightkg(),
+			entity.getUnitOfMeasure().name(),
+			ShipmentItemPackageDetailResponseDTO.fromEntity(entity.getPackageDetails())
 		);
 	}
 }

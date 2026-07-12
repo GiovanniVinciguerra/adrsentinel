@@ -26,13 +26,14 @@ import dev.vinciguerra.adrsentinel.db.shipment.Shipment;
  * (Macchina a Stati). Viene serializzato in stringa in modo nativo dall'Enum.
  * @param originAddress L'indirizzo toponomastico del sito di prelievo del carico ADR.
  * @param destinationAddresses Gli indirizzi toponomastici dei siti di consegna.
- * @param distancekm La distanza calcolata in chilometri della rotta logistica.
+ * @param tunnelRestriction La restrizione dei tunnel attraverso cui questa spedizione può passare.
+ * @param shipmentReason La ragione per cui è stata creata la spedizione.
  * @author Giovanni Vinciguerra
  * @version 1.0 (Strict Validated Output Payload)
  * @since 1.0
  */
 public record ShipmentResponseDTO(String trackingNumber, String shipmentDate, String shipmentStatus,
-		String originAddress, List<String> destinationAddresses) {
+		String originAddress, List<String> destinationAddresses, String tunnelRestriction,  String shipmentReason) {
 	
 	/**
 	 * Factory Method statico per la conversione (Mapping) e l'aggregazione strutturata 
@@ -72,7 +73,9 @@ public record ShipmentResponseDTO(String trackingNumber, String shipmentDate, St
 			entity.getShipmentDate().toString(),
 			entity.getShipmentStatus().name(),
 			entity.getOriginAddress(),
-			entity.getDestinationAddresses()
+			entity.getDestinationAddresses(),
+			entity.getTunnelRestriction().name(),
+			entity.getShipmentReason().name()
 		);
 	}
 }

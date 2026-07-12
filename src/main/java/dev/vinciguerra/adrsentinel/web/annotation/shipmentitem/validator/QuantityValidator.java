@@ -5,51 +5,47 @@ import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 
 /**
- * Implementazione concreta del vincolo di validazione perimetrale e matematico {@link ValidatorQuantity}.
- * Agisce come scudo architetturale (Edge Validation) per le grandezze fisiche di quantità 
- * nel dominio ADR (es. peso netto, massa lorda, volume nominale), garantendo che i dati in 
- * ingresso siano obbligatori, matematicamente sicuri e semanticamente coerenti con la realtà fisica.
- * <p><b>Design Architetturale (Strict Validation & Mathematical Sanitization):</b></p>
- * Questa classe implementa una difesa in profondità a livello algebrico. Rifiutando 
- * nativamente l'assenza del dato (valori {@code null}), fonde l'obbligatorietà del parametro 
- * con una rigorosa sanitizzazione matematica. Blocca proattivamente le anomalie strutturali 
- * come {@code NaN} (Not a Number) o {@code Infinity}, proteggendo il motore di calcolo del 
- * Service Layer (es. l'algoritmo per l'esenzione dei 1000 punti ADR 1.1.3.6) da alterazioni 
- * silenziose e corruzione dei dati a database.
+ * Implementazione concreta del validatore custom legato all'annotazione {@link ValidatorQuantity}.
+ * <p><b>Contesto Architetturale (Boundary Protection &amp; Anti-Corruption):</b></p>
+ * Questa classe agisce come barriera protettiva allo strato di ingresso delle API (REST/DTO). 
+ * Il suo compito è intercettare i valori quantitativi interi dichiarati nei payload, 
+ * garantendo che siano conformi ai limiti strutturali e logistici prima di propagarsi 
+ * verso la logica di business o la persistenza sul database.
+ * <p><b>Invarianti di Dominio (Limiti Fisici e Logistici):</b></p>
+ * Il range di validazione matematico (0, 40000] è progettato per allinearsi 
+ * ai limiti operativi standard del trasporto merci:
+ * <ul>
+ * <li><i>Limite Inferiore (Rigidamente Positivo):</i> La quantità deve essere strettamente 
+ * maggiore di zero. L'assenza di quantità logistica (zero) renderebbe logicamente invalida 
+ * la riga del Documento di Trasporto.</li>
+ * <li><i>Limite Superiore (40.000):</i> Il tetto massimo di 40.000 rappresenta una 
+ * soglia di sicurezza invalicabile (es. limite fisico corrispondente alla portata massima di 40 tonnellate). 
+ * Questo vincolo funge primariamente da "Typo Preventer", bloccando sul nascere errori macroscopici 
+ * di digitazione da parte dell'operatore (es. l'aggiunta accidentale di zeri extra).</li>
+ * </ul>
  * @author Giovanni Vinciguerra
  * @version 1.0
  * @since 3.0
  * @see ValidatorQuantity
  */
-public class QuantityValidator implements ConstraintValidator<ValidatorQuantity, Float> {
+public class QuantityValidator implements ConstraintValidator<ValidatorQuantity, Integer> {
 	/**
-	 * Esegue l'ispezione profonda del valore numerico applicando tre livelli di sicurezza matematica.
-	 * <p><b>Flusso di Esecuzione (Fail-Fast & Triple Check):</b></p>
+	 * Esegue la validazione formale e logistica sulla quantità intera in ingresso.
+	 * <p><b>Pipeline di Validazione (Fail-Fast):</b></p>
 	 * <ol>
-	 * <li><b>Guard Clause (Strict Presence Check):</b> Intercetta e respinge istantaneamente 
-	 * i valori {@code null}. Questo certifica l'assoluta obbligatorietà del parametro nel payload 
-	 * e previene disastrose {@code NullPointerException} durante il processo di unboxing 
-	 * (da {@code Float} a {@code float}) nelle formule a valle.</li>
-	 * <li><b>Sanitizzazione Algebrica (Finite Math Check):</b> Verifica che il numero a virgola 
-	 * mobile sia finito e reale. Intercettando {@code Float.isNaN()} e {@code Float.isInfinite()}, 
-	 * respinge payload ingannevoli che i comuni parser JSON deserializzerebbero senza errori, 
-	 * impedendo che si propaghino nel sistema.</li>
-	 * <li><b>Domain Rule (Strictly Positive):</b> Come ultimo step, impone che il valore sia 
-	 * strettamente maggiore di zero ({@code > 0}). Trattandosi di materia fisica trasportata, 
-	 * una quantità nulla o negativa rappresenta un paradosso logico e normativo inaccettabile.</li>
+	 * <li><i>Null-Safety:</i> Rifiuta immediatamente valori nulli, garantendo che il dato 
+	 * sia sempre presente per l'elaborazione del D.D.T.</li>
+	 * <li><i>Domain Rule Check:</i> Verifica che il valore sia maggiore di zero ({@code > 0}) 
+	 * e non ecceda il limite logistico di sicurezza ({@code 44000}).</li>
 	 * </ol>
-	 * @param value Il valore numerico della quantità estratto dal Request Payload.
-	 * @param context Il contesto di validazione iniettato dal framework (Spring/Hibernate Validator).
-	 * @return {@code true} esclusivamente se il valore è presente, finito, reale e strettamente 
-	 * maggiore di zero; {@code false} in caso di assenza, aberrazione matematica (NaN/Infinity) 
-	 * o valore nullo/negativo.
+	 * @param value Il valore quantitativo intero da sottoporre a verifica.
+	 * @param context Il contesto strutturale fornito dal motore di validazione Jakarta.
+	 * @return {@code true} se la quantità è valorizzata e rientra nel range logistico consentito, {@code false} altrimenti.
 	 */
 	@Override
-	public boolean isValid(Float value, ConstraintValidatorContext context) {
+	public boolean isValid(Integer value, ConstraintValidatorContext context) {
 		if(value == null)
 			return false;
-		if(value.isInfinite() || value.isNaN())
-			return false;
-		return value > 0;
+		return value > 0 && value <= 44000;
 	}
 }

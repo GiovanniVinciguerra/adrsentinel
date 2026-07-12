@@ -2,6 +2,7 @@ package dev.vinciguerra.adrsentinel.web.dto.shipmentroute;
 
 import java.util.List;
 import dev.vinciguerra.adrsentinel.db.adrclass.shipmentroute.ShipmentRoute;
+import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumber.TunnelRestriction;
 
 /**
  * Data Transfer Object (DTO) aggregatore (Response Payload) utilizzato dal Presentation Layer 
@@ -23,7 +24,7 @@ import dev.vinciguerra.adrsentinel.db.adrclass.shipmentroute.ShipmentRoute;
  * @version 2.0 (Multi-Stop Validated Output Payload)
  * @since 1.0 
  */
-public record ShipmentRouteResponseDTO(List<ShipmentRouteStageResponseDTO> routes) {
+public record ShipmentRouteResponseDTO(List<ShipmentRouteStageResponseDTO> routes, String tunnelRestriction) {
 	/**
 	 * DTO Annidato (Nested Record) che rappresenta la singola tratta (Segmento/Leg) 
 	 * all'interno di un viaggio multi-tappa.
@@ -38,12 +39,11 @@ public record ShipmentRouteResponseDTO(List<ShipmentRouteStageResponseDTO> route
 	 * @param destLng La longitudine esatta della destinazione di questa specifica tratta (formato WGS 84).
 	 * @param distancekm La distanza stradale effettiva della tratta in chilometri, calcolata per il profilo mezzi pesanti.
 	 * @param etaMinutes Il tempo di percorrenza stimato (ETA) per questa singola tratta, espresso in minuti.
-	 * @param tunnelRestriction La restrizione gallerie ADR applicata durante il calcolo (es. "D_E", "NONE").
 	 * @param geometry La stringa vettoriale compressa (Encoded Polyline) per renderizzare accuratamente 
 	 * il tracciato di questo segmento su una mappa frontend (Leaflet/Google Maps).
 	 */
 	public record ShipmentRouteStageResponseDTO(String routeUUID, Double originLat, Double originLng, Double destLat, Double destLng, Float distancekm,
-			Integer etaMinutes, String tunnelRestriction, String geometry) {
+			Integer etaMinutes, String geometry) {
 		
 		/**
 		 * Mapper statico (Static Factory Method) responsabile della conversione sicura 
@@ -72,7 +72,6 @@ public record ShipmentRouteResponseDTO(List<ShipmentRouteStageResponseDTO> route
 				entity.getDestLng(),
 				entity.getDistanceKm(),
 				entity.getEtaMinutes(),
-				entity.getTunnelRestriction().name(),
 				entity.getGeometry()
 			);
 		}
@@ -86,15 +85,17 @@ public record ShipmentRouteResponseDTO(List<ShipmentRouteStageResponseDTO> route
 	 * per invocare iterativamente il mapper del singolo segmento ({@code fromEntity(ShipmentRoute)}).
 	 * </p>
 	 * @param entity La lista delle entità di database {@link ShipmentRoute} calcolate e persistite.
+	 * @param tunnelRestriction La restrizione per i tunnel associata all'intero percorso.
 	 * @return Una nuova istanza immutabile di {@link ShipmentRouteResponseDTO}, oppure {@code null} 
 	 * se la lista delle tratte fornita in input è nulla o vuota.
 	 */
-	public static ShipmentRouteResponseDTO fromEntity(List<ShipmentRoute> entity) {
+	public static ShipmentRouteResponseDTO fromEntity(List<ShipmentRoute> entity, TunnelRestriction tunnelRestriction) {
 		if(entity == null || entity.isEmpty())
 			return null;
 		
 		return new ShipmentRouteResponseDTO(
-			entity.stream().map(ShipmentRouteStageResponseDTO::fromEntity).toList()
+			entity.stream().map(ShipmentRouteStageResponseDTO::fromEntity).toList(),
+			tunnelRestriction.name()
 		);
 	}
 }

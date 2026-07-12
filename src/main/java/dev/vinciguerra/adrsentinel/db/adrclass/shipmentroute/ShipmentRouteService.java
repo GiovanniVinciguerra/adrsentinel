@@ -18,6 +18,7 @@ import dev.vinciguerra.adrsentinel.db.CaffeineCacheConfiguration;
 import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumber.TunnelRestriction;
 import dev.vinciguerra.adrsentinel.db.shipment.Shipment;
 import dev.vinciguerra.adrsentinel.db.shipment.Shipment.ShipmentStatus;
+import dev.vinciguerra.adrsentinel.db.shipment.ShipmentService;
 import dev.vinciguerra.adrsentinel.db.shipmentitem.ShipmentItem;
 import dev.vinciguerra.adrsentinel.db.shipmentitem.ShipmentItemService;
 import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle;
@@ -60,6 +61,7 @@ import dev.vinciguerra.adrsentinel.web.dto.shipmentroute.ShipmentRouteUpdateDTO;
 public class ShipmentRouteService extends AbstractGenericService {
 	private final ShipmentRouteRepository shipmentRouteRepository;
 	private final ShipmentItemService shipmentItemService;
+	private final ShipmentService shipmentService;
 	private final OrsGeocodingService orsGeocodingService;
 	private final RestClient restClient;
 	private final String apiKey;
@@ -80,12 +82,13 @@ public class ShipmentRouteService extends AbstractGenericService {
 	 * @param apiKey La chiave crittografica di autenticazione per i servizi ORS.
 	 * @param cacheManager Il manager globale delle cache passato alla superclasse.
 	 */
-	protected ShipmentRouteService(ShipmentRouteRepository shipmentRouteRepository, ShipmentItemService shipmentItemService,
+	protected ShipmentRouteService(ShipmentRouteRepository shipmentRouteRepository, ShipmentItemService shipmentItemService, ShipmentService shipmentService,
 			OrsGeocodingService orsGeocodingService, @Value("${ors.api.base-url:https://api.openrouteservice.org}") String baseUrl, 
 			@Value("${ors.api.key}") String apiKey, CacheManager cacheManager) {
 		super(cacheManager);
 		this.shipmentRouteRepository = shipmentRouteRepository;
 		this.shipmentItemService = shipmentItemService;
+		this.shipmentService = shipmentService;
 		this.orsGeocodingService = orsGeocodingService;
 		this.apiKey = apiKey;
 		this.restClient = RestClient.builder().baseUrl(baseUrl).build();
@@ -188,28 +191,37 @@ public class ShipmentRouteService extends AbstractGenericService {
 	
 	/**
 	 * Esegue l'aggiornamento transazionale di uno specifico segmento di rotta logistica, 
-	 * applicando i nuovi parametri vettoriali e mantenendo l'allineamento con la cache.
+	 * applicando i nuovi parametri vettoriali e gestendo, ove necessario, la propagazione 
+	 * dei vincoli ADR (Tunnel Restriction) verso la spedizione padre.
 	 * <p>
-	 * <b>Architettura e Sicurezza:</b>
+	 * <b>Architettura, Sicurezza e Domain-Driven Design (DDD):</b>
 	 * <ul>
 	 * <li><b>Anti-IDOR:</b> Il metodo viene esposto ai layer superiori (Controller) richiedendo come 
 	 * parametro di ricerca il {@code routeUUID} (identificativo pubblico) anziché la chiave primaria, 
 	 * blindando l'accesso ai dati.</li>
-	 * <li><b>Dirty Checking e Salvataggio:</b> L'entità viene estratta fresca dal DB. Anche se l'annotazione 
-	 * {@code @Transactional} applicherebbe le modifiche in automatico a fine metodo (Dirty Checking), 
-	 * l'invocazione esplicita di {@code repository.save(route)} è mantenuta per garantire che l'hook 
-	 * di sincronizzazione catturi l'istanza finale aggiornata.</li>
-	 * <li><b>Enum Hydration:</b> Converte dinamicamente la stringa della restrizione gallerie in 
-	 * arrivo dal DTO nel corrispettivo dominio tipizzato {@link TunnelRestriction}.</li>
+	 * <li><b>Delegazione di Dominio e Ottimizzazione:</b> Prima di aggiornare la restrizione ADR, 
+	 * l'algoritmo verifica se il nuovo valore differisce da quello attuale. In caso affermativo, 
+	 * evita la mutazione diretta dell'entità padre e delega l'operazione di business al {@code ShipmentService}. 
+	 * Questo rispetta i confini di dominio (DDD) e previene query di scrittura o manipolazioni di cache superflue.</li>
+	 * <li><b>Propagazione Transazionale e Cache Safety:</b> L'eventuale chiamata al Service esterno 
+	 * si unisce alla transazione corrente. L'aggiornamento in memoria locale (Caffeine) è blindato 
+	 * contro le <i>race conditions</i>: gli hook di {@link TransactionSynchronizationManager} garantiscono 
+	 * che l'allineamento della cache per questa rotta avvenga <b>esclusivamente</b> a valle di un 
+	 * {@code COMMIT} finale e confermato sul database.</li>
+	 * <li><b>Dirty Checking e Salvataggio:</b> Anche se l'annotazione {@code @Transactional} applicherebbe 
+	 * le modifiche in automatico a fine metodo, l'invocazione esplicita di {@code repository.save(route)} 
+	 * è mantenuta per garantire che l'hook di sincronizzazione riceva l'istanza finale tracciata.</li>
 	 * </ul>
 	 * </p>
 	 * @param routeUUID L'identificatore alfanumerico univoco della tratta da aggiornare.
 	 * @param updateDto Il payload validato (Data Transfer Object) contenente le nuove coordinate, 
-	 * la polilinea aggiornata e le metriche di viaggio.
-	 * @return L'entità {@link ShipmentRoute} aggiornata e sincronizzata col database.
+	 * la polilinea aggiornata, le metriche di viaggio e la potenziale nuova restrizione gallerie.
+	 * @return L'entità {@link ShipmentRoute} aggiornata e sincronizzata col database, completa 
+	 * della referenza (aggiornata, se modificata) allo {@link Shipment} padre.
 	 * @throws ResourceNotFoundException Se l'UUID fornito non corrisponde ad alcun segmento esistente 
-	 * (Interrompe la transazione prima di effettuare qualsiasi logica di aggiornamento).
-	 * @throws IllegalShipmentStateException Se lo Shipment collegato a questa rotta non è più nello stato PLANNED.
+	 * (Interrompe la transazione in modalità Fail-Fast).
+	 * @throws IllegalShipmentStateException Se lo Shipment collegato a questa rotta non è più nello stato PLANNED, 
+	 * bloccando mutazioni su veicoli già in transito o consegnati.
 	 */
 	@Transactional
 	public ShipmentRoute updateByRouteUUID(String routeUUID, ShipmentRouteUpdateDTO updateDto) throws ResourceNotFoundException, IllegalShipmentStateException {
@@ -224,8 +236,16 @@ public class ShipmentRouteService extends AbstractGenericService {
 		route.setDestLng(updateDto.destLng());
 		route.setDistanceKm(updateDto.distancekm());
 		route.setEtaMinutes(updateDto.etaMins());
-		route.setTunnelRestriction(Enum.valueOf(TunnelRestriction.class, updateDto.tunnelRestriction()));
 		route.setGeometry(updateDto.geometry());
+		TunnelRestriction newTunnelRestriction = Enum.valueOf(TunnelRestriction.class, updateDto.tunnelRestriction());
+		if(route.getShipment().getTunnelRestriction() != newTunnelRestriction) {
+			shipmentService.updateTunnelRestrictionByTrackingNumber(newTunnelRestriction, route.getShipment().getTrackingNumber());
+			/* NOTA SU HIBERNATE: L'istruzione route.getShipment().setTunnelRestriction(...) è volutamente omessa.
+			 * Poiché operiamo nella stessa transazione (stesso Persistence Context / L1 Cache), l'entità Shipment 
+			 * modificata all'interno del Service è esattamente la stessa istanza in memoria referenziata 
+			 * qui da route.getShipment(). L'oggetto genitore risulta quindi già aggiornato per referenza.
+			 */
+		}
 		ShipmentRoute updatedRoute = shipmentRouteRepository.save(route);
 		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
 			@Override
@@ -392,7 +412,6 @@ public class ShipmentRouteService extends AbstractGenericService {
 						entity.setDestLng(currentDest.longitude());
 						entity.setDistanceKm(distancekm);
 						entity.setEtaMinutes(etaMinutes);
-						entity.setTunnelRestriction(tunnelRestriction);
 						entity.setGeometry(route.geometry());
 						entity.setShipment(shipment);
 						return entity;
@@ -401,7 +420,7 @@ public class ShipmentRouteService extends AbstractGenericService {
 				routeStages.add(stageEntity);
 			}
 			logger.info("Multi-stop orchestration completed successfully. Total processed stages: {}", routeStages.size());
-			return ShipmentRouteResponseDTO.fromEntity(routeStages);
+			return ShipmentRouteResponseDTO.fromEntity(routeStages, tunnelRestriction);
 		} catch (RestClientException error) {
 			logger.error("Fatal communication error with ORS during route calculation: {}", error.getMessage());
 			throw new GeocodingApiException("Navigation service temporarily unavailable.", error);

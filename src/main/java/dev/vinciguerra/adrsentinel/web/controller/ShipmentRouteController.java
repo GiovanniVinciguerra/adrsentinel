@@ -13,8 +13,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import dev.vinciguerra.adrsentinel.db.adrclass.shipmentroute.ShipmentRoute;
 import dev.vinciguerra.adrsentinel.db.adrclass.shipmentroute.ShipmentRouteService;
+import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumber.TunnelRestriction;
 import dev.vinciguerra.adrsentinel.db.shipment.Shipment;
 import dev.vinciguerra.adrsentinel.db.shipment.ShipmentService;
+import dev.vinciguerra.adrsentinel.exception.ResourceNotFoundException;
 import dev.vinciguerra.adrsentinel.web.annotation.ValidatorUUID;
 import dev.vinciguerra.adrsentinel.web.dto.shipmentroute.ShipmentRouteRequestDTO;
 import dev.vinciguerra.adrsentinel.web.dto.shipmentroute.ShipmentRouteResponseDTO;
@@ -120,7 +122,10 @@ public class ShipmentRouteController {
 	@GetMapping("/shipment/{trackingNumber}")
 	public ResponseEntity<ShipmentRouteResponseDTO> getByShipmentTrackingNumber(@PathVariable @ValidatorUUID String trackingNumber) {
 		List<ShipmentRoute> routes = shipmentRouteService.getByShipmentTrackingNumber(trackingNumber);
-		return ResponseEntity.ok(ShipmentRouteResponseDTO.fromEntity(routes));
+		if(routes.isEmpty())
+			return ResponseEntity.ok(ShipmentRouteResponseDTO.fromEntity(routes, TunnelRestriction.NONE));
+		Shipment shipment = routes.get(0).getShipment();
+		return ResponseEntity.ok(ShipmentRouteResponseDTO.fromEntity(routes, shipment.getTunnelRestriction()));
 	}
 	
 	/**
@@ -195,7 +200,7 @@ public class ShipmentRouteController {
 			.map(routeDetailDTO -> shipmentRouteService.mapToEntity(routeDetailDTO, shipment))
 			.toList();
 		List<ShipmentRoute> savedShipmentRoutes = shipmentRouteService.save(shipmentRoutesToSave);
-		return ResponseEntity.status(HttpStatus.CREATED).body(ShipmentRouteResponseDTO.fromEntity(savedShipmentRoutes));
+		return ResponseEntity.status(HttpStatus.CREATED).body(ShipmentRouteResponseDTO.fromEntity(savedShipmentRoutes, shipment.getTunnelRestriction()));
 	}
 	
 	/**

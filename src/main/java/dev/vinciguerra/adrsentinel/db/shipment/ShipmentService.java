@@ -3,6 +3,7 @@ package dev.vinciguerra.adrsentinel.db.shipment;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -10,6 +11,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -27,15 +29,20 @@ import dev.vinciguerra.adrsentinel.db.driver.Driver;
 import dev.vinciguerra.adrsentinel.db.driver.DriverService;
 import dev.vinciguerra.adrsentinel.db.driver.DriverSnapshot;
 import dev.vinciguerra.adrsentinel.db.driver.DriverSnapshotService;
+import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumber.TunnelRestriction;
+import dev.vinciguerra.adrsentinel.db.shipment.Shipment.ShipmentReason;
 import dev.vinciguerra.adrsentinel.db.shipment.Shipment.ShipmentStatus;
 import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle;
 import dev.vinciguerra.adrsentinel.db.vehicle.VehicleService;
 import dev.vinciguerra.adrsentinel.db.vehicle.VehicleSnapshot;
 import dev.vinciguerra.adrsentinel.db.vehicle.VehicleSnapshotService;
+import dev.vinciguerra.adrsentinel.db.waybill.Waybill;
+import dev.vinciguerra.adrsentinel.db.waybill.WaybillService;
 import dev.vinciguerra.adrsentinel.exception.IllegalShipmentStateException;
 import dev.vinciguerra.adrsentinel.exception.ResourceNotFoundException;
 import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentRequestDTO;
 import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentUpdateDTO;
+import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentUpdateReasonDTO;
 import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentUpdateStatusDTO;
 
 /**
@@ -74,6 +81,7 @@ public class ShipmentService extends AbstractGenericService {
 	private final DriverSnapshotService driverSnapshotService;
 	private final CustomerService customerService;
 	private final CustomerSnapshotService customerSnapshotService;
+	private final WaybillService waybillService;
 	
 	/**
 	 * Costruttore con Dependency Injection nativa di Spring.
@@ -81,7 +89,8 @@ public class ShipmentService extends AbstractGenericService {
 	 * @param cacheManager il gestore dell'infrastruttura di memoria (iniettato nella superclasse).
 	 */
 	public ShipmentService(ShipmentRepository shipmentRepository, VehicleService vehicleService, VehicleSnapshotService vehicleSnapshotService, DriverService driverService,
-			DriverSnapshotService driverSnapshotService, CustomerService customerService, CustomerSnapshotService customerSnapshotService, CacheManager cacheManager) {
+			DriverSnapshotService driverSnapshotService, CustomerService customerService, CustomerSnapshotService customerSnapshotService, @Lazy WaybillService waybillService,
+			CacheManager cacheManager) {
 		super(cacheManager);
 		this.shipmentRepository = shipmentRepository;
 		this.vehicleService = vehicleService;
@@ -90,6 +99,7 @@ public class ShipmentService extends AbstractGenericService {
 		this.driverSnapshotService = driverSnapshotService;
 		this.customerService = customerService;
 		this.customerSnapshotService = customerSnapshotService;
+		this.waybillService = waybillService;
 	}
 	
 	// --- SEZIONE 1: BOUNDED DATA (CACHED) ---
@@ -269,6 +279,107 @@ public class ShipmentService extends AbstractGenericService {
 	}
 	
 	/**
+	 * Aggiorna la causale di trasporto (Shipment Reason) per una specifica spedizione ADR,
+	 * localizzata tramite il suo Tracking Number univoco.
+	 * <p>
+	 * <b>Logica di Business e Vincoli di Stato:</b><br>
+	 * Il metodo agisce come un guardiano per la coerenza dei dati operativi. Prima di 
+	 * applicare qualsiasi modifica, verifica che il ciclo di vita della spedizione lo 
+	 * consenta. L'aggiornamento è permesso <i>esclusivamente</i> se la spedizione si trova 
+	 * nello stato {@code PLANNED}. Tentativi di alterare la causale su spedizioni già 
+	 * avviate, in transito o completate vengono respinti in modo fail-fast.
+	 * </p>
+	 * <p>
+	 * <b>Gestione Transazionale e Sicurezza della Cache:</b><br>
+	 * Operando all'interno di un contesto {@link Transactional}, il metodo garantisce 
+	 * l'assoluta consistenza tra il database e il livello di caching. L'invocazione del 
+	 * metodo di allineamento della cache ({@code syncCacheAfterUpdate}) viene deliberatamente 
+	 * posticipata e registrata tramite il {@link TransactionSynchronizationManager}. 
+	 * Questo pattern avanzato assicura che la cache venga modificata o invalidata 
+	 * <i>solo e soltanto se</i> la transazione sul database esegue il commit con successo, 
+	 * annullando il rischio di disallineamenti in caso di rollback (Cache Poisoning).
+	 * </p>
+	 * @param trackingNumber la stringa alfanumerica univoca (es. UUID) che identifica la spedizione
+	 * @param updateDto il DTO (Data Transfer Object) immutabile contenente la nuova 
+	 * causale di trasporto, preventivamente validata dallo strato Web
+	 * @return l'entità {@link Shipment} aggiornata, persistita e pronta per essere mappata 
+	 * nella response
+	 * @throws ResourceNotFoundException se il tracking number fornito non corrisponde 
+	 * ad alcuna spedizione presente nel database
+	 * @throws IllegalShipmentStateException se la spedizione esiste, ma il suo stato attuale 
+	 * non è {@code PLANNED} (es. la merce è già in viaggio)
+	 */
+	@Transactional
+	public Shipment updateShipmentReasonByTrackingNumber(String trackingNumber, ShipmentUpdateReasonDTO updateDto) 
+			throws ResourceNotFoundException, IllegalShipmentStateException {
+		logger.info("[DataBase CALL] Updating Shipment shipment reason with trackingNumber: {}", trackingNumber);
+		Shipment shipment = shipmentRepository.findByTrackingNumber(trackingNumber)
+			.orElseThrow(() -> new ResourceNotFoundException("Shipment not found: " + trackingNumber));
+		if(shipment.getShipmentStatus() != ShipmentStatus.PLANNED)
+			throw new IllegalShipmentStateException("Update denied: shipment is no longer in PLANNED status.");
+		final LocalDate oldDate = shipment.getShipmentDate().toLocalDate();
+		shipment.setShipmentReason(Enum.valueOf(ShipmentReason.class, updateDto.shipmentReason()));
+		Shipment updatedShipment = shipmentRepository.save(shipment);
+		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+			@Override
+			public void afterCommit() { syncCacheAfterUpdate(updatedShipment, oldDate); }
+		});
+		return updatedShipment;
+	}
+	
+	/**
+	 * Aggiorna la classe di restrizione per le gallerie (Tunnel Restriction) di una specifica spedizione 
+	 * identificata dal suo Tracking Number.
+	 * <p>
+	 * <b>Logica di Business:</b><br>
+	 * L'operazione di aggiornamento è soggetta a un rigido vincolo di stato: è consentita <b>esclusivamente</b> 
+	 * se la spedizione si trova nello stato {@link ShipmentStatus#PLANNED}. Qualsiasi tentativo di modifica su 
+	 * spedizioni già in transito, consegnate o annullate solleverà un'eccezione per preservare l'integrità 
+	 * e la legalità del tracciato di viaggio.
+	 * </p>
+	 * <p>
+	 * <b>Dettagli Architetturali e Gestione della Cache:</b><br>
+	 * Il metodo è transazionale e ottimizzato per ambienti a singola istanza (Single-Node). 
+	 * Per prevenire il fenomeno del <i>Cache Poisoning</i> (Avvelenamento della Cache) e la <i>Race Condition</i> 
+	 * in caso di fallimento del database o accessi concorrenti, la sincronizzazione della cache applicativa (Caffeine) 
+	 * è completamente disaccoppiata dall'esecuzione principale tramite {@link TransactionSynchronizationManager}.
+	 * <ul>
+	 * <li><b>Salvataggio:</b> Viene sfruttato il <i>Dirty Checking</i> di Hibernate (con un {@code save()} esplicito 
+	 * per eventuali trigger o listener JPA).</li>
+	 * <li><b>Hook Transazionale:</b> L'aggiornamento <i>In-Place</i> della RAM ({@code syncCacheAfterUpdate}) viene 
+	 * accodato ed eseguito <b>solo ed esclusivamente</b> a seguito di un {@code COMMIT} confermato sul database.</li>
+	 * <li><b>Cache Key Integrity:</b> Lo stato della data originale ({@code oldDate}) viene congelato prima 
+	 * dell'aggiornamento per garantire una corretta rilocazione/aggiornamento nell'indice della cache in memoria.</li>
+	 * </ul>
+	 * </p>
+	 * @param tunnelRestriction La nuova classe di restrizione ADR per gallerie (es. B, C, D, E) da applicare 
+	 * all'intero carico della spedizione.
+	 * @param trackingNumber L'identificativo alfanumerico univoco della spedizione (Business Key).
+	 * @return L'entità {@link Shipment} aggiornata, gestita (<i>Managed</i>) dal Persistence Context.
+	 * @throws ResourceNotFoundException Se non esiste alcuna spedizione nel database associata al 
+	 * Tracking Number fornito.
+	 * @throws IllegalShipmentStateException Se la spedizione viene trovata, ma il suo stato attuale non è 
+	 * {@code PLANNED} (es. {@code IN_TRANSIT}, {@code DELIVERED}).
+	 */
+	@Transactional
+	public Shipment updateTunnelRestrictionByTrackingNumber(TunnelRestriction tunnelRestriction, String trackingNumber)
+			throws ResourceNotFoundException, IllegalShipmentStateException {
+		logger.info("[DataBase CALL] Updating Shipment with trackingNumber: {}", trackingNumber);
+		Shipment shipment = shipmentRepository.findByTrackingNumber(trackingNumber)
+			.orElseThrow(() -> new ResourceNotFoundException("Shipment not found: " + trackingNumber));
+		if(shipment.getShipmentStatus() != ShipmentStatus.PLANNED)
+			throw new IllegalShipmentStateException("Update denied: shipment is no longer in PLANNED status.");
+		final LocalDate oldDate = shipment.getShipmentDate().toLocalDate();
+		shipment.setTunnelRestriction(tunnelRestriction);
+		Shipment updatedShipment = shipmentRepository.save(shipment);
+		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+			@Override
+			public void afterCommit() { syncCacheAfterUpdate(updatedShipment, oldDate); }
+		});
+		return updatedShipment;
+	}
+	
+	/**
 	 * Esegue l'aggiornamento chirurgico dello stato logistico di una spedizione esistente, 
 	 * garantendo l'allineamento transazionale tra Database e Memoria Cache, e orchestrando 
 	 * il ciclo di vita delle entità correlate (Veicoli, Autisti e Snapshot).
@@ -292,7 +403,7 @@ public class ShipmentService extends AbstractGenericService {
 	 * <li><b>Mutazione di Stato e Logica di Dominio:</b> Applica le seguenti rigide regole di transizione:
 	 * <ul>
 	 * <li><b>Uscita da {@code PLANNED}:</b> Rappresenta il trigger univoco per la storicizzazione. Indipendentemente 
-	 * dalla destinazione ({@code TRANSIT} o {@code CANCELED}), genera e persiste uno snapshot storico 
+	 * dalla destinazione ({@code TRANSIT} o {@code CANCELED}), genera la bolla di viaggio (DDT), genera e persiste uno snapshot storico 
 	 * ({@link VehicleSnapshot}, {@link DriverSnapshot}) e {@link CustomerSnapshot} per cristallizzare i dati. Successivamente, 
 	 * <b>scollega</b> la spedizione dai master ({@link Vehicle}, {@link Driver}), {@link Customer} , permettendo loro di seguire 
 	 * un ciclo di vita indipendente. Nel caso specifico della transizione verso {@code TRANSIT}, blocca le risorse 
@@ -360,7 +471,18 @@ public class ShipmentService extends AbstractGenericService {
 	        DriverSnapshot.fromDrivers(shipment).forEach(driverSnapshotService::save);
 	        shipment.getDrivers().clear();
 	        CustomerSnapshot.fromCustomers(shipment).forEach(customerSnapshotService::save);
-	        shipment.getCustomers().clear();
+	        shipment.setSender(null);
+	        shipment.setCarrier(null);
+	        shipment.getReceivers().clear();
+	        /* Creazione della bolla di viaggio (DDT) */
+	        logger.info("Shipment [{}] left PLANNED state changing to {}. Triggering automatic Waybill (D.D.T.) generation.", trackingNumber, newStatus);
+	        Waybill waybill = waybillService.save(trackingNumber);
+	        logger.info(
+	        	"[Waybill-Engine] D.D.T. [{}] successfully generated and persisted for Shipment [{}]. Payload size: {} bytes.",
+	        	waybill.getDdtNumber(),
+	        	trackingNumber,
+	        	waybill.getPdfData().length
+	        );
 	    } else if(oldStatus == ShipmentStatus.TRANSIT) { // 3. LOGICA IN USCITA DALLO STATO OPERATIVO (TRANSIT)
 	    	// Da TRANSIT può andare solo in DELIVERED o CANCELED
 	        if (newStatus == ShipmentStatus.PLANNED || newStatus == ShipmentStatus.TRANSIT) {
@@ -467,27 +589,27 @@ public class ShipmentService extends AbstractGenericService {
 	 * Questo metodo agisce come strato anti-corruzione (Anti-Corruption Layer) tra l'interfaccia 
 	 * API (frontend) e il modello dati JPA (backend). Assicura che la logica di persistenza riceva 
 	 * un oggetto strutturalmente coerente, aggregando i dati e risolvendo i riferimenti al database.
-	 * * <p><b>Risoluzione delle Relazioni (Lookup & Hydration):</b></p>
-	 * Il mapping non è puramente scalare (copia 1 a 1). Il metodo esegue una complessa "idratazione" 
+	 * <p><b>Risoluzione delle Relazioni (Lookup & Hydration):</b></p>
+	 * Il mapping non è puramente scalare (copia 1 a 1). Il metodo esegue un'operazione di "idratazione" 
 	 * dell'aggregato recuperando le entità relazionate tramite le rispettive chiavi di business:
 	 * <ul>
 	 * <li><b>Veicolo (Vehicle):</b> Interrogato tramite la targa (Business Key).</li>
 	 * <li><b>Equipaggio (Drivers):</b> Risoluzione massiva tramite Stream. Converte un {@code Set} di numeri 
-	 * di patente nelle corrispondenti entità {@link Driver}, garantendo l'assegnazione dell'equipaggio 
-	 * (singolo o multiplo) stabilito dal motore decisionale.</li>
-	 * <li><b>Attori Logistici (Customers):</b> Implementa un mapping bidimensionale ottimizzato. 
-	 * Elabora il container DTO appiattito, convertendo dinamicamente il ruolo testuale nell'enum 
-	 * {@link CustomerRole} e risolvendo la Partita IVA nell'anagrafica pura {@link Customer}. 
-	 * Il risultato viene iniettato in una {@link EnumMap} per garantire le massime performance 
-	 * di accesso e per popolare correttamente la tabella ponte sul database.</li>
+	 * di patente nelle corrispondenti entità {@link Driver}, garantendo l'assegnazione dell'equipaggio.</li>
+	 * <li><b>Attori Logistici (Customers):</b> Aggrega la lista in ingresso dal DTO in una {@link EnumMap} 
+	 * ottimizzata, raggruppando i clienti per ruolo. <br>
+	 * <i>Nota di Sicurezza (SRP):</i> Questo strato assume una conformità rigorosa del payload. La validazione 
+	 * della cardinalità (presenza di un singolo SENDER, un singolo CARRIER e destinazioni multiple) 
+	 * è delegata interamente a monte tramite validatori custom sul DTO, garantendo un'estrazione 
+	 * dei dati diretta, lineare e priva di difese condizionali ridondanti (fail-fast architecture).</li>
 	 * </ul>
 	 * <p><b>Gestione Rigorosa degli Enum e del Tempo:</b></p>
 	 * La conversione dello stato logistico e dei ruoli avviene tramite la funzione nativa {@code Enum.valueOf}. 
 	 * Questa operazione è intrinsecamente case-sensitive e richiede una corrispondenza esatta 
 	 * tra la stringa del DTO e la costante enumerata Java.
 	 * @param dto Il payload di richiesta contenente i dati scalari e i riferimenti logistici della spedizione. 
-	 * Si assume che i campi obbligatori siano già stati sanificati e verificati 
-	 * (es. tramite annotazioni {@code @Valid}).
+	 * Si assume che i campi obbligatori e le regole di business sulla cardinalità siano 
+	 * già stati sanificati dal Validation Context.
 	 * @return Una nuova istanza di {@link Shipment} in stato <i>Transient</i> (non ancora gestita dall'EntityManager), 
 	 * completamente idratata e pronta per la persistenza.
 	 */
@@ -498,19 +620,21 @@ public class ShipmentService extends AbstractGenericService {
 			.stream()
 			.map(license -> driverService.getByLicense(license))
 			.collect(Collectors.toSet());
-		Map<CustomerRole, Customer> customers = dto.customers()
-			.stream()
-			.collect(Collectors
-				.toMap(
-					container -> Enum.valueOf(CustomerRole.class, container.role()),
-					container -> customerService.getByVatNumber(container.vatNumber()),
-					(existing, replacement) -> existing,
-					() -> new EnumMap<CustomerRole, Customer>(CustomerRole.class)
-				)
-			);
+		Map<CustomerRole, List<Customer>> customers = new EnumMap<Customer.CustomerRole, List<Customer>>(CustomerRole.class);
+		dto.customers().forEach(container -> {
+			// 1. MAPPING DEL CONTAINER
+			CustomerRole role = Enum.valueOf(CustomerRole.class, container.role());
+			Customer customer = customerService.getByVatNumber(container.vatNumber());
+			// 2. ESTRAZIONE E INSERIMENTO
+			List<Customer> customerListByRole = customers.getOrDefault(role, new ArrayList<Customer>());
+			customerListByRole.add(customer);
+			customers.put(role, customerListByRole);
+		});
 		shipment.setVehicle(vehicle);
 		shipment.setDrivers(drivers);
-		shipment.setCustomers(customers);
+		shipment.setSender(customers.get(CustomerRole.SENDER).get(0));
+		shipment.setCarrier(customers.get(CustomerRole.CARRIER).get(0));
+		shipment.setReceivers(customers.get(CustomerRole.RECEIVER));
 		shipment.setShipmentDate(LocalDateTime.parse(dto.date()));
 		shipment.setShipmentStatus(Enum.valueOf(ShipmentStatus.class, dto.status()));
 		shipment.setOriginAddress(dto.origin());

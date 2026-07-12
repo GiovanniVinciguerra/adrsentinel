@@ -16,9 +16,12 @@ import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumberService;
 import dev.vinciguerra.adrsentinel.db.shipment.Shipment;
 import dev.vinciguerra.adrsentinel.db.shipment.Shipment.ShipmentStatus;
 import dev.vinciguerra.adrsentinel.db.shipment.ShipmentService;
+import dev.vinciguerra.adrsentinel.db.shipmentitem.ShipmentItem.PackageDetail;
 import dev.vinciguerra.adrsentinel.db.shipmentitem.ShipmentItem.UnitOfMeasure;
+import dev.vinciguerra.adrsentinel.db.shipmentitem.ShipmentItem.PackageDetail.PackageType;
 import dev.vinciguerra.adrsentinel.exception.IllegalShipmentStateException;
 import dev.vinciguerra.adrsentinel.exception.ResourceNotFoundException;
+import dev.vinciguerra.adrsentinel.web.dto.shipmentitem.ShipmentItemPackageUpdateDTO;
 import dev.vinciguerra.adrsentinel.web.dto.shipmentitem.ShipmentItemRequestDTO;
 import dev.vinciguerra.adrsentinel.web.dto.shipmentitem.ShipmentItemUpdateDTO;
 
@@ -187,7 +190,58 @@ public class ShipmentItemService extends AbstractGenericService {
 		);
 		item.setOnuNumber(number);
 		item.setQuantity(updateDto.quantity());
+		item.setNetWeightkg(updateDto.netWeightkg());
 		item.setUnitOfMeasure(Enum.valueOf(UnitOfMeasure.class, updateDto.unitOfMeasure()));
+		ShipmentItem updatedShipmentItem = shipmentItemRepository.save(item);
+		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+			@Override
+			public void afterCommit() { syncCacheAfterInsertOrUpdate(updatedShipmentItem, shipmentTrackingNumber); }
+		});
+		return updatedShipmentItem;
+	}
+	
+	/**
+	 * Aggiorna i dettagli fisici e di imballaggio (packaging) di una specifica riga di spedizione 
+	 * ({@link ShipmentItem}) identificata dal suo UUID univoco.
+	 * <p><b>Regole di Business e Macchina a Stati (Guard Clauses):</b></p>
+	 * Il metodo implementa un pattern di programmazione difensiva. Prima di applicare qualsiasi 
+	 * modifica, verifica rigorosamente il ciclo di vita della spedizione madre. L'aggiornamento 
+	 * è consentito <b>solo ed esclusivamente</b> se la spedizione si trova nello stato {@code PLANNED}. 
+	 * Qualsiasi tentativo di modifica su spedizioni in transito, consegnate o fatturate viene respinto 
+	 * per garantire l'immutabilità dei dati storici e la validità legale dei documenti già emessi (es. D.D.T.).
+	 * <p><b>Mutazione del Dominio (Embeddable):</b></p>
+	 * I dati estratti dal DTO sovrascrivono l'oggetto Value Object ({@code @Embeddable}) {@link PackageDetail} 
+	 * associato all'entità. La conversione del tipo di pacco ({@link PackageType}) avviene tramite 
+	 * la funzione nativa {@code Enum.valueOf}, richiedendo un match case-sensitive esatto con il payload.
+	 * <p><b>Contesto Transazionale e Sincronizzazione Cache (Evitare il Cache Poisoning):</b></p>
+	 * Il metodo è protetto da {@link Transactional}. Tuttavia, l'aggiornamento della cache applicativa 
+	 * non avviene immediatamente dopo il {@code repository.save()}. Sfruttando il 
+	 * {@link TransactionSynchronizationManager}, l'innesco della sincronizzazione ({@code syncCacheAfterInsertOrUpdate}) 
+	 * viene delegato alla fase di <i>After-Commit</i>. 
+	 * Questo pattern architetturale avanzato assicura che la cache venga allineata <b>solo</b> se la 
+	 * transazione sul database (MariaDB/PostgreSQL) va a buon fine, prevenendo disallineamenti critici 
+	 * (dati fantasma in cache) qualora la transazione dovesse subire un Rollback per errori di rete o constraint.
+	 * @param itemUUID L'identificativo pubblico univoco e immutabile (UUID) della riga di spedizione da aggiornare.
+	 * @param updateDto Il payload (Data Transfer Object) contenente i nuovi valori di imballaggio (quantità, 
+	 * tipo, codice ONU e peso della tara). Si assume che il DTO sia già stato validato 
+	 * sintatticamente a monte (es. pesi &gt; 0).
+	 * @return L'istanza di {@link ShipmentItem} aggiornata e persistita sul database.
+	 * @throws ResourceNotFoundException Se nessun {@link ShipmentItem} corrisponde all'UUID fornito.
+	 * @throws IllegalShipmentStateException Se la spedizione associata ha superato la fase di pianificazione 
+	 * (non è in stato {@code PLANNED}), rendendo l'oggetto immutabile.
+	 */
+	@Transactional
+	public ShipmentItem updatePackageDetailsByItemUUID(String itemUUID, ShipmentItemPackageUpdateDTO updateDto) throws ResourceNotFoundException, IllegalShipmentStateException {
+		ShipmentItem item = shipmentItemRepository.findByItemUUID(itemUUID)
+			.orElseThrow(() -> new ResourceNotFoundException("ShipmentItem not found: " + itemUUID));
+		if(item.getShipment().getShipmentStatus() != ShipmentStatus.PLANNED)
+			throw new IllegalShipmentStateException("Update denied: shipment is no longer in PLANNED status.");
+		final String shipmentTrackingNumber = item.getShipment().getTrackingNumber();
+		PackageDetail detail = item.getPackageDetails();
+		detail.setPackageCount(updateDto.packageCount());
+		detail.setPackageType(Enum.valueOf(PackageType.class, updateDto.packageType()));
+		detail.setOnuPackingCode(updateDto.onuPackingCode());
+		detail.setPackagingWeightkg(updateDto.packagingWeightkg());
 		ShipmentItem updatedShipmentItem = shipmentItemRepository.save(item);
 		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
 			@Override
@@ -276,6 +330,12 @@ public class ShipmentItemService extends AbstractGenericService {
 			Enum.valueOf(PackingGroup.class, dto.packingGroup()),
 			dto.name()
 		);
+		PackageDetail detail = new PackageDetail();
+		detail.setPackageCount(dto.packageCount());
+		detail.setPackageType(Enum.valueOf(PackageType.class, dto.packageType()));
+		detail.setOnuPackingCode(dto.onuPackingCode());
+		detail.setPackagingWeightkg(dto.packingWeight());
+		item.setPackageDetails(detail);
 		item.setShipment(shipment);
 		item.setOnuNumber(onuNumber);
 		item.setQuantity(dto.quantity());

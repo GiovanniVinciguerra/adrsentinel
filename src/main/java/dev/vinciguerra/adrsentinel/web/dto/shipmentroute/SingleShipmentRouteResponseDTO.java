@@ -26,14 +26,13 @@ import dev.vinciguerra.adrsentinel.db.adrclass.shipmentroute.ShipmentRoute;
  * @param destLng Longitudine esatta della destinazione della tratta (WGS 84).
  * @param distancekm La distanza stradale ricalcolata al netto di eventuali deviazioni HGV (Heavy Goods Vehicle).
  * @param etaMinutes Il tempo di percorrenza stimato espresso in minuti.
- * @param tunnelRestriction Il codice ADR della restrizione gallerie (es. "C/E"). Restituisce {@code null} se assente.
  * @param geometry La stringa vettoriale compressa (Encoded Polyline) per il rendering su mappa.
  * @author Giovanni Vinciguerra
  * @version 1.0
  * @since 1.0 
  */
 public record SingleShipmentRouteResponseDTO(String routeUUID, Double originLat, Double originLng, Double destLat, Double destLng, Float distancekm,
-		Integer etaMinutes, String tunnelRestriction, String geometry) {
+		Integer etaMinutes, String geometry) {
 	
 	/**
 	 * Mapper statico (Static Factory Method) responsabile della conversione dall'entità di 
@@ -62,7 +61,6 @@ public record SingleShipmentRouteResponseDTO(String routeUUID, Double originLat,
 			entity.getDestLng(),
 			entity.getDistanceKm(),
 			entity.getEtaMinutes(),
-			entity.getTunnelRestriction().name(),
 			entity.getGeometry()
 		);
 	}

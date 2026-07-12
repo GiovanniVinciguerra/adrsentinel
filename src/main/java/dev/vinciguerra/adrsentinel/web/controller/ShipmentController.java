@@ -23,6 +23,7 @@ import dev.vinciguerra.adrsentinel.web.annotation.shipment.ValidatorShipmentStat
 import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentRequestDTO;
 import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentResponseDTO;
 import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentUpdateDTO;
+import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentUpdateReasonDTO;
 import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentUpdateStatusDTO;
 import jakarta.validation.Valid;
 
@@ -151,16 +152,30 @@ public class ShipmentController {
 	
 	/**
 	 * Aggiorna esclusivamente lo stato del ciclo di vita della spedizione.
-	 * Pur agendo come un aggiornamento parziale (PATCH-like), utilizza il verbo PUT per 
-	 * sostituire in toto la risorsa logica di "Stato".
 	 * @param tracking Il tracking number della spedizione.
 	 * @param updateStatusDTO Il payload snello contenente solo il nuovo stato logistico.
 	 * @return Un payload HTTP 200 (OK) a conferma dell'avvenuta transizione di stato.
 	 */
 	@PutMapping("/status/{tracking}")
 	public ResponseEntity<ShipmentResponseDTO> updateShipmentStatus(@PathVariable @ValidatorUUID String tracking,
-			@RequestBody @Valid ShipmentUpdateStatusDTO updateStatusDTO) {
-		Shipment updatedShipment = shipmentService.updateStatusByTrackingNumber(tracking, updateStatusDTO);
+			@RequestBody @Valid ShipmentUpdateStatusDTO updateStatusDto) {
+		Shipment updatedShipment = shipmentService.updateStatusByTrackingNumber(tracking, updateStatusDto);
+		return ResponseEntity.ok(ShipmentResponseDTO.fromEntity(updatedShipment));
+	}
+	
+	/**
+	 * Aggiorna esclusivamente la causale di spedizione.
+	 * @param tracking il numero di tracciamento univoco (UUID) della spedizione da aggiornare, 
+	 * iniettato e validato direttamente dall'URI della richiesta ({@code /reason/{tracking}}).
+	 * @param updateReasonDto il payload JSON (deserializzato nel record immutabile) contenente 
+	 * la nuova causale di trasporto. Sottoposto a validazione formale di dominio.
+	 * @return una {@link ResponseEntity} contenente il {@link ShipmentResponseDTO} aggiornato 
+	 * con HTTP status {@code 200 OK} in caso di successo.
+	 */
+	@PutMapping("/reason/{tracking}")
+	public ResponseEntity<ShipmentResponseDTO> updateShipmentReason(@PathVariable @ValidatorUUID String tracking,
+			@RequestBody @Valid ShipmentUpdateReasonDTO updateReasonDto) {
+		Shipment updatedShipment = shipmentService.updateShipmentReasonByTrackingNumber(tracking, updateReasonDto);
 		return ResponseEntity.ok(ShipmentResponseDTO.fromEntity(updatedShipment));
 	}
 }

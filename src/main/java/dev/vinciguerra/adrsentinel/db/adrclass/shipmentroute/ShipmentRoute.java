@@ -2,13 +2,9 @@ package dev.vinciguerra.adrsentinel.db.adrclass.shipmentroute;
 
 import java.util.Objects;
 import java.util.UUID;
-import org.hibernate.annotations.ColumnDefault;
-import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumber.TunnelRestriction;
 import dev.vinciguerra.adrsentinel.db.shipment.Shipment;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.ForeignKey;
 import jakarta.persistence.GeneratedValue;
@@ -17,8 +13,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Lob;
 import jakarta.persistence.OneToOne;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
@@ -105,15 +99,6 @@ public class ShipmentRoute {
 		nullable = false
 	)
 	private Integer etaMinutes;
-	/** Il divieto di transito in determinate gallerie. Se null verrà associato il grado massimo {@code B} */
-	@Enumerated(EnumType.STRING)
-    @Column(
-    	name = "tunnel_restriction",
-    	nullable = false,
-    	length = 255
-    )
-	@ColumnDefault("'B'")
-    private TunnelRestriction tunnelRestriction;
 	/**
 	 * Stringa codificata (Encoded Polyline) restituita da OpenRouteService.
 	 * <p>
@@ -129,13 +114,7 @@ public class ShipmentRoute {
 		columnDefinition = "TEXT"
 	)
 	private String geometry;
-	/**
-	 * Relazione Uno-a-Uno con la spedizione.
-	 * <p>
-	 * Utilizza {@code FetchType.LAZY} per evitare query cartesiane (N+1) indesiderate quando 
-	 * si carica una singola Route, ritardando l'estrazione dello Shipment al momento dell'effettivo bisogno.
-	 * </p>
-	 */
+	/** Relazione Uno-a-Uno con la spedizione. */
 	@OneToOne(fetch = FetchType.EAGER)
 	@JoinColumn(
 		name = "shipment_id",
@@ -174,33 +153,6 @@ public class ShipmentRoute {
 	 */
 	public ShipmentRoute(String routeUUID) {
 		this.routeUUID = routeUUID;
-	}
-	
-	/**
-	 * Hook del ciclo di vita JPA (Lifecycle Callback) invocato automaticamente dall'ORM 
-	 * prima di ogni inserimento ({@code @PrePersist}) o aggiornamento ({@code @PreUpdate}) nel database.
-	 * <p>
-	 * Questo metodo agisce da coordinatore per le operazioni di pre-salvataggio, garantendo 
-	 * l'integrità dei dati:
-	 * </p>
-	 * <ul>
-	 * <li>
-	 * <b>Politica di Sicurezza "Fail-Safe" (Tunnel Restriction):</b><br>
-	 * Qualora il calcolo del routing non fornisca un codice di restrizione per le gallerie 
-	 * ({@code tunnelRestriction == null}), il sistema attua un meccanismo di difesa preventiva 
-	 * assegnando d'ufficio il valore di massima cautela ({@link TunnelRestriction#B}). 
-	 * Questa scelta architetturale garantisce che, in caso di dati incompleti o ambigui, 
-	 * il motore cartografico instradi il veicolo vietandogli l'accesso alla quasi totalità 
-	 * dei tunnel (Categorie B, C, D ed E). Ciò previene alla radice il rischio di violazioni 
-	 * del Codice della Strada e massimizza la sicurezza pubblica durante il trasporto ADR.
-	 * </li>
-	 * </ul>
-	 */
-	@PrePersist
-	@PreUpdate
-	private void Normalize() {
-		if(tunnelRestriction == null)
-			tunnelRestriction = TunnelRestriction.B;
 	}
 
 	public Long getId() {
@@ -263,14 +215,6 @@ public class ShipmentRoute {
 		this.etaMinutes = etaMinutes;
 	}
 
-	public TunnelRestriction getTunnelRestriction() {
-		return tunnelRestriction;
-	}
-
-	public void setTunnelRestriction(TunnelRestriction tunnelRestriction) {
-		this.tunnelRestriction = tunnelRestriction;
-	}
-
 	public String getGeometry() {
 		return geometry;
 	}
@@ -310,8 +254,7 @@ public class ShipmentRoute {
 		builder.append("ShipmentRoute [id=").append(id).append(", routeUUID=").append(routeUUID).append(", originLat=")
 			.append(originLat).append(", originLng=").append(originLng).append(", destLat=").append(destLat)
 			.append(", destLng=").append(destLng).append(", distanceKm=").append(distanceKm).append(", etaMinutes=")
-			.append(etaMinutes).append(", tunnelRestriction=").append(tunnelRestriction).append(", geometry=")
-			.append(geometry).append(", shipment=").append(shipment).append("]");
+			.append(etaMinutes).append(", geometry=").append(geometry).append("]");
 		return builder.toString();
 	}
 }
