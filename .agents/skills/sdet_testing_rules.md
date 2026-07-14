@@ -36,7 +36,7 @@ Non limitarti a testare i percorsi visibili in chiaro nel codice. Agisci con est
 ### Regole di Isolamento per Strato:
 - **Service Layer:** Puro isolamento. Usa `@ExtendWith(MockitoExtension.class)`. NON avviare mai il contesto Spring.
 - **Controller Layer:** Usa `@WebMvcTest` abbinato a `MockMvc`. Verifica status HTTP, corretta serializzazione JSON ed effettivo innesco delle annotazioni di validazione.
-- **Repository Layer:** Usa `@DataJpaTest` appoggiandoti ad H2. **CRUCIALE:** Configura le properties affinché H2 giri in **MariaDB/MySQL Compatibility Mode** (es. `MODE=MariaDB` o `MODE=MySQL`), per rispettare i dialetti DDL e i vincoli relazionali di produzione.
+- **Repository Layer:** Puro isolamento. Usa `@ExtendWith(MockitoExtension.class)`. **DIVIETO ASSOLUTO DI USARE H2** o altri database in memoria. NON avviare il contesto Spring. Devi testare le interazioni con il database esclusivamente mockando le interfacce repository tramite Mockito, verificando i dati passati ai metodi di salvataggio o ricerca.
 - **Validator Custom:** Puro isolamento. Istanzia direttamente la classe validatrice o utilizza `Validation.buildDefaultValidatorFactory()`.
 
 ## 5. STANDARD DI DOCUMENTAZIONE (TASSATIVO E INVIOLABILE)
