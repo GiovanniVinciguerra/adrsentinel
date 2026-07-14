@@ -1,0 +1,36 @@
+- **Data e Ora:** 2026-07-14T15:12:34+02:00
+- **Classe Analizzata:** ShipmentService
+- **Metodi Coperti:**
+  - getByTrackingNumber
+  - getByShipmentDate
+  - getByShipmentStatus
+  - getAllShipment
+  - save
+  - updateDetailsByTrackingNumber
+  - updateShipmentReasonByTrackingNumber
+  - updateTunnelRestrictionByTrackingNumber
+  - updateStatusByTrackingNumber
+  - syncCacheAfterInsert
+  - syncCacheAfterUpdate
+  - mapToEntity
+- **Vulnerabilità/Bug Rilevati (Cruciale):**
+  - Manca la validazione a monte sui tracking number `null` (metodo `getByTrackingNumber`), propagando l'errore al repository. Soluzione: Aggiungere un check di validità in ingresso.
+  - Assenza di try-catch per `DateTimeParseException` con date ISO malformate in `updateDetailsByTrackingNumber`. Soluzione: Aggiungere gestione dell'eccezione.
+  - Uscita da `TRANSIT` senza snapshot veicolo nel DB genera `ResourceNotFoundException`. Soluzione: Prevedere e gestire la possibile assenza dello snapshot prima dello sblocco risorse.
+  - Nel metodo `mapToEntity`, l'assenza di un Customer con ruolo `SENDER` causa `NullPointerException`. Inoltre `tunnelRestriction` e `shipmentReason` del DTO non vengono mappati. Soluzione: Gestire la mancanza del ruolo o validare a monte e mappare i campi mancanti.
+
+- **Data e Ora:** 2026-07-14T15:20:00+02:00
+- **Classe Analizzata:** Shipment
+- **Metodi Coperti:**
+  - onBeforeSaveOrUpdate (via reflection)
+  - ensurePlannedShipmentIsNotInThePast
+  - normalize
+  - getCustomerAsMap
+  - setDrivers
+  - setReceivers
+  - equals
+  - hashCode
+- **Vulnerabilità/Bug Rilevati (Cruciale):**
+  - Manca un controllo sui `null` interni nella lista in `normalize()`: se `destinationAddresses` contiene un elemento `null`, l'operazione `replaceAll` lancia `NullPointerException`. Soluzione: Filtrare i null o controllare `address != null` prima di rimpiazzare.
+  - Hardcoupling con il clock di sistema in `ensurePlannedShipmentIsNotInThePast` (uso diretto di `LocalDateTime.now()`). Questo rende la validazione non deterministica. Soluzione: Iniettare un `Clock` configurabile per facilitare il testing e migliorare la robustezza.
+  - I setter `setDrivers` e `setReceivers` ignorano silenziosamente collezioni nulle o vuote senza azzerare il campo, violando il contratto standard dei setter. Soluzione: Rimuovere il blocco `if` silente e permettere lo svuotamento, oppure lanciare una chiara `IllegalArgumentException`.
