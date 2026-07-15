@@ -2,6 +2,7 @@ package dev.vinciguerra.adrsentinel.db.shipment;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
@@ -15,7 +16,6 @@ import dev.vinciguerra.adrsentinel.db.customer.Customer.CustomerRole;
 import dev.vinciguerra.adrsentinel.db.driver.Driver;
 import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumber.TunnelRestriction;
 import dev.vinciguerra.adrsentinel.db.vehicle.Vehicle;
-import dev.vinciguerra.adrsentinel.exception.BadRequestException;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
@@ -52,9 +52,6 @@ import jakarta.persistence.UniqueConstraint;
  * <li><b>Tolerant Reader & Security:</b> Gli indirizzi testuali sono protetti contro attacchi 
  * di tipo Injection/XSS tramite Regex dedicate, e vengono auto-sanificati (trim e collasso spazi) 
  * prima di ogni interazione col database.</li>
- * <li><b>Domain-Driven Time Validation:</b> La validazione incrociata tra lo stato della spedizione 
- * e la data viene gestita internamente tramite hook JPA ({@link #ensurePlannedShipmentIsNotInThePast()}), 
- * superando i limiti statici di Jakarta Validation.</li>
  * </ul>
  * @author Giovanni Vinciguerra
  * @version 2.0 (Refactored with Jakarta Validation)
@@ -90,7 +87,7 @@ public class Shipment {
 	 * critica per determinare l'applicabilità di specifiche esenzioni ADR,
 	 * l'obbligo di documenti accessori (es. F.I.R. per i rifiuti) e le corrette
 	 * dichiarazioni documentali.
- * </p>
+	 * </p>
 	 */
 	public enum ShipmentReason {
 		/**
@@ -321,53 +318,6 @@ public class Shipment {
     )
     private List<Customer> receivers = new ArrayList<>();
 	
-	
-	/**
-	 * Hook Orchestratore (Coordinator) per gli eventi di scrittura del database.
-	 * <p>
-	 * <b>Pattern Architetturale:</b> Risolve la limitazione della specifica JPA (che ammette un singolo 
-	 * metodo {@code @PrePersist}/{@code @PreUpdate} per classe) definendo un ordine di esecuzione 
-	 * rigido e deterministico per le operazioni di pre-salvataggio.
-	 * </p>
-	 * <p>
-	 * <b>Ordine di Esecuzione:</b>
-	 * <ol>
-	 * <li><b>Validazione di Dominio:</b> Verifica le regole di business temporali ({@link #ensurePlannedShipmentIsNotInThePast()}).</li>
-	 * <li><b>Sanificazione:</b> Pulisce e formatta i dati anagrafici ({@link #normalize()}).</li>
-	 * </ol>
-	 * Questo ordine garantisce che non si sprechi tempo CPU per la formattazione dei testi se 
-	 * la transazione sta per essere abortita a causa di una violazione temporale.
-	 * </p>
-	 */
-	@PrePersist
-	@PreUpdate
-	private void onBeforeSaveOrUpdate() {
-		ensurePlannedShipmentIsNotInThePast();
-		normalize();
-	}
-	
-	/**
-	 * Validatore di Dominio (Domain Enforcer): Impedisce la retrodatazione abusiva delle spedizioni.
-	 * <p>
-	 * <b>Logica di Business Logistica:</b><br>
-	 * Se una spedizione si trova ancora nello stato inziale ({@code PLANNED}), la sua data di 
-	 * partenza programmata non può essere "nel passato remoto". Viene concessa una finestra 
-	 * di tolleranza operativa di <b>48 ore</b> (per consentire agli operatori di inserire 
-	 * a sistema spedizioni partite nella notte o il giorno precedente in caso di down di rete), 
-	 * ma oltre tale soglia l'inserimento viene considerato un errore di battitura (Fat-Finger) 
-	 * o un'anomalia di sistema e viene bloccato alla radice.
-	 * </p>
-	 * @throws BadRequestException se la data della spedizione pianificata è antecedente a (NOW - 24 ore), 
-	 * provocando il rollback immediato della transazione di database.
-	 */
-	private void ensurePlannedShipmentIsNotInThePast() throws BadRequestException {
-		if(shipmentStatus == ShipmentStatus.PLANNED) {
-			LocalDateTime toleranceLimit = LocalDateTime.now().minusDays(2);
-			if(shipmentDate.isBefore(toleranceLimit))
-				throw new BadRequestException("A planned shipment cannot be scheduled more than 48 hours in the past");
-		}
-	}
-	
 	/**
 	 * Implementa il pattern "Tolerant Reader" per la sanificazione degli indirizzi logistici.
 	 * <p>
@@ -380,19 +330,26 @@ public class Shipment {
 	 * compattando tutto in una stringa pulita su singola riga.
 	 * </p>
 	 */
-	private void normalize() {
+	@PrePersist
+	@PreUpdate
+	private void normalize() throws IllegalArgumentException {
 		if(originAddress != null) {
 			originAddress = originAddress
 				.replaceAll("[\\r\\n\\t]+", " ")
 				.replaceAll(" {2,}", " ")
 				.trim();
+			if(originAddress.isBlank())
+				throw new IllegalArgumentException("After sanitization, the source address is blank.");
 		}
 		if(destinationAddresses != null) {
+			destinationAddresses.removeIf(Objects::isNull);
 			destinationAddresses.replaceAll(address -> address
 				.replaceAll("[\\r\\n\\t]+", " ")
 				.replaceAll(" {2,}", " ")
 				.trim()
 			);
+			if(destinationAddresses.isEmpty())
+				throw new IllegalStateException("After sanification, the destination address list is empty.");
 		}
 		if(tunnelRestriction == null)
 			tunnelRestriction = TunnelRestriction.B;
@@ -447,7 +404,8 @@ public class Shipment {
 	}
 
 	public void setTunnelRestriction(TunnelRestriction tunnelRestriction) {
-		this.tunnelRestriction = tunnelRestriction;
+		if(tunnelRestriction == null) this.tunnelRestriction = TunnelRestriction.B;
+		else this.tunnelRestriction = tunnelRestriction;
 	}
 
 	public ShipmentReason getShipmentReason() {
@@ -467,12 +425,17 @@ public class Shipment {
 	}
 	
 	public Set<Driver> getDrivers() {
-		return drivers;
+		return Collections.unmodifiableSet(drivers);
 	}
 	
 	public void setDrivers(Set<Driver> drivers) {
-		if(drivers == null || drivers.isEmpty()) { /* do nothing */ }
+		if(drivers == null) this.drivers = new HashSet<Driver>();
 		else this.drivers = drivers;
+	}
+	
+	/** Metodo helper per svuotare il set di Driver. Serve perchè il getter ritorna un set non modificabile */
+	public void clearDrivers() {
+		this.drivers.clear();
 	}
 
 	public Customer getSender() {
@@ -492,11 +455,16 @@ public class Shipment {
 	}
 
 	public List<Customer> getReceivers() {
-		return receivers;
+		return Collections.unmodifiableList(receivers);
+	}
+	
+	/** Metodo helper per svuotare la lista di Receiver. Serve perchè il getter ritorna una lista non modificabile */
+	public void clearReceivers() {
+		this.receivers.clear();
 	}
 	
 	public void setReceivers(List<Customer> receivers) {
-		if(receivers == null || receivers.isEmpty()) { /* do nothing */ }
+		if(receivers == null) this.receivers = new ArrayList<Customer>();
 		else this.receivers = receivers;
 	}
 	

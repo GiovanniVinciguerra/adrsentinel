@@ -23,6 +23,7 @@ import dev.vinciguerra.adrsentinel.web.annotation.shipment.ValidatorShipmentStat
 import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentRequestDTO;
 import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentResponseDTO;
 import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentUpdateDTO;
+import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentUpdateDateDTO;
 import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentUpdateReasonDTO;
 import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentUpdateStatusDTO;
 import jakarta.validation.Valid;
@@ -147,6 +148,23 @@ public class ShipmentController {
 	public ResponseEntity<ShipmentResponseDTO> updateShipmentDetails(@PathVariable @ValidatorUUID String tracking,
 			@RequestBody @Valid ShipmentUpdateDTO updateDto) {
 		Shipment updatedShipment = shipmentService.updateDetailsByTrackingNumber(tracking, updateDto);
+		return ResponseEntity.ok(ShipmentResponseDTO.fromEntity(updatedShipment));
+	}
+	
+	/**
+     * Endpoint REST (HTTP PUT) per aggiornare la data di una spedizione specifica.
+     * <p>
+     * Questo endpoint riceve il numero di tracciamento della spedizione tramite la variabile di percorso
+     * (path variable) e il payload con la nuova data nel corpo della richiesta (request body).
+     * </p>
+     * @param tracking  il codice di tracciamento univoco della spedizione, fornito come variabile d'area nell'URL (deve essere un UUID valido)
+     * @param updateDto il corpo della richiesta contenente il record con la nuova data da impostare
+     * @return una {@link ResponseEntity} contenente il {@link ShipmentResponseDTO} con i dati aggiornati della spedizione e stato HTTP {@code 200 OK}
+     */
+	@PutMapping("/date/{tracking}")
+	public ResponseEntity<ShipmentResponseDTO> updateShipmentDate(@PathVariable @ValidatorUUID String tracking,
+			@RequestBody @Valid ShipmentUpdateDateDTO updateDto) {
+		Shipment updatedShipment = shipmentService.updateDateByTrackingNumber(tracking, updateDto);
 		return ResponseEntity.ok(ShipmentResponseDTO.fromEntity(updatedShipment));
 	}
 	

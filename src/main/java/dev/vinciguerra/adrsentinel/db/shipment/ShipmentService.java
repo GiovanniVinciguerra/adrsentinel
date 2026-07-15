@@ -3,6 +3,7 @@ package dev.vinciguerra.adrsentinel.db.shipment;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
@@ -38,10 +39,12 @@ import dev.vinciguerra.adrsentinel.db.vehicle.VehicleSnapshot;
 import dev.vinciguerra.adrsentinel.db.vehicle.VehicleSnapshotService;
 import dev.vinciguerra.adrsentinel.db.waybill.Waybill;
 import dev.vinciguerra.adrsentinel.db.waybill.WaybillService;
+import dev.vinciguerra.adrsentinel.exception.BadRequestException;
 import dev.vinciguerra.adrsentinel.exception.IllegalShipmentStateException;
 import dev.vinciguerra.adrsentinel.exception.ResourceNotFoundException;
 import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentRequestDTO;
 import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentUpdateDTO;
+import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentUpdateDateDTO;
 import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentUpdateReasonDTO;
 import dev.vinciguerra.adrsentinel.web.dto.shipment.ShipmentUpdateStatusDTO;
 
@@ -114,9 +117,12 @@ public class ShipmentService extends AbstractGenericService {
 	 * @param trackingNumber il codice alfanumerico univoco identificativo della spedizione.
 	 * @return l'entità {@link Shipment} trovata.
 	 * @throws ResourceNotFoundException se il tracking number non esiste nel sistema.
+	 * @throws BadRequestException se il tracking number è {@code null}.
 	 */
 	@Cacheable(value = CaffeineCacheConfiguration.SHIPMENT_BY_TRACKING_NUMBER_CACHE, key = "#trackingNumber")
-	public Shipment getByTrackingNumber(String trackingNumber) throws ResourceNotFoundException {
+	public Shipment getByTrackingNumber(String trackingNumber) throws BadRequestException, ResourceNotFoundException {
+		if(trackingNumber == null)
+			throw new BadRequestException("Invalid parameter: the tracking number is null.");
 		logger.info("[DataBase CALL] Searching for the Shipment by trackingNumber: {}", trackingNumber);
 		return shipmentRepository.findByTrackingNumber(trackingNumber)
 			.orElseThrow(() -> new ResourceNotFoundException("Shipment not found: " + trackingNumber));
@@ -131,9 +137,12 @@ public class ShipmentService extends AbstractGenericService {
 	 * </p>
 	 * @param targetDate la data operativa da analizzare.
 	 * @return la lista finita di spedizioni appartenenti a quella specifica data.
+	 * @throws BadRequestException se la data è {@code null}.
 	 */
 	@Cacheable(value = CaffeineCacheConfiguration.SHIPMENT_BY_SHIPMENT_DATE_CACHE, key = "#targetDate")
-	public List<Shipment> getByShipmentDate(LocalDate targetDate) {
+	public List<Shipment> getByShipmentDate(LocalDate targetDate) throws BadRequestException {
+		if(targetDate == null)
+			throw new BadRequestException("Invalid parameter: the date is null.");
 		logger.info("[DataBase CALL] Searching for the Shipment by shipmentDate: {}", targetDate);
 		LocalDateTime startOfDay = targetDate.atStartOfDay();
 		LocalDateTime endOfDay = targetDate.atTime(LocalTime.MAX);
@@ -225,9 +234,12 @@ public class ShipmentService extends AbstractGenericService {
 	 * </p>
 	 * @param newShipment il DTO di dominio da persistere.
 	 * @return l'entità consolidata restituita da Hibernate (con ID generato/aggiornato).
+	 * @throws IllegalShipmentStateException se la spedizione da memorizzare è {@code null}.
 	 */
 	@Transactional
-	public Shipment save(Shipment newShipment) {
+	public Shipment save(Shipment newShipment) throws IllegalShipmentStateException {
+		if(newShipment == null)
+			throw new IllegalShipmentStateException("Save denied: the new shipment is null.");
 		logger.info("[DataBase CALL] Saving new Shipment with trackingNumber: {}", newShipment.getTrackingNumber());
 		Shipment savedShipment = shipmentRepository.save(newShipment);
 		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
@@ -268,8 +280,57 @@ public class ShipmentService extends AbstractGenericService {
 		final LocalDate oldDate = shipment.getShipmentDate().toLocalDate();
 		Vehicle vehicle = vehicleService.getByLicensePlate(updateDto.vehicleLicensePlate());
 		shipment.setVehicle(vehicle);
-		shipment.setShipmentDate(LocalDateTime.parse(updateDto.date()));
 		shipment.setDestinationAddresses(updateDto.destinations());
+		Shipment updatedShipment = shipmentRepository.save(shipment);
+		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+			@Override
+			public void afterCommit() { syncCacheAfterUpdate(updatedShipment, oldDate); }
+		});
+		return updatedShipment;
+	}
+	
+	/**
+     * Aggiorna la data di una spedizione identificata dal suo numero di tracciamento.
+     * <p>
+     * Questo metodo è transazionale ({@code @Transactional}). Esegue una serie di validazioni
+     * di business prima di applicare la modifica e, in caso di successo, programma la
+     * sincronizzazione della cache per essere eseguita solo <strong>dopo il commit positivo</strong>
+     * della transazione sul database.
+     * </p>
+     * * <h3>Regole di Business e Validazioni:</h3>
+     * <ul>
+     * <li>La spedizione deve esistere a sistema, altrimenti viene sollevato un errore 404.</li>
+     * <li>
+     * Se la spedizione <strong>non</strong> è in stato {@link ShipmentStatus#PLANNED}, la data attuale
+     * della spedizione non deve essere antecedente a più di 48 ore rispetto al momento dell'elaborazione.
+     * </li>
+     * <li>La nuova data fornita nel DTO deve rispettare un formato ISO-8601 valido per il parsing.</li>
+     * </ul>
+     * @param trackingNumber il codice di tracciamento univoco della spedizione da aggiornare (non {@code null})
+     * @param updateDto il DTO contenente la stringa della nuova data da impostare
+     * @return l'entità {@link Shipment} aggiornata e persistita sul database
+     * @throws ResourceNotFoundException se non esiste alcuna spedizione con il {@code trackingNumber} fornito
+     * @throws BadRequestException se la spedizione non è pianificata ({@code PLANNED}) ed è già programmata 
+     * nel passato oltre la soglia di tolleranza di 48 ore
+     * @throws IllegalShipmentStateException se la stringa della data nel DTO è malformata e non può essere 
+     * convertita in un {@link java.time.LocalDateTime}
+     */
+	@Transactional
+	public Shipment updateDateByTrackingNumber(String trackingNumber, ShipmentUpdateDateDTO updateDto) throws BadRequestException, IllegalShipmentStateException {
+		logger.info("[DataBase CALL] Updating Shipment with trackingNumber: {}", trackingNumber);
+		Shipment shipment = shipmentRepository.findByTrackingNumber(trackingNumber)
+			.orElseThrow(() -> new ResourceNotFoundException("Shipment not found: " + trackingNumber));
+		final LocalDate oldDate = shipment.getShipmentDate().toLocalDate();
+		if(shipment.getShipmentStatus() != ShipmentStatus.PLANNED) {
+			LocalDateTime toleranceLimit = LocalDateTime.now().minusDays(2);
+			if(shipment.getShipmentDate().isBefore(toleranceLimit))
+				throw new BadRequestException("A non-planned shipment cannot be scheduled more than 48 hours in the past.");
+		}
+		try {
+			shipment.setShipmentDate(LocalDateTime.parse(updateDto.date()));
+		} catch(DateTimeParseException error) {
+			throw new IllegalShipmentStateException("Unable to convert date, invalid format. Date update aborted.", error);
+		}
 		Shipment updatedShipment = shipmentRepository.save(shipment);
 		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
 			@Override
@@ -308,17 +369,22 @@ public class ShipmentService extends AbstractGenericService {
 	 * ad alcuna spedizione presente nel database
 	 * @throws IllegalShipmentStateException se la spedizione esiste, ma il suo stato attuale 
 	 * non è {@code PLANNED} (es. la merce è già in viaggio)
+	 * @throws BadRequestException se la nuova reason non può essere convertita in {@code Enum}.
 	 */
 	@Transactional
 	public Shipment updateShipmentReasonByTrackingNumber(String trackingNumber, ShipmentUpdateReasonDTO updateDto) 
-			throws ResourceNotFoundException, IllegalShipmentStateException {
+			throws ResourceNotFoundException, IllegalShipmentStateException, BadRequestException {
 		logger.info("[DataBase CALL] Updating Shipment shipment reason with trackingNumber: {}", trackingNumber);
 		Shipment shipment = shipmentRepository.findByTrackingNumber(trackingNumber)
 			.orElseThrow(() -> new ResourceNotFoundException("Shipment not found: " + trackingNumber));
 		if(shipment.getShipmentStatus() != ShipmentStatus.PLANNED)
 			throw new IllegalShipmentStateException("Update denied: shipment is no longer in PLANNED status.");
 		final LocalDate oldDate = shipment.getShipmentDate().toLocalDate();
-		shipment.setShipmentReason(Enum.valueOf(ShipmentReason.class, updateDto.shipmentReason()));
+		try {
+			shipment.setShipmentReason(Enum.valueOf(ShipmentReason.class, updateDto.shipmentReason()));
+		} catch(IllegalArgumentException error) {
+			throw new BadRequestException("Update denied: the shipment reason is in an invalid format.");
+		}
 		Shipment updatedShipment = shipmentRepository.save(shipment);
 		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
 			@Override
@@ -430,15 +496,22 @@ public class ShipmentService extends AbstractGenericService {
 	 * @throws ResourceNotFoundException Se il {@code trackingNumber} fornito non trova riscontro nel database. Oppure se 
 	 * gli snapshot del veicolo e degli autisti non sono presenti nel Database.
 	 * @throws IllegalShipmentStateException Se si tenta di alterare uno stato terminale (Nodo Pozzo) o se la 
-	 * transizione richiesta viola i vincoli della macchina a stati (es. {@code PLANNED -> DELIVERED} o {@code TRANSIT -> PLANNED}).
+	 * transizione richiesta viola i vincoli della macchina a stati (es. {@code PLANNED -> DELIVERED} o {@code TRANSIT -> PLANNED}) o 
+	 * se non sono presenti {@code Customer} e {@code Driver}.
+	 * @throws BadRequestException se il nuovo stato non può essere convertito in {@code Enum}.
 	 */
 	@Transactional
-	public Shipment updateStatusByTrackingNumber(String trackingNumber, ShipmentUpdateStatusDTO updateStatusDTO) throws IllegalShipmentStateException {
+	public Shipment updateStatusByTrackingNumber(String trackingNumber, ShipmentUpdateStatusDTO updateStatusDTO) throws BadRequestException, IllegalShipmentStateException {
 		logger.info("[DataBase CALL] Updating Shipment status with trackingNumber: {}", trackingNumber);
 		Shipment shipment = shipmentRepository.findByTrackingNumber(trackingNumber)
 			.orElseThrow(() -> new ResourceNotFoundException("Shipment not found: " + trackingNumber));
 		ShipmentStatus oldStatus = shipment.getShipmentStatus();
-		ShipmentStatus newStatus = Enum.valueOf(ShipmentStatus.class, updateStatusDTO.status());
+		ShipmentStatus newStatus;
+		try {
+			newStatus = Enum.valueOf(ShipmentStatus.class, updateStatusDTO.status());
+		} catch(IllegalArgumentException error) {
+			throw new BadRequestException("Update denied: shipment status is in invalid format.");
+		}
 		LocalDate oldDate = shipment.getShipmentDate().toLocalDate();
 		// 1. GESTIONE STATI TERMINALI (Nodi Pozzo)
 		if(oldStatus == ShipmentStatus.DELIVERED || oldStatus == ShipmentStatus.CANCELLED) {
@@ -468,12 +541,16 @@ public class ShipmentService extends AbstractGenericService {
 	        logger.info("Shipment [{}] leaving PLANNED state. Executing one-time snapshot and detachment.", trackingNumber);
 	        vehicleSnapshotService.save(new VehicleSnapshot(shipment));
 	        shipment.setVehicle(null);
+	        if(shipment.getDrivers().isEmpty())
+	        	throw new IllegalShipmentStateException("Update Canceled: There are no drivers for this shipment, but the shipment is in PLANNED status.");
 	        DriverSnapshot.fromDrivers(shipment).forEach(driverSnapshotService::save);
-	        shipment.getDrivers().clear();
+	        shipment.clearDrivers();
+	        if(shipment.getCustomerAsMap().isEmpty())
+	        	throw new IllegalShipmentStateException("Update Canceled: There are no customers for this shipment, but the shipment is in PLANNED status.");
 	        CustomerSnapshot.fromCustomers(shipment).forEach(customerSnapshotService::save);
 	        shipment.setSender(null);
 	        shipment.setCarrier(null);
-	        shipment.getReceivers().clear();
+	        shipment.clearReceivers();
 	        /* Creazione della bolla di viaggio (DDT) */
 	        logger.info("Shipment [{}] left PLANNED state changing to {}. Triggering automatic Waybill (D.D.T.) generation.", trackingNumber, newStatus);
 	        Waybill waybill = waybillService.save(trackingNumber);
@@ -612,6 +689,8 @@ public class ShipmentService extends AbstractGenericService {
 	 * già stati sanificati dal Validation Context.
 	 * @return Una nuova istanza di {@link Shipment} in stato <i>Transient</i> (non ancora gestita dall'EntityManager), 
 	 * completamente idratata e pronta per la persistenza.
+	 * @throws BadRequestException se non sono presenti {@code SENDER o CARRIER o RECEIVER}, se il {@code RECEIVER} è presente, ma 
+	 * è una lista vuota.
 	 */
 	public Shipment mapToEntity(ShipmentRequestDTO dto) {
 		Shipment shipment = new Shipment();
@@ -630,6 +709,14 @@ public class ShipmentService extends AbstractGenericService {
 			customerListByRole.add(customer);
 			customers.put(role, customerListByRole);
 		});
+		if(!customers.containsKey(CustomerRole.SENDER))
+			throw new BadRequestException("Error: there is no SENDER.");
+		if(!customers.containsKey(CustomerRole.CARRIER))
+			throw new BadRequestException("Error: there is no CARRIER.");
+		if(!customers.containsKey(CustomerRole.RECEIVER))
+			throw new BadRequestException("Error: there is no RECEIVER.");
+		if(customers.get(CustomerRole.RECEIVER).isEmpty())
+			throw new BadRequestException("Error: there is a RECEIVER, but is empty list.");
 		shipment.setVehicle(vehicle);
 		shipment.setDrivers(drivers);
 		shipment.setSender(customers.get(CustomerRole.SENDER).get(0));

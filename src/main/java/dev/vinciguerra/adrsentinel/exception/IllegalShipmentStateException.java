@@ -57,4 +57,22 @@ public class IllegalShipmentStateException extends RuntimeException {
 	public IllegalShipmentStateException(String message) {
         super(message);
     }
+	
+	/**
+     * Costruisce una nuova eccezione {@code IllegalShipmentStateException} con il messaggio 
+     * di dettaglio e la causa specificati.
+     * <p>
+     * Questo costruttore è particolarmente utile per l'incatenamento delle eccezioni 
+     * (exception chaining), permettendo di preservare l'errore d'origine (ad esempio 
+     * un {@link java.time.format.DateTimeParseException}) per facilitare il debugging.
+     * </p>
+     * @param message il messaggio di dettaglio che descrive l'errore (recuperabile 
+     * tramite il metodo {@link #getMessage()})
+     * @param cause   la causa che ha scatenato questa eccezione (recuperabile tramite 
+     * il metodo {@link #getCause()}). Un valore {@code null} è ammesso 
+     * e indica che la causa è inesistente o sconosciuta.
+     */
+	public IllegalShipmentStateException(String message, Throwable cause) {
+		super(message, cause);
+	}
 }
