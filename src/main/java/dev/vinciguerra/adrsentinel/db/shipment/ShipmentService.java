@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.cache.CacheManager;
@@ -95,14 +96,14 @@ public class ShipmentService extends AbstractGenericService {
 			DriverSnapshotService driverSnapshotService, CustomerService customerService, CustomerSnapshotService customerSnapshotService, @Lazy WaybillService waybillService,
 			CacheManager cacheManager) {
 		super(cacheManager);
-		this.shipmentRepository = shipmentRepository;
-		this.vehicleService = vehicleService;
-		this.vehicleSnapshotService = vehicleSnapshotService;
-		this.driverService = driverService;
-		this.driverSnapshotService = driverSnapshotService;
-		this.customerService = customerService;
-		this.customerSnapshotService = customerSnapshotService;
-		this.waybillService = waybillService;
+		this.shipmentRepository = Objects.requireNonNull(shipmentRepository, "shipmentRepository must not be null.");
+		this.vehicleService = Objects.requireNonNull(vehicleService, "vehicleService must not be null.");
+		this.vehicleSnapshotService = Objects.requireNonNull(vehicleSnapshotService, "vehicleSnapshotService must not be null.");
+		this.driverService = Objects.requireNonNull(driverService, "driverService must not be null.");
+		this.driverSnapshotService = Objects.requireNonNull(driverSnapshotService, "driverSnapshotService must not be null.");
+		this.customerService = Objects.requireNonNull(customerService, "customerService must not be null.");
+		this.customerSnapshotService = Objects.requireNonNull(customerSnapshotService, "customerSnapshotService must not be null.");
+		this.waybillService = Objects.requireNonNull(waybillService, "waybillService must not be null.");
 	}
 	
 	// --- SEZIONE 1: BOUNDED DATA (CACHED) ---

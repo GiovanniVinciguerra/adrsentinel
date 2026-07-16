@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.cache.CacheManager;
@@ -97,12 +98,12 @@ public class DispatchService extends AbstractGenericService {
 	protected DispatchService(AdrClassService adrClassService, CompatibilityRuleService compatibilityRuleService, OnuNumberService onuNumberService,
 			ShipmentRouteService shipmentRouteService, VehicleService vehicleService, DriverService driverService, CacheManager cacheManager) {
 		super(cacheManager);
-		this.adrClassService = adrClassService;
-		this.compatibilityRuleService = compatibilityRuleService;
-		this.onuNumberService = onuNumberService;
-		this.shipmentRouteService = shipmentRouteService;
-		this.vehicleService = vehicleService;
-		this.driverService = driverService;
+		this.adrClassService = Objects.requireNonNull(adrClassService, "adrClassService must not be null.");
+		this.compatibilityRuleService = Objects.requireNonNull(compatibilityRuleService, "compatibilityRuleService must not be null.");
+		this.onuNumberService = Objects.requireNonNull(onuNumberService, "onuNumberService must not be null.");
+		this.shipmentRouteService = Objects.requireNonNull(shipmentRouteService, "shipmentRouteService must not be null.");
+		this.vehicleService = Objects.requireNonNull(vehicleService, "vehicleService must not be null.");
+		this.driverService = Objects.requireNonNull(driverService, "driverService must not be null.");
 	}
 	
 	/**

@@ -3,6 +3,7 @@ package dev.vinciguerra.adrsentinel.db.shipmentroute;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.CacheManager;
@@ -86,11 +87,11 @@ public class ShipmentRouteService extends AbstractGenericService {
 			OrsGeocodingService orsGeocodingService, @Value("${ors.api.base-url:https://api.openrouteservice.org}") String baseUrl, 
 			@Value("${ors.api.key}") String apiKey, CacheManager cacheManager) {
 		super(cacheManager);
-		this.shipmentRouteRepository = shipmentRouteRepository;
-		this.shipmentItemService = shipmentItemService;
-		this.shipmentService = shipmentService;
-		this.orsGeocodingService = orsGeocodingService;
-		this.apiKey = apiKey;
+		this.shipmentRouteRepository = Objects.requireNonNull(shipmentRouteRepository, "shipmentRouteRepository must not be null.");
+		this.shipmentItemService = Objects.requireNonNull(shipmentItemService, "shipmentItemService must not be null.");
+		this.shipmentService = Objects.requireNonNull(shipmentService, "shipmentService must not be null.");
+		this.orsGeocodingService = Objects.requireNonNull(orsGeocodingService, "orsGeocodingService must not be null.");
+		this.apiKey = Objects.requireNonNull(apiKey, "apiKey must not be null.");
 		this.restClient = RestClient.builder().baseUrl(baseUrl).build();
 	}
 	

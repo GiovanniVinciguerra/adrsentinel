@@ -209,3 +209,37 @@ I test seguenti sono scritti **appositamente per FALLIRE** con il codice attuale
    - *Test RED:* `shouldReturnFalseWhenBothClassCodesAreNull_RED`.
 
 ---
+
+---
+
+## Sessione del 2026-07-16T16:36+02:00
+
+**Classe Analizzata:** CompatibilityRuleService.java
+**File Generato:** CompatibilityRuleServiceTest.java
+**Righe Generate:** 1158
+**Test Totali:** 18 (10 GREEN + 8 RED-TDD)
+**Destinazione:** `/home/giovanni/Documenti/AntigravityTester/CompatibilityRuleServiceTest.java`
+
+### Metodi Coperti
+
+- `CompatibilityRuleService(CompatibilityRuleRepository, AdrClassService, CacheManager)` — Costruttore (3 test: 1 HP + 2 RED-TDD)
+- `getByAdrClassA(String adrClassCodeA)` — Recupero regole per classe ADR sorgente (4 test: 2 HP + 2 RED-TDD)
+- `save(CompatibilityRule newCompatibilityRule)` — Persistenza + Write-Through cache (7 test: 2 HP + 3 RED-TDD + 1 EDGE)
+- `mapToEntity(CompatibilityRuleRequestDTO dto)` — Mapping DTO → Entity con lookup ADR (7 test: 3 HP + 2 FP + 2 RED-TDD)
+- `syncCacheAfterInsert(CompatibilityRule)` — Testato indirettamente tramite `ArgumentCaptor` sul callback `afterCommit()`
+
+### Vulnerabilita'/Bug Rilevati (8 Test RED-TDD)
+
+1. **[CRITICA] Mancanza di null-check in `getByAdrClassA()`:** Il metodo non valida `adrClassCodeA` prima di passarlo al repository JPA. Un input `null` o blank viene propagato silenziosamente, potenzialmente producendo query malformate o risultati inattesi. **Fix:** Aggiungere `if (adrClassCodeA == null || adrClassCodeA.isBlank()) throw new IllegalArgumentException(...)` come prima istruzione del metodo.
+
+2. **[CRITICA] Mancanza di null-check in `save()`:** Il metodo invoca `newCompatibilityRule.getAdrClassA().getClassCode()` (riga 110) senza verificare che l'argomento o le sue relazioni siano non null. Passare `null`, o una regola con `adrClassA = null` o `adrClassB = null`, causa `NullPointerException` non gestita con risposta HTTP 500. **Fix:** Aggiungere Guard Clause all'inizio del metodo che verifichi null sull'argomento e sulle due classi ADR, lanciando `IllegalArgumentException`.
+
+3. **[MEDIA] Mancanza di null-check in `mapToEntity()`:** Il metodo non valida il DTO in ingresso prima di accedere a `dto.classCodeA()` (riga 187). Un DTO `null` causa `NullPointerException` con HTTP 500. Analogamente, un classCode blank nel DTO bypassa la validazione del service e viene delegato silenziosamente ad `adrClassService`. **Fix:** Aggiungere `if (dto == null) throw new IllegalArgumentException(...)` e validazione dei singoli campi nel mapper.
+
+4. **[BASSA] Mancanza di null-check nel costruttore:** Le dipendenze `compatibilityRuleRepository` e `adrClassService` vengono assegnate ai campi `final` senza Guard Clause. Un'iniezione errata produce errori differiti (NPE al primo utilizzo) anziché immediati (Fail-Fast). **Fix:** Aggiungere `Objects.requireNonNull(compatibilityRuleRepository, ...)` e `Objects.requireNonNull(adrClassService, ...)` nel costruttore.
+
+### Aree che Richiedono Ulteriori Validazioni
+
+- Il metodo `getByAdrClassA()` manca di test di verifica per i casi in cui il repository lanci un'eccezione (es. `DataAccessException`): si consiglia di aggiungere un test che verifichi la propagazione di eccezioni infrastrutturali.
+- Il metodo `save()` non verifica che la `CompatibilityRule` passata non abbia un ID gia' valorizzato (che indicherebbe una risorsa esistente, non una nuova): considerare l'aggiunta di un controllo `if (rule.getId() != null) throw new IllegalArgumentException(...)` per forzare la semantica di creazione.
+

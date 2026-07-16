@@ -1,6 +1,8 @@
 package dev.vinciguerra.adrsentinel.db.customer;
 
 import java.util.List;
+import java.util.Objects;
+
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -43,7 +45,7 @@ public class CustomerService extends AbstractGenericService {
 	 */
 	protected CustomerService(CustomerRepository customerRepository, CacheManager cacheManager) {
 		super(cacheManager);
-		this.customerRepository = customerRepository;
+		this.customerRepository = Objects.requireNonNull(customerRepository, "customerRepository must be not null.");
 	}
 	
 	/**

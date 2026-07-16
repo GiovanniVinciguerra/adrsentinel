@@ -6,6 +6,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+
 import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,13 +60,13 @@ public class WaybillService extends AbstractGenericService  {
 			VehicleSnapshotService vehicleSnapshotService, DriverSnapshotService driverSnapshotService, CustomerSnapshotService customerSnapshotService,
 			ShipmentItemService shipmentItemService, CacheManager cacheManager) {
 		super(cacheManager);
-		this.waybillRepository = waybillRepository;
-		this.templateEngine = templateEngine;
-		this.shipmentService = shipmentService;
-		this.vehicleSnapshotService = vehicleSnapshotService;
-		this.driverSnapshotService = driverSnapshotService;
-		this.customerSnapshotService = customerSnapshotService;
-		this.shipmentItemService = shipmentItemService;
+		this.waybillRepository = Objects.requireNonNull(waybillRepository, "waybillRepository must not be null.");
+		this.templateEngine = Objects.requireNonNull(templateEngine, "templateEngine must not be null.");
+		this.shipmentService = Objects.requireNonNull(shipmentService, "shipmentService must not be null.");
+		this.vehicleSnapshotService = Objects.requireNonNull(vehicleSnapshotService, "vehicleSnapshotService must not be null.");
+		this.driverSnapshotService = Objects.requireNonNull(driverSnapshotService, "driverSnapshotService must not be null.");
+		this.customerSnapshotService = Objects.requireNonNull(customerSnapshotService, "customerSnapshotService must not be null.");
+		this.shipmentItemService = Objects.requireNonNull(shipmentItemService, "shipmentItemService must not be null.");
 	}
 	
 	/**

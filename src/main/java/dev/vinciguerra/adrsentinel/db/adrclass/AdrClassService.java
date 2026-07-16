@@ -1,6 +1,8 @@
 package dev.vinciguerra.adrsentinel.db.adrclass;
 
 import java.util.List;
+import java.util.Objects;
+
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -46,7 +48,7 @@ public class AdrClassService extends AbstractGenericService {
      */
 	public AdrClassService(AdrClassRepository adrClassRepository, CacheManager cacheManager) {
 		super(cacheManager);
-		this.adrClassRepository = adrClassRepository;
+		this.adrClassRepository = Objects.requireNonNull(adrClassRepository, "adrClassRepository must not be null.");
 	}
 	
 	/**
@@ -103,14 +105,18 @@ public class AdrClassService extends AbstractGenericService {
      * @param newAdrClass L'entità AdrClass da salvare (i dati devono essere già validati).
      * @return L'entità salvata, arricchita con l'ID autogenerato dal Database.
      * @throws IllegalArgumentException Se l'oggetto AdrClass da memorizzare è {@code null}.
+     * @throws IllegalStateException Se la nuova adr class è già presente nel DB.
      */
 	@Transactional
-	public AdrClass save(AdrClass newAdrClass) throws IllegalArgumentException {
+	public AdrClass save(AdrClass newAdrClass) throws IllegalArgumentException, IllegalStateException {
 		if(newAdrClass == null)
 			throw new IllegalArgumentException("AdrClass entity cannot be null.");
 		if(newAdrClass.getClassCode() == null || newAdrClass.getClassCode().isBlank())
 			throw new IllegalArgumentException("classCode cannot be null or blank");
 		logger.info("[DataBase CALL] Saving new AdrClass with classCode: {}", newAdrClass.getClassCode());
+		boolean exists = adrClassRepository.existsByClassCode(newAdrClass.getClassCode());
+		if(exists)
+			throw new IllegalStateException("Save aborted: the adr class already exists.");
 		AdrClass savedAdrClass = adrClassRepository.save(newAdrClass);
 		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
 			@Override

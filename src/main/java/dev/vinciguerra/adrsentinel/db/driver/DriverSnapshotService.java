@@ -1,6 +1,8 @@
 package dev.vinciguerra.adrsentinel.db.driver;
 
 import java.util.List;
+import java.util.Objects;
+
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -44,7 +46,7 @@ public class DriverSnapshotService extends AbstractGenericService {
 	 */
 	protected DriverSnapshotService(DriverSnapshotRepository driverSnapshotRepository, CacheManager cacheManager) {
 		super(cacheManager);
-		this.driverSnapshotRepository = driverSnapshotRepository;
+		this.driverSnapshotRepository = Objects.requireNonNull(driverSnapshotRepository, "driverSnapshotRepository must not be null.");
 	}
 	
 	/**

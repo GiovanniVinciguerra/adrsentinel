@@ -3,6 +3,7 @@ package dev.vinciguerra.adrsentinel.db.driver;
 import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.cache.CacheManager;
@@ -56,7 +57,7 @@ public class DriverService extends AbstractGenericService {
 	 */
 	protected DriverService(DriverRepository driverRepository, CacheManager cacheManager) {
 		super(cacheManager);
-		this.driverRepository = driverRepository;
+		this.driverRepository = Objects.requireNonNull(driverRepository, "driverRepository must not be null.");
 	}
 	
 	/**

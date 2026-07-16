@@ -1,6 +1,8 @@
 package dev.vinciguerra.adrsentinel.db.compatibilityrule;
 
 import java.util.List;
+import java.util.Objects;
+
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -66,8 +68,8 @@ public class CompatibilityRuleService extends AbstractGenericService {
 	 */
 	public CompatibilityRuleService(CompatibilityRuleRepository compatibilityRuleRepository, AdrClassService adrClassService, CacheManager cacheManager)  {
 		super(cacheManager);
-		this.adrClassService = adrClassService;
-		this.compatibilityRuleRepository = compatibilityRuleRepository;
+		this.adrClassService = Objects.requireNonNull(adrClassService, "adrClassService must not be null.");
+		this.compatibilityRuleRepository = Objects.requireNonNull(compatibilityRuleRepository, "compatibilityRuleRepository must not be null.");
 	}
 	
 	/**
@@ -82,9 +84,12 @@ public class CompatibilityRuleService extends AbstractGenericService {
 	 * </p>
 	 * @param adrClassA l'entità completa della classe ADR da analizzare.
 	 * @return una {@link List} di regole di compatibilità associate a tale classe (può essere vuota).
+	 * @throws IllegalArgumentException Se il classCode passato è {@code null} o {@code blank}.
 	 */
 	@Cacheable(value = CaffeineCacheConfiguration.COMPATIBILITY_RULE_ADR_CLASS_A_CACHE, key = "#adrClassCodeA")
-	public List<CompatibilityRule> getByAdrClassA(String adrClassCodeA) {
+	public List<CompatibilityRule> getByAdrClassA(String adrClassCodeA) throws IllegalArgumentException {
+		if(adrClassCodeA == null || adrClassCodeA.isBlank())
+			throw new IllegalArgumentException("The classCode to get is null or blank.");
 		logger.info("[DataBase CALL] Searching compatibility rule for the AdrClass by classCode: {}", adrClassCodeA);
 		return compatibilityRuleRepository.findByAdrClassA_ClassCode(adrClassCodeA);
 	}
@@ -102,14 +107,33 @@ public class CompatibilityRuleService extends AbstractGenericService {
 	 * </p>
 	 * @param newCompatibilityRule l'entità transient contenente la nuova regola da salvare.
 	 * @return l'entità persistent restituita da Hibernate, comprensiva dell'ID generato.
+	 * @throws IllegalStateException Se la nuova regola di compatibilità è {@code null}.
+	 * @throws IllegalArgumentException Se le due classi Adr della nuova regola di compatibilità sono {@code null}, oppure se hanno 
+	 * classCode {@code null}, oppure se la regola di compatibilità già esiste nel DB.
 	 */
 	@Transactional
-	public CompatibilityRule save(CompatibilityRule newCompatibilityRule) {
+	public CompatibilityRule save(CompatibilityRule newCompatibilityRule) throws IllegalStateException, IllegalArgumentException {
+		if(newCompatibilityRule == null)
+			throw new IllegalStateException("Save aborted: new compatibility rule is null.");
+		if(newCompatibilityRule.getAdrClassA() == null)
+			throw new IllegalArgumentException("Save aborted: the adr class A in the new compatibility rule is null.");
+		if(newCompatibilityRule.getAdrClassB() == null)
+			throw new IllegalArgumentException("Save aborted: the adr class B in the new compatibility rule is null.");
+		if(newCompatibilityRule.getAdrClassA().getClassCode() == null)
+			throw new IllegalArgumentException("Save aborted: the class code of the adr class A in the new compatibility rule is null.");
+		if(newCompatibilityRule.getAdrClassB().getClassCode() == null)
+			throw new IllegalArgumentException("Save aborted: the class code of the adr class B in the new compatibility rule is null.");
 		logger.info(
 			"[DataBase CALL] Saving new CompatibilityRule for AdrClassA: {} and AdrClassB : {})",
 			newCompatibilityRule.getAdrClassA().getClassCode(),
 			newCompatibilityRule.getAdrClassB().getClassCode()
 		);
+		boolean exists = compatibilityRuleRepository.existsByAdrClassA_ClassCodeAndAdrClassB_ClassCode(
+			newCompatibilityRule.getAdrClassA().getClassCode(),
+			newCompatibilityRule.getAdrClassB().getClassCode()
+		);
+		if(exists)
+			throw new IllegalStateException("Save aborted: the compatibility rule already exists.");
 		CompatibilityRule savedCompatibilityRule = compatibilityRuleRepository.save(newCompatibilityRule);
 		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
 			@Override
@@ -181,8 +205,16 @@ public class CompatibilityRuleService extends AbstractGenericService {
 	 * @return un'istanza "transiente" (non ancora persistita nel database) dell'entità 
 	 * {@link CompatibilityRule}, completamente popolata, idratata con le relative relazioni 
 	 * e pronta per essere validata e salvata dal Repository.
+	 * @throws IllegalArgumentException Se il dto in ingresso è {@code null}, oppure se classCodeA e classCodeB sono 
+	 * {@code null} o {@code blank}.
 	 */
-	public CompatibilityRule mapToEntity(CompatibilityRuleRequestDTO dto) {
+	public CompatibilityRule mapToEntity(CompatibilityRuleRequestDTO dto) throws IllegalArgumentException {
+		if (dto == null)
+	        throw new IllegalArgumentException("CompatibilityRuleRequestDTO must not be null.");
+	    if (dto.classCodeA() == null || dto.classCodeA().isBlank())
+	        throw new IllegalArgumentException("classCodeA must not be null or blank.");
+	    if (dto.classCodeB() == null || dto.classCodeB().isBlank())
+	        throw new IllegalArgumentException("classCodeB must not be null or blank.");
 		CompatibilityRule compatibilityRule = new CompatibilityRule();
 		AdrClass adrClassA = adrClassService.getByClassCode(dto.classCodeA());
 		AdrClass adrClassB = adrClassService.getByClassCode(dto.classCodeB());
