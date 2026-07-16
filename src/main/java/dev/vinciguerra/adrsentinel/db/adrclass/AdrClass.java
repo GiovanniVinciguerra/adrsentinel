@@ -93,16 +93,23 @@ public class AdrClass implements Comparable<AdrClass> {
 	 * Sostituisce ritorni a capo e tabulazioni con spazi, collassa gli spazi multipli in uno singolo 
 	 * e rimuove gli spazi in eccesso ai bordi.</li>
 	 * </ul>
+	 * @throws IllegalStateException Se dopo le operazioni di sanificazione il classCode o la description sono {@code null}.
 	 */
 	@PrePersist
 	@PreUpdate
-	private void normalize() {
-		if(classCode != null)
+	private void normalize() throws IllegalStateException {
+		if(classCode != null) {
 			classCode = classCode.trim().toUpperCase();
+			if(classCode.isBlank())
+				throw new IllegalStateException("After sanitization the classCode is blank.");
+		}
 		if(description != null) {
-			description = description.replaceAll("[\\r\\n\\t]+", " ");
-			description = description.replaceAll(" {2,}", " ");
-			description = description.trim();
+			description = description
+				.replaceAll("[\\r\\n\\t]+", " ")
+				.replaceAll(" {2,}", " ")
+				.trim();
+			if(description.isBlank())
+				throw new IllegalStateException("After sanitization the description is blank.");
 		}
 	}
 	
@@ -159,6 +166,8 @@ public class AdrClass implements Comparable<AdrClass> {
 		if (getClass() != obj.getClass())
 			return false;
 		AdrClass other = (AdrClass) obj;
+		if(this.classCode == null)
+			return false;
 		return Objects.equals(classCode, other.classCode);
 	}
 	
@@ -168,9 +177,17 @@ public class AdrClass implements Comparable<AdrClass> {
      *
      * @param classB L'entità con cui effettuare il confronto.
      * @return un valore negativo, zero o positivo se questo classCode è minore, uguale o maggiore di quello passato.
+     * @throws IllegalArgumentException Se la classa in ingresso è {@code null}.
+     * @throws IllegalStateException Se i classCode delle due AdrClass a confronto sono {@code null}.
      */
 	@Override
-	public int compareTo(AdrClass classB) {
+	public int compareTo(AdrClass classB) throws IllegalArgumentException, IllegalStateException {
+		if(classB == null)
+			throw new IllegalArgumentException("The AdrClass B passed for comparison is null.");
+		if(classB.classCode == null)
+			throw new IllegalStateException("The classCode of the AdrClass B passed for comparison is null.");
+		if(this.classCode == null)
+			throw new IllegalStateException("The classCode of AdrClass A is null.");
 		return classCode.compareTo(classB.classCode);
 	}
 

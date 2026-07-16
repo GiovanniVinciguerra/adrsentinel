@@ -5,12 +5,11 @@
 ## Sessione del 2026-07-15T11:41+02:00
 
 **Classe Analizzata:** ShipmentService.java
-
 **File Generato:** ShipmentServiceTests.java
-
-**Righe Generate:** 1773
-
-**Copertura Target:** >85% branch & line coverage
+**Righe Generate:** 1792
+**Test Totali:** 44
+**Stack:** JUnit 5 Jupiter · Mockito · AssertJ · Java Reflection (per lifecycle hook privati)
+**Isolamento:** Puro — nessun contesto Spring, nessun H2, nessun ORM avviato.
 
 ---
 
@@ -64,8 +63,8 @@ Questi test sono stati scritti appositamente per **FALLIRE** finche' lo sviluppa
 
 **Classe Analizzata:** Shipment
 **File Generato:** ShipmentTests.java
-**Righe Generate:** 1182
-**Test Totali:** 43
+**Righe Generate:** 1164
+**Test Totali:** 51
 **Stack:** JUnit 5 Jupiter · Mockito · AssertJ · Java Reflection (per lifecycle hook privati)
 **Isolamento:** Puro — nessun contesto Spring, nessun H2, nessun ORM avviato.
 
@@ -120,7 +119,7 @@ I test seguenti sono scritti appositamente per FALLIRE con il codice attuale e d
 
 **Classe Analizzata:** AdrClassService
 **File Generato:** AdrClassServiceTests.java
-**Righe Generate:** 998
+**Righe Generate:** 1117
 **Test Totali:** 23
 **Stack:** JUnit 5 Jupiter · Mockito · AssertJ · Java Reflection (per metodo privato `syncCacheAfterInsert`)
 **Isolamento:** Puro — nessun contesto Spring, nessun H2, nessun ORM avviato.
@@ -157,5 +156,56 @@ I test seguenti sono scritti appositamente per FALLIRE con il codice attuale e d
 4. **[MEDIA] Nessuna protezione contro la corruzione del contesto transazionale in `save()` quando invocato fuori da una transazione attiva.**
    - *Falla:* Il metodo chiama `TransactionSynchronizationManager.registerSynchronization()` senza verificare preventivamente che una transazione sia attiva. Se invocato in un contesto non transazionale (es. da un job schedulato o da un test senza setup), lancia `IllegalStateException: Transaction synchronization is not active` non gestita.
    - *Fix:* Aggiungere controllo `if (TransactionSynchronizationManager.isSynchronizationActive())` prima di registrare il synchronization, oppure demandare la chiamata a un metodo separato annotato con `@Transactional`.
+
+---
+
+## [2026-07-16T13:50:00+02:00] — AdrClass.java (Entity)
+
+**Classe Analizzata:** AdrClass
+**File Generato:** AdrClassTest.java
+**Righe Generate:** 1510
+**Test Totali:** 50
+**Stack:** JUnit 5 Jupiter · AssertJ · Java Reflection (per metodo privato `normalize()`)
+**Isolamento:** Puro — nessun contesto Spring, nessun H2, nessun ORM avviato. Zero mock (entità POJO pura).
+
+---
+
+### Metodi Coperti
+
+- **`getId()` / `setId(Long)`** — 3 test (Transient state null, Happy Path, Accept-null)
+- **`getClassCode()` / `setClassCode(String)`** — 2 test (Happy Path, Accept-null)
+- **`getDescription()` / `setDescription(String)`** — 2 test (Happy Path, Accept-null)
+- **`normalize()` (private @PrePersist/@PreUpdate, via Reflection)** — 12 test (Trim+Uppercase, Idempotency, Null classCode, Null description, Newline replacement, CRLF replacement, Tab replacement, Multiple-space collapse, Description trim, Full pipeline, Boundary 4-char, RED blank classCode, RED blank description)
+- **`equals(Object)`** — 7 test (Reflexivity, Symmetry, Different classCode, Null argument, Different type, One-null classCode, HashSet integration, RED dual-null classCode)
+- **`hashCode()`** — 4 test (Consistency, Different hash, Null-safe, Stability)
+- **`compareTo(AdrClass)`** — 7 test (Negative result, Positive result, Zero result, Consistency with equals, TreeSet ordering, Collections.sort ordering, RED null this.classCode, RED null classB.classCode)
+- **`toString()`** — 4 test (All fields present, All-null entity, Exact format match, Max-length classCode)
+- **Scenari Composti** — 5 test (Post-normalize equals+hash, List.remove after normalize, Boundary 1-char classCode, Boundary 3-char description, RED TreeSet+null NPE)
+
+---
+
+### Vulnerabilita' / Bug Rilevati (Fase RED TDD)
+
+I test seguenti sono scritti **appositamente per FALLIRE** con il codice attuale e devono essere portati in "verde" dallo sviluppatore implementando le correzioni indicate.
+
+1. **[CRITICA] `compareTo()` causa NullPointerException non gestita se `this.classCode` o `classB.classCode` sono null.**
+   - *Falla:* Il metodo esegue direttamente `classCode.compareTo(classB.classCode)` senza null-check su entrambi gli operandi. Un'entita' in stato Transient (pre-persist) puo' avere `classCode = null`. L'inserimento in un `TreeSet` o qualunque operazione che invochi `compareTo()` causa NPE non gestita.
+   - *Fix:* Aggiungere null-guard all'inizio di `compareTo()`: `if (this.classCode == null) throw new IllegalStateException("classCode must not be null for comparison");` Oppure adottare `Comparator.nullsFirst(Comparator.naturalOrder())`.
+   - *Test RED:* `shouldNotThrowNPEWhenThisClassCodeIsNull_RED`, `shouldNotThrowNPEWhenOtherClassCodeIsNull_RED`, `shouldNotCauseNPEWhenInsertingNullClassCodeInTreeSet_RED`.
+
+2. **[ALTA] `normalize()` non valida il `classCode` post-trim: stringa vuota diventa "" senza eccezione.**
+   - *Falla:* Se il `classCode` e' composto da soli spazi (es. "   "), dopo `trim().toUpperCase()` il campo diventa "". Nessuna eccezione viene lanciata. Una stringa vuota viola il vincolo semantico (non e' una Classe ADR valida) ma non quello sintattico, producendo potenzialmente record corrotti.
+   - *Fix:* In `normalize()`, aggiungere post-trim: `if (classCode.isBlank()) throw new IllegalStateException("classCode cannot be blank after normalization");`.
+   - *Test RED:* `shouldThrowWhenClassCodeIsBlankOnlyAfterTrim_RED`.
+
+3. **[ALTA] `normalize()` non valida la `description` post-trim: stringa vuota diventa "" senza eccezione.**
+   - *Falla:* Analoga alla falla precedente. Una description di soli spazi viene ridotta a "" senza errore applicativo, violando le future regole di presentazione e ricerca.
+   - *Fix:* In `normalize()`, post-trim: `if (description.isBlank()) throw new IllegalStateException("description cannot be blank after normalization");`.
+   - *Test RED:* `shouldThrowWhenDescriptionIsBlankOnlyAfterTrim_RED`.
+
+4. **[MEDIA] `equals()` considera uguali due entita' con `classCode = null`: comportamento indesiderato.**
+   - *Falla:* `Objects.equals(null, null)` restituisce `true`. Due entita' senza Business Key vengono considerate identiche da `equals()`, causando sovrascrizioni inattese in cache e false-positive nella deduplicazione di `AbstractGenericService.storeInCache()`.
+   - *Fix:* Aggiungere early return `false` in `equals()` se `this.classCode == null`: `if (this.classCode == null) return false;`.
+   - *Test RED:* `shouldReturnFalseWhenBothClassCodesAreNull_RED`.
 
 ---

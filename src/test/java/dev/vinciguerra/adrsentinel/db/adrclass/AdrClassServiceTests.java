@@ -7,12 +7,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -25,7 +23,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-
 import dev.vinciguerra.adrsentinel.db.CaffeineCacheConfiguration;
 import dev.vinciguerra.adrsentinel.exception.ResourceNotFoundException;
 import dev.vinciguerra.adrsentinel.web.dto.adrclass.AdrClassRequestDTO;
@@ -34,26 +31,39 @@ import dev.vinciguerra.adrsentinel.web.dto.adrclass.AdrClassRequestDTO;
  * Suite di test unitari per {@link AdrClassService}.
  *
  * <p>
- * Questa classe verifica in modo esaustivo e con isolamento puro il comportamento del Service
- * Layer dedicato alla gestione delle Classi ADR (macro-categorie di rischio normativa ADR).
- * Non viene avviato alcun contesto Spring, nessun database H2 e nessun broker di messaggi:
- * tutte le dipendenze esterne ({@link AdrClassRepository}, {@link CacheManager} e {@link Cache})
- * sono sostituite da mock Mockito, garantendo test veloci, deterministici e completamente isolati.
+ * Questa classe verifica in modo esaustivo e con isolamento puro il
+ * comportamento del Service
+ * Layer dedicato alla gestione delle Classi ADR (macro-categorie di rischio
+ * normativa ADR).
+ * Non viene avviato alcun contesto Spring, nessun database H2 e nessun broker
+ * di messaggi:
+ * tutte le dipendenze esterne ({@link AdrClassRepository}, {@link CacheManager}
+ * e {@link Cache})
+ * sono sostituite da mock Mockito, garantendo test veloci, deterministici e
+ * completamente isolati.
  * </p>
  *
  * <h3>Metodi sotto test:</h3>
  * <ul>
- *   <li>{@link AdrClassService#getByClassCode(String)} — lettura con logica cache @Cacheable</li>
- *   <li>{@link AdrClassService#getAllAdrClasses()} — lettura massiva con logica cache @Cacheable</li>
- *   <li>{@link AdrClassService#save(AdrClass)} — persistenza con sincronizzazione cache Write-Through</li>
- *   <li>{@link AdrClassService#mapToEntity(AdrClassRequestDTO)} — mapping DTO a Entity</li>
- *   <li>{@code syncCacheAfterInsert(AdrClass)} — metodo privato coperto via Reflection</li>
+ * <li>{@link AdrClassService#getByClassCode(String)} — lettura con logica
+ * cache @Cacheable</li>
+ * <li>{@link AdrClassService#getAllAdrClasses()} — lettura massiva con logica
+ * cache @Cacheable</li>
+ * <li>{@link AdrClassService#save(AdrClass)} — persistenza con sincronizzazione
+ * cache Write-Through</li>
+ * <li>{@link AdrClassService#mapToEntity(AdrClassRequestDTO)} — mapping DTO a
+ * Entity</li>
+ * <li>{@code syncCacheAfterInsert(AdrClass)} — metodo privato coperto via
+ * Reflection</li>
  * </ul>
  *
  * <h3>Strategia TDD applicata:</h3>
- * I test marcati con {@code [TDD-RED]} sono scritti intenzionalmente per FALLIRE con il codice
- * sorgente attuale. Rappresentano la Fase RED del ciclo TDD e segnalano vulnerabilita'
- * architetturali che lo sviluppatore deve correggere per far diventare i test "verdi" (Fase GREEN).
+ * I test marcati con {@code [TDD-RED]} sono scritti intenzionalmente per
+ * FALLIRE con il codice
+ * sorgente attuale. Rappresentano la Fase RED del ciclo TDD e segnalano
+ * vulnerabilita'
+ * architetturali che lo sviluppatore deve correggere per far diventare i test
+ * "verdi" (Fase GREEN).
  *
  * @author Giovanni Vinciguerra
  * @version 1.0
@@ -73,21 +83,24 @@ class AdrClassServiceTests {
 
     /**
      * Mock del CacheManager di Spring. Viene iniettato nel costruttore di
-     * {@link AdrClassService} tramite la superclasse {@link dev.vinciguerra.adrsentinel.db.AbstractGenericService}.
+     * {@link AdrClassService} tramite la superclasse
+     * {@link dev.vinciguerra.adrsentinel.db.AbstractGenericService}.
      */
     @Mock
     private CacheManager cacheManager;
 
     /**
      * Mock dell'istanza di cache specifica ({@code adr_class_by_class_code}).
-     * Restituito da {@code cacheManager.getCache(...)} per simulare operazioni di put/evict/get.
+     * Restituito da {@code cacheManager.getCache(...)} per simulare operazioni di
+     * put/evict/get.
      */
     @Mock
     private Cache mockSingleRecordCache;
 
     /**
      * Mock dell'istanza di cache globale ({@code all_adr_class}).
-     * Restituito da {@code cacheManager.getCache(...)} per simulare operazioni sulla lista.
+     * Restituito da {@code cacheManager.getCache(...)} per simulare operazioni
+     * sulla lista.
      */
     @Mock
     private Cache mockAllAdrClassCache;
@@ -109,9 +122,10 @@ class AdrClassServiceTests {
 
     /**
      * Factory method helper che costruisce un'istanza di {@link AdrClass}
-     * con classCode e description gia' valorizzati, pronta per essere usata nei test.
+     * con classCode e description gia' valorizzati, pronta per essere usata nei
+     * test.
      *
-     * @param classCode il codice ADR (es. "3", "6.1").
+     * @param classCode   il codice ADR (es. "3", "6.1").
      * @param description la descrizione del pericolo (es. "Liquidi infiammabili").
      * @return un'istanza di {@link AdrClass} nello stato Transient (senza ID).
      */
@@ -126,8 +140,8 @@ class AdrClassServiceTests {
      * Factory method helper che costruisce un'istanza di {@link AdrClass}
      * con ID, classCode e description valorizzati (simula stato Persistent da DB).
      *
-     * @param id l'ID surrogato assegnato dal database.
-     * @param classCode il codice ADR.
+     * @param id          l'ID surrogato assegnato dal database.
+     * @param classCode   il codice ADR.
      * @param description la descrizione del pericolo.
      * @return un'istanza di {@link AdrClass} nello stato Persistent (con ID).
      */
@@ -146,11 +160,15 @@ class AdrClassServiceTests {
      * {@link AdrClassService#getByClassCode(String)}.
      *
      * <p>
-     * Il metodo esegue una ricerca per Business Key ({@code classCode}) delegando al repository.
+     * Il metodo esegue una ricerca per Business Key ({@code classCode}) delegando
+     * al repository.
      * Quando la classe ADR e' presente nel DB, la restituisce. In assenza, lancia
-     * {@link ResourceNotFoundException}. Il meccanismo {@code @Cacheable} e' a carico del
-     * proxy Spring e non e' testabile in isolamento puro (verrebbe testato in un integration test);
-     * qui verifichiamo che il metodo deleghi correttamente al repository quando la cache non intercetta.
+     * {@link ResourceNotFoundException}. Il meccanismo {@code @Cacheable} e' a
+     * carico del
+     * proxy Spring e non e' testabile in isolamento puro (verrebbe testato in un
+     * integration test);
+     * qui verifichiamo che il metodo deleghi correttamente al repository quando la
+     * cache non intercetta.
      * </p>
      *
      * @author Giovanni Vinciguerra
@@ -162,11 +180,14 @@ class AdrClassServiceTests {
     class GetByClassCodeTests {
 
         /**
-         * [HAPPY PATH] Verifica che {@code getByClassCode} ritorni correttamente l'entita'
-         * {@link AdrClass} quando il repository trova un record corrispondente al classCode fornito.
+         * [HAPPY PATH] Verifica che {@code getByClassCode} ritorni correttamente
+         * l'entita'
+         * {@link AdrClass} quando il repository trova un record corrispondente al
+         * classCode fornito.
          *
          * <p>
-         * <b>Mock coinvolti:</b> {@code adrClassRepository.findByClassCode("3")} restituisce
+         * <b>Mock coinvolti:</b> {@code adrClassRepository.findByClassCode("3")}
+         * restituisce
          * un {@link Optional} contenente un'entita' valida.
          * </p>
          * <b>Output atteso:</b> l'entita' non e' null, il classCode corrisponde a "3"
@@ -191,19 +212,25 @@ class AdrClassServiceTests {
         }
 
         /**
-         * [FAILURE PATH] Verifica che {@code getByClassCode} lanci {@link ResourceNotFoundException}
-         * quando il repository non trova nessuna classe ADR corrispondente al classCode fornito.
+         * [FAILURE PATH] Verifica che {@code getByClassCode} lanci
+         * {@link ResourceNotFoundException}
+         * quando il repository non trova nessuna classe ADR corrispondente al classCode
+         * fornito.
          *
          * <p>
-         * Questo test verifica il comportamento Fail-Fast dichiarato nel Javadoc del Service:
-         * l'assenza del record deve tradursi in un'eccezione semantica di dominio (404 a livello REST),
+         * Questo test verifica il comportamento Fail-Fast dichiarato nel Javadoc del
+         * Service:
+         * l'assenza del record deve tradursi in un'eccezione semantica di dominio (404
+         * a livello REST),
          * mai in un {@code null} restituito silenziosamente.
          * </p>
          * <p>
-         * <b>Mock coinvolti:</b> {@code adrClassRepository.findByClassCode("99")} restituisce
+         * <b>Mock coinvolti:</b> {@code adrClassRepository.findByClassCode("99")}
+         * restituisce
          * {@code Optional.empty()}.
          * </p>
-         * <b>Output atteso:</b> {@link ResourceNotFoundException} con messaggio contenente "99".
+         * <b>Output atteso:</b> {@link ResourceNotFoundException} con messaggio
+         * contenente "99".
          */
         @Test
         @DisplayName("[Failure Path] Non trovata: lancia ResourceNotFoundException per classCode inesistente")
@@ -213,8 +240,8 @@ class AdrClassServiceTests {
 
             // Act & Assert
             assertThatThrownBy(() -> adrClassService.getByClassCode("99"))
-                .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("99");
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasMessageContaining("99");
             verify(adrClassRepository).findByClassCode("99");
         }
 
@@ -224,10 +251,12 @@ class AdrClassServiceTests {
          * e frequente nella normativa ADR.
          *
          * <p>
-         * <b>Mock coinvolti:</b> {@code adrClassRepository.findByClassCode("6.1")} restituisce
+         * <b>Mock coinvolti:</b> {@code adrClassRepository.findByClassCode("6.1")}
+         * restituisce
          * un {@link Optional} contenente un'entita' valida.
          * </p>
-         * <b>Output atteso:</b> l'entita' e' restituita correttamente con classCode "6.1".
+         * <b>Output atteso:</b> l'entita' e' restituita correttamente con classCode
+         * "6.1".
          */
         @Test
         @DisplayName("[Edge Case] classCode con punto (6.1): restituisce l'entita' ADR corretta")
@@ -245,15 +274,18 @@ class AdrClassServiceTests {
         }
 
         /**
-         * [EDGE CASE] Verifica il comportamento del metodo per un classCode con lettera finale
+         * [EDGE CASE] Verifica il comportamento del metodo per un classCode con lettera
+         * finale
          * (es. "1.4S" - Esplosivi con pericolo minimo), che rappresenta il formato
          * massimamente complesso consentito dalla normativa ADR (4 caratteri).
          *
          * <p>
-         * <b>Mock coinvolti:</b> {@code adrClassRepository.findByClassCode("1.4S")} restituisce
+         * <b>Mock coinvolti:</b> {@code adrClassRepository.findByClassCode("1.4S")}
+         * restituisce
          * un {@link Optional} contenente un'entita' valida.
          * </p>
-         * <b>Output atteso:</b> l'entita' e' restituita correttamente con classCode "1.4S".
+         * <b>Output atteso:</b> l'entita' e' restituita correttamente con classCode
+         * "1.4S".
          */
         @Test
         @DisplayName("[Edge Case] classCode alfanumerico (1.4S): restituisce l'entita' ADR corretta")
@@ -271,51 +303,64 @@ class AdrClassServiceTests {
         }
 
         /**
-         * [TDD-RED] Verifica che {@code getByClassCode} lanci {@link IllegalArgumentException}
+         * [TDD-RED] Verifica che {@code getByClassCode} lanci
+         * {@link IllegalArgumentException}
          * quando viene invocato con un classCode {@code null}.
          *
          * <p>
          * <b>QUESTO TEST E' PROGETTATO PER FALLIRE (Fase RED del TDD).</b><br>
-         * Nel codice sorgente attuale ({@link AdrClassService#getByClassCode(String)}), non esiste
-         * alcun controllo esplicito sul parametro {@code classCode} prima della delega al repository.
-         * Se {@code classCode} e' {@code null}, la chiamata {@code adrClassRepository.findByClassCode(null)}
-         * potrebbe: (a) lanciare {@code NullPointerException} non gestita (HTTP 500), oppure
+         * Nel codice sorgente attuale ({@link AdrClassService#getByClassCode(String)}),
+         * non esiste
+         * alcun controllo esplicito sul parametro {@code classCode} prima della delega
+         * al repository.
+         * Se {@code classCode} e' {@code null}, la chiamata
+         * {@code adrClassRepository.findByClassCode(null)}
+         * potrebbe: (a) lanciare {@code NullPointerException} non gestita (HTTP 500),
+         * oppure
          * (b) generare una query SQL malformata (eccezione JPA non semantica).
          * </p>
          * <p>
-         * <b>Fix richiesto:</b> Aggiungere come prima istruzione di {@code getByClassCode}:
+         * <b>Fix richiesto:</b> Aggiungere come prima istruzione di
+         * {@code getByClassCode}:
          * {@code if (classCode == null || classCode.isBlank()) throw new IllegalArgumentException("classCode cannot be null or blank");}
          * </p>
-         * <b>Mock coinvolti:</b> nessuno (l'eccezione deve essere lanciata PRIMA della delega al repository).
+         * <b>Mock coinvolti:</b> nessuno (l'eccezione deve essere lanciata PRIMA della
+         * delega al repository).
          * <br>
-         * <b>Output atteso:</b> {@link IllegalArgumentException} prima che il repository venga invocato.
+         * <b>Output atteso:</b> {@link IllegalArgumentException} prima che il
+         * repository venga invocato.
          */
         @Test
         @DisplayName("[TDD-RED] Null Guard mancante: getByClassCode(null) dovrebbe lanciare IllegalArgumentException")
         void shouldThrowIllegalArgumentExceptionWhenClassCodeIsNull() {
-            // Arrange - nessun mock necessario: l'eccezione deve scattare prima del repository
+            // Arrange - nessun mock necessario: l'eccezione deve scattare prima del
+            // repository
 
             // Act & Assert
             assertThatThrownBy(() -> adrClassService.getByClassCode(null))
-                .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(IllegalArgumentException.class);
 
             // Il repository NON deve mai essere interrogato con un input null
             verify(adrClassRepository, never()).findByClassCode(any());
         }
 
         /**
-         * [TDD-RED] Verifica che {@code getByClassCode} lanci {@link IllegalArgumentException}
+         * [TDD-RED] Verifica che {@code getByClassCode} lanci
+         * {@link IllegalArgumentException}
          * quando viene invocato con una stringa blank (es. stringa di soli spazi).
          *
          * <p>
          * <b>QUESTO TEST E' PROGETTATO PER FALLIRE (Fase RED del TDD).</b><br>
-         * Una stringa blank non e' un classCode ADR valido. Il metodo attuale non la valida
-         * e inoltra silenziosamente la query al DB, generando un potenziale errore in produzione.
+         * Una stringa blank non e' un classCode ADR valido. Il metodo attuale non la
+         * valida
+         * e inoltra silenziosamente la query al DB, generando un potenziale errore in
+         * produzione.
          * </p>
          * <p>
          * <b>Fix richiesto:</b> Medesima guard clause citata nel test per {@code null}.
          * </p>
-         * <b>Output atteso:</b> {@link IllegalArgumentException} prima che il repository venga invocato.
+         * <b>Output atteso:</b> {@link IllegalArgumentException} prima che il
+         * repository venga invocato.
          */
         @Test
         @DisplayName("[TDD-RED] Blank Guard mancante: getByClassCode(blank) dovrebbe lanciare IllegalArgumentException")
@@ -324,7 +369,7 @@ class AdrClassServiceTests {
 
             // Act & Assert
             assertThatThrownBy(() -> adrClassService.getByClassCode("   "))
-                .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(IllegalArgumentException.class);
 
             verify(adrClassRepository, never()).findByClassCode(any());
         }
@@ -340,8 +385,10 @@ class AdrClassServiceTests {
      *
      * <p>
      * Il metodo restituisce l'intera lista delle classi ADR presenti nel database.
-     * Non lancia eccezioni: un repository vuoto restituisce una lista vuota (HTTP 200 OK).
-     * La logica {@code @Cacheable} e' gestita dal proxy Spring e non e' direttamente
+     * Non lancia eccezioni: un repository vuoto restituisce una lista vuota (HTTP
+     * 200 OK).
+     * La logica {@code @Cacheable} e' gestita dal proxy Spring e non e'
+     * direttamente
      * testabile in isolamento puro.
      * </p>
      *
@@ -354,14 +401,17 @@ class AdrClassServiceTests {
     class GetAllAdrClassesTests {
 
         /**
-         * [HAPPY PATH] Verifica che {@code getAllAdrClasses} ritorni correttamente la lista
+         * [HAPPY PATH] Verifica che {@code getAllAdrClasses} ritorni correttamente la
+         * lista
          * completa delle entita' {@link AdrClass} quando il repository ne contiene.
          *
          * <p>
-         * <b>Mock coinvolti:</b> {@code adrClassRepository.findAll()} restituisce una lista
+         * <b>Mock coinvolti:</b> {@code adrClassRepository.findAll()} restituisce una
+         * lista
          * con due entita' ADR rappresentative (Classe 3 e Classe 8).
          * </p>
-         * <b>Output atteso:</b> lista non null, dimensione 2, contenente le entita' corrette.
+         * <b>Output atteso:</b> lista non null, dimensione 2, contenente le entita'
+         * corrette.
          */
         @Test
         @DisplayName("[Happy Path] Repository popolato: restituisce la lista completa delle AdrClass")
@@ -381,15 +431,19 @@ class AdrClassServiceTests {
         }
 
         /**
-         * [EDGE CASE - Database Vuoto] Verifica che {@code getAllAdrClasses} ritorni una lista
+         * [EDGE CASE - Database Vuoto] Verifica che {@code getAllAdrClasses} ritorni
+         * una lista
          * vuota (e non lanci eccezioni) quando il repository non contiene alcun record.
          *
          * <p>
-         * Questo e' il comportamento atteso e dichiarato nel Javadoc del Service: un database vuoto
-         * deve produrre un HTTP 200 OK con body {@code []}, conforme agli standard REST.
+         * Questo e' il comportamento atteso e dichiarato nel Javadoc del Service: un
+         * database vuoto
+         * deve produrre un HTTP 200 OK con body {@code []}, conforme agli standard
+         * REST.
          * </p>
          * <p>
-         * <b>Mock coinvolti:</b> {@code adrClassRepository.findAll()} restituisce {@code Collections.emptyList()}.
+         * <b>Mock coinvolti:</b> {@code adrClassRepository.findAll()} restituisce
+         * {@code Collections.emptyList()}.
          * </p>
          * <b>Output atteso:</b> lista non null e vuota, nessuna eccezione.
          */
@@ -409,10 +463,12 @@ class AdrClassServiceTests {
 
         /**
          * [EDGE CASE - Singolo Record] Verifica che {@code getAllAdrClasses} gestisca
-         * correttamente un catalogo contenente un'unica classe ADR (catalogo minimo ADR).
+         * correttamente un catalogo contenente un'unica classe ADR (catalogo minimo
+         * ADR).
          *
          * <p>
-         * <b>Mock coinvolti:</b> {@code adrClassRepository.findAll()} restituisce una lista con
+         * <b>Mock coinvolti:</b> {@code adrClassRepository.findAll()} restituisce una
+         * lista con
          * un solo elemento.
          * </p>
          * <b>Output atteso:</b> lista con un solo elemento correttamente valorizzato.
@@ -442,10 +498,14 @@ class AdrClassServiceTests {
      * {@link AdrClassService#save(AdrClass)}.
      *
      * <p>
-     * Il metodo salva una nuova entita' {@link AdrClass} nel database e, al termine della
-     * transazione (hook {@code afterCommit}), sincronizza le due regioni di cache Caffeine
-     * (record singolo e lista globale). I test su {@code syncCacheAfterInsert} vengono
-     * coperti indirettamente tramite l'invocazione diretta (fuori contesto transazionale)
+     * Il metodo salva una nuova entita' {@link AdrClass} nel database e, al termine
+     * della
+     * transazione (hook {@code afterCommit}), sincronizza le due regioni di cache
+     * Caffeine
+     * (record singolo e lista globale). I test su {@code syncCacheAfterInsert}
+     * vengono
+     * coperti indirettamente tramite l'invocazione diretta (fuori contesto
+     * transazionale)
      * per garantire la massima copertura di branch.
      * </p>
      *
@@ -458,9 +518,11 @@ class AdrClassServiceTests {
     class SaveTests {
 
         /**
-         * Predispone il contesto transazionale simulato prima di ogni test della classe innestata.
+         * Predispone il contesto transazionale simulato prima di ogni test della classe
+         * innestata.
          * Richiesto per evitare {@link java.lang.IllegalStateException} quando
-         * {@code TransactionSynchronizationManager.registerSynchronization} viene invocato
+         * {@code TransactionSynchronizationManager.registerSynchronization} viene
+         * invocato
          * dall'implementazione reale del metodo {@code save()}.
          */
         @BeforeEach
@@ -472,14 +534,18 @@ class AdrClassServiceTests {
         }
 
         /**
-         * [HAPPY PATH] Verifica che {@code save} persista correttamente l'entita' {@link AdrClass}
+         * [HAPPY PATH] Verifica che {@code save} persista correttamente l'entita'
+         * {@link AdrClass}
          * e ritorni l'istanza arricchita con l'ID autogenerato dal database.
          *
          * <p>
-         * <b>Mock coinvolti:</b> {@code adrClassRepository.save(newAdrClass)} restituisce
-         * l'entita' con ID valorizzato (simula il comportamento di Hibernate al commit).
+         * <b>Mock coinvolti:</b> {@code adrClassRepository.save(newAdrClass)}
+         * restituisce
+         * l'entita' con ID valorizzato (simula il comportamento di Hibernate al
+         * commit).
          * </p>
-         * <b>Output atteso:</b> l'entita' restituita non e' null e possiede l'ID assegnato dal DB mock.
+         * <b>Output atteso:</b> l'entita' restituita non e' null e possiede l'ID
+         * assegnato dal DB mock.
          */
         @Test
         @DisplayName("[Happy Path] Entita' valida: persiste nel DB e restituisce l'entita' con ID generato")
@@ -506,14 +572,17 @@ class AdrClassServiceTests {
          * del vincolo di unicita' su {@code classCode} (UK constraint del DB).
          *
          * <p>
-         * <b>Scenario:</b> Si tenta di inserire una Classe ADR "3" gia' presente nel database.
+         * <b>Scenario:</b> Si tenta di inserire una Classe ADR "3" gia' presente nel
+         * database.
          * Il repository lancia un'eccezione di violazione di integrita' referenziale.
          * </p>
          * <p>
-         * <b>Mock coinvolti:</b> {@code adrClassRepository.save(duplicateAdrClass)} lancia
+         * <b>Mock coinvolti:</b> {@code adrClassRepository.save(duplicateAdrClass)}
+         * lancia
          * {@link org.springframework.dao.DataIntegrityViolationException}.
          * </p>
-         * <b>Output atteso:</b> la medesima eccezione viene propagata senza essere inghiottita.
+         * <b>Output atteso:</b> la medesima eccezione viene propagata senza essere
+         * inghiottita.
          */
         @Test
         @DisplayName("[Failure Path] classCode duplicato: propaga DataIntegrityViolationException dal repository")
@@ -521,13 +590,13 @@ class AdrClassServiceTests {
             // Arrange
             AdrClass duplicateAdrClass = buildAdrClass("3", "Liquidi infiammabili (duplicato)");
             when(adrClassRepository.save(duplicateAdrClass))
-                .thenThrow(new org.springframework.dao.DataIntegrityViolationException(
-                    "UK constraint violation: class_code '3' already exists"));
+                    .thenThrow(new org.springframework.dao.DataIntegrityViolationException(
+                            "UK constraint violation: class_code '3' already exists"));
 
             // Act & Assert
             assertThatThrownBy(() -> adrClassService.save(duplicateAdrClass))
-                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class)
-                .hasMessageContaining("class_code '3'");
+                    .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class)
+                    .hasMessageContaining("class_code '3'");
         }
 
         /**
@@ -546,17 +615,19 @@ class AdrClassServiceTests {
          * <b>Fix richiesto:</b> Aggiungere come prima istruzione di {@code save}:
          * {@code if (newAdrClass == null) throw new IllegalArgumentException("AdrClass entity cannot be null");}
          * </p>
-         * <b>Mock coinvolti:</b> nessuno (l'eccezione deve scattare PRIMA della delega al repository).
+         * <b>Mock coinvolti:</b> nessuno (l'eccezione deve scattare PRIMA della delega
+         * al repository).
          * <br>
-         * <b>Output atteso:</b> {@link IllegalArgumentException} (non {@code NullPointerException}).
+         * <b>Output atteso:</b> {@link IllegalArgumentException} (non
+         * {@code NullPointerException}).
          */
         @Test
         @DisplayName("[TDD-RED] Null Guard mancante: save(null) dovrebbe lanciare IllegalArgumentException (non NullPointerException)")
         void shouldThrowIllegalArgumentExceptionWhenSavingNullEntity() {
             // Act & Assert
             assertThatThrownBy(() -> adrClassService.save(null))
-                .isInstanceOf(IllegalArgumentException.class)
-                .isNotInstanceOf(NullPointerException.class);
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .isNotInstanceOf(NullPointerException.class);
 
             verify(adrClassRepository, never()).save(any());
         }
@@ -567,17 +638,21 @@ class AdrClassServiceTests {
          *
          * <p>
          * <b>QUESTO TEST E' PROGETTATO PER FALLIRE (Fase RED del TDD).</b><br>
-         * Un'entita' con {@code classCode} null verrebbe passata al DB, violando il vincolo
-         * {@code nullable = false} della colonna {@code class_code} e causando un'eccezione
+         * Un'entita' con {@code classCode} null verrebbe passata al DB, violando il
+         * vincolo
+         * {@code nullable = false} della colonna {@code class_code} e causando
+         * un'eccezione
          * JPA a livello di Hibernate non semantica e non controllata.
-         * La validazione dei campi obbligatori dell'entita' dovrebbe avvenire nel Service,
+         * La validazione dei campi obbligatori dell'entita' dovrebbe avvenire nel
+         * Service,
          * non dipendere esclusivamente dal DB.
          * </p>
          * <p>
          * <b>Fix richiesto:</b> Aggiungere validazione:
          * {@code if (newAdrClass.getClassCode() == null || newAdrClass.getClassCode().isBlank()) throw new IllegalArgumentException(...);}
          * </p>
-         * <b>Output atteso:</b> {@link IllegalArgumentException} prima della delega al repository.
+         * <b>Output atteso:</b> {@link IllegalArgumentException} prima della delega al
+         * repository.
          */
         @Test
         @DisplayName("[TDD-RED] classCode null nell'entity: save dovrebbe lanciare IllegalArgumentException prima del repository")
@@ -589,7 +664,7 @@ class AdrClassServiceTests {
 
             // Act & Assert
             assertThatThrownBy(() -> adrClassService.save(invalidEntity))
-                .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(IllegalArgumentException.class);
 
             verify(adrClassRepository, never()).save(any());
         }
@@ -601,13 +676,17 @@ class AdrClassServiceTests {
 
     /**
      * Classe innestata che testa il metodo privato
-     * {@code AdrClassService#syncCacheAfterInsert(AdrClass)} tramite Java Reflection.
+     * {@code AdrClassService#syncCacheAfterInsert(AdrClass)} tramite Java
+     * Reflection.
      *
      * <p>
-     * Poiche' {@code syncCacheAfterInsert} e' un metodo privato invocato all'interno
+     * Poiche' {@code syncCacheAfterInsert} e' un metodo privato invocato
+     * all'interno
      * del hook {@code afterCommit} del {@code TransactionSynchronizationManager},
-     * la sua logica viene testata invocando direttamente il metodo tramite reflection
-     * per bypassare l'incapsulamento e testarne il comportamento in isolamento totale,
+     * la sua logica viene testata invocando direttamente il metodo tramite
+     * reflection
+     * per bypassare l'incapsulamento e testarne il comportamento in isolamento
+     * totale,
      * senza la dipendenza dal ciclo transazionale reale di Spring.
      * </p>
      *
@@ -620,19 +699,25 @@ class AdrClassServiceTests {
     class SyncCacheAfterInsertTests {
 
         /**
-         * [HAPPY PATH - Write-Through Sincrono] Verifica che {@code syncCacheAfterInsert}
-         * invochi correttamente {@code cache.put(classCode, savedAdrClass)} per aggiornare
+         * [HAPPY PATH - Write-Through Sincrono] Verifica che
+         * {@code syncCacheAfterInsert}
+         * invochi correttamente {@code cache.put(classCode, savedAdrClass)} per
+         * aggiornare
          * la cache del record singolo ({@code ADR_CLASS_BY_CLASS_CODE_CACHE}).
          *
          * <p>
          * <b>Mock coinvolti:</b>
          * <ul>
-         *   <li>{@code cacheManager.getCache(ADR_CLASS_BY_CLASS_CODE_CACHE)} restituisce {@code mockSingleRecordCache}</li>
-         *   <li>{@code cacheManager.getCache(ALL_ADR_CLASS_CACHE)} restituisce {@code null} (cache globale non disponibile)</li>
-         *   <li>{@code mockSingleRecordCache.put(classCode, savedAdrClass)} viene verificato</li>
+         * <li>{@code cacheManager.getCache(ADR_CLASS_BY_CLASS_CODE_CACHE)} restituisce
+         * {@code mockSingleRecordCache}</li>
+         * <li>{@code cacheManager.getCache(ALL_ADR_CLASS_CACHE)} restituisce
+         * {@code null} (cache globale non disponibile)</li>
+         * <li>{@code mockSingleRecordCache.put(classCode, savedAdrClass)} viene
+         * verificato</li>
          * </ul>
          * </p>
-         * <b>Output atteso:</b> {@code mockSingleRecordCache.put("3", savedAdrClass)} viene chiamato esattamente una volta.
+         * <b>Output atteso:</b> {@code mockSingleRecordCache.put("3", savedAdrClass)}
+         * viene chiamato esattamente una volta.
          */
         @Test
         @DisplayName("[Happy Path] Cache record singolo: put() invocato correttamente su ADR_CLASS_BY_CLASS_CODE_CACHE")
@@ -640,12 +725,12 @@ class AdrClassServiceTests {
             // Arrange
             AdrClass savedAdrClass = buildPersistedAdrClass(1L, "3", "Liquidi infiammabili");
             when(cacheManager.getCache(CaffeineCacheConfiguration.ADR_CLASS_BY_CLASS_CODE_CACHE))
-                .thenReturn(mockSingleRecordCache);
+                    .thenReturn(mockSingleRecordCache);
             when(cacheManager.getCache(CaffeineCacheConfiguration.ALL_ADR_CLASS_CACHE))
-                .thenReturn(null);
+                    .thenReturn(null);
 
             java.lang.reflect.Method syncMethod = AdrClassService.class
-                .getDeclaredMethod("syncCacheAfterInsert", AdrClass.class);
+                    .getDeclaredMethod("syncCacheAfterInsert", AdrClass.class);
             syncMethod.setAccessible(true);
 
             // Act
@@ -656,7 +741,8 @@ class AdrClassServiceTests {
         }
 
         /**
-         * [HAPPY PATH - Lista Globale Popolata] Verifica che {@code syncCacheAfterInsert}
+         * [HAPPY PATH - Lista Globale Popolata] Verifica che
+         * {@code syncCacheAfterInsert}
          * aggiunga l'entita' alla lista globale in cache ({@code ALL_ADR_CLASS_CACHE})
          * quando la lista e' gia' caricata in memoria (Cache Hit sul value wrapper).
          *
@@ -667,11 +753,14 @@ class AdrClassServiceTests {
          * <p>
          * <b>Mock coinvolti:</b>
          * <ul>
-         *   <li>{@code cacheManager.getCache(ALL_ADR_CLASS_CACHE)} restituisce {@code mockAllAdrClassCache}</li>
-         *   <li>{@code mockAllAdrClassCache.get(ALL_ADR_CLASS_KEY)} restituisce {@code mockValueWrapper} con lista preesistente</li>
+         * <li>{@code cacheManager.getCache(ALL_ADR_CLASS_CACHE)} restituisce
+         * {@code mockAllAdrClassCache}</li>
+         * <li>{@code mockAllAdrClassCache.get(ALL_ADR_CLASS_KEY)} restituisce
+         * {@code mockValueWrapper} con lista preesistente</li>
          * </ul>
          * </p>
-         * <b>Output atteso:</b> {@code mockAllAdrClassCache.put(...)} viene chiamato con la lista aggiornata contenente il nuovo elemento.
+         * <b>Output atteso:</b> {@code mockAllAdrClassCache.put(...)} viene chiamato
+         * con la lista aggiornata contenente il nuovo elemento.
          */
         @Test
         @DisplayName("[Happy Path] Lista globale in cache: append dell'entita' nella ALL_ADR_CLASS_CACHE")
@@ -684,15 +773,15 @@ class AdrClassServiceTests {
             preExistingList.add(existingClass);
 
             when(cacheManager.getCache(CaffeineCacheConfiguration.ADR_CLASS_BY_CLASS_CODE_CACHE))
-                .thenReturn(mockSingleRecordCache);
+                    .thenReturn(mockSingleRecordCache);
             when(cacheManager.getCache(CaffeineCacheConfiguration.ALL_ADR_CLASS_CACHE))
-                .thenReturn(mockAllAdrClassCache);
+                    .thenReturn(mockAllAdrClassCache);
             when(mockAllAdrClassCache.get(CaffeineCacheConfiguration.ALL_ADR_CLASS_KEY))
-                .thenReturn(mockValueWrapper);
+                    .thenReturn(mockValueWrapper);
             when(mockValueWrapper.get()).thenReturn(preExistingList);
 
             java.lang.reflect.Method syncMethod = AdrClassService.class
-                .getDeclaredMethod("syncCacheAfterInsert", AdrClass.class);
+                    .getDeclaredMethod("syncCacheAfterInsert", AdrClass.class);
             syncMethod.setAccessible(true);
 
             // Act
@@ -701,9 +790,8 @@ class AdrClassServiceTests {
             // Assert - la lista aggiornata deve contenere anche il nuovo elemento
             ArgumentCaptor<Object> captorValue = ArgumentCaptor.forClass(Object.class);
             verify(mockAllAdrClassCache).put(
-                org.mockito.ArgumentMatchers.eq(CaffeineCacheConfiguration.ALL_ADR_CLASS_KEY),
-                captorValue.capture()
-            );
+                    org.mockito.ArgumentMatchers.eq(CaffeineCacheConfiguration.ALL_ADR_CLASS_KEY),
+                    captorValue.capture());
             @SuppressWarnings("unchecked")
             List<AdrClass> updatedList = (List<AdrClass>) captorValue.getValue();
             assertThat(updatedList).contains(newClass).contains(existingClass);
@@ -711,18 +799,24 @@ class AdrClassServiceTests {
 
         /**
          * [EDGE CASE - Lista Non in Cache] Verifica che {@code syncCacheAfterInsert}
-         * NON tenti di inizializzare la lista globale se non e' ancora presente in memoria
+         * NON tenti di inizializzare la lista globale se non e' ancora presente in
+         * memoria
          * (Cache Miss), rispettando il pattern di Lazy Loading sicuro.
          *
          * <p>
-         * <b>Contesto Architetturale:</b> Se il metodo inizializzasse la lista con un solo elemento,
-         * la successiva richiesta di {@code findAll} troverebbe la chiave valorizzata e restituirebbe
-         * solo quell'elemento, nascondendo tutti i restanti record dal DB (corruzione della cache).
+         * <b>Contesto Architetturale:</b> Se il metodo inizializzasse la lista con un
+         * solo elemento,
+         * la successiva richiesta di {@code findAll} troverebbe la chiave valorizzata e
+         * restituirebbe
+         * solo quell'elemento, nascondendo tutti i restanti record dal DB (corruzione
+         * della cache).
          * </p>
          * <p>
-         * <b>Mock coinvolti:</b> {@code mockAllAdrClassCache.get(ALL_ADR_CLASS_KEY)} restituisce {@code null} (Cache Miss).
+         * <b>Mock coinvolti:</b> {@code mockAllAdrClassCache.get(ALL_ADR_CLASS_KEY)}
+         * restituisce {@code null} (Cache Miss).
          * </p>
-         * <b>Output atteso:</b> {@code mockAllAdrClassCache.put(...)} NON viene chiamato per la lista globale.
+         * <b>Output atteso:</b> {@code mockAllAdrClassCache.put(...)} NON viene
+         * chiamato per la lista globale.
          */
         @Test
         @DisplayName("[Edge Case] Lista globale non in cache (Cache Miss): nessun append, lista non inizializzata")
@@ -731,14 +825,14 @@ class AdrClassServiceTests {
             AdrClass newClass = buildPersistedAdrClass(2L, "3", "Liquidi infiammabili");
 
             when(cacheManager.getCache(CaffeineCacheConfiguration.ADR_CLASS_BY_CLASS_CODE_CACHE))
-                .thenReturn(mockSingleRecordCache);
+                    .thenReturn(mockSingleRecordCache);
             when(cacheManager.getCache(CaffeineCacheConfiguration.ALL_ADR_CLASS_CACHE))
-                .thenReturn(mockAllAdrClassCache);
+                    .thenReturn(mockAllAdrClassCache);
             when(mockAllAdrClassCache.get(CaffeineCacheConfiguration.ALL_ADR_CLASS_KEY))
-                .thenReturn(null);
+                    .thenReturn(null);
 
             java.lang.reflect.Method syncMethod = AdrClassService.class
-                .getDeclaredMethod("syncCacheAfterInsert", AdrClass.class);
+                    .getDeclaredMethod("syncCacheAfterInsert", AdrClass.class);
             syncMethod.setAccessible(true);
 
             // Act
@@ -746,26 +840,31 @@ class AdrClassServiceTests {
 
             // Assert - il put sulla cache globale NON deve avvenire
             verify(mockAllAdrClassCache, never()).put(
-                org.mockito.ArgumentMatchers.eq(CaffeineCacheConfiguration.ALL_ADR_CLASS_KEY),
-                any()
-            );
+                    org.mockito.ArgumentMatchers.eq(CaffeineCacheConfiguration.ALL_ADR_CLASS_KEY),
+                    any());
         }
 
         /**
-         * [EDGE CASE - Upsert in Lista Globale] Verifica che {@code syncCacheAfterInsert}
-         * rimuova il vecchio record dalla lista globale prima di aggiungere quello aggiornato,
-         * prevenendo la presenza di duplicati (logica Upsert del {@code AbstractGenericService}).
+         * [EDGE CASE - Upsert in Lista Globale] Verifica che
+         * {@code syncCacheAfterInsert}
+         * rimuova il vecchio record dalla lista globale prima di aggiungere quello
+         * aggiornato,
+         * prevenendo la presenza di duplicati (logica Upsert del
+         * {@code AbstractGenericService}).
          *
          * <p>
-         * Questo test verifica che se un'entita' con lo stesso {@code classCode} e' gia' presente
+         * Questo test verifica che se un'entita' con lo stesso {@code classCode} e'
+         * gia' presente
          * nella lista, venga sostituita dall'istanza aggiornata e non duplicata.
          * La logica si basa sull'implementazione di {@link AdrClass#equals(Object)}.
          * </p>
          * <p>
-         * <b>Mock coinvolti:</b> lista preesistente contenente un'entita' con classCode "3";
+         * <b>Mock coinvolti:</b> lista preesistente contenente un'entita' con classCode
+         * "3";
          * nuova entita' con stesso classCode "3" ma description aggiornata.
          * </p>
-         * <b>Output atteso:</b> la lista finale contiene UN SOLO elemento con classCode "3"
+         * <b>Output atteso:</b> la lista finale contiene UN SOLO elemento con classCode
+         * "3"
          * e la description aggiornata.
          */
         @Test
@@ -779,15 +878,15 @@ class AdrClassServiceTests {
             preExistingList.add(oldVersion);
 
             when(cacheManager.getCache(CaffeineCacheConfiguration.ADR_CLASS_BY_CLASS_CODE_CACHE))
-                .thenReturn(mockSingleRecordCache);
+                    .thenReturn(mockSingleRecordCache);
             when(cacheManager.getCache(CaffeineCacheConfiguration.ALL_ADR_CLASS_CACHE))
-                .thenReturn(mockAllAdrClassCache);
+                    .thenReturn(mockAllAdrClassCache);
             when(mockAllAdrClassCache.get(CaffeineCacheConfiguration.ALL_ADR_CLASS_KEY))
-                .thenReturn(mockValueWrapper);
+                    .thenReturn(mockValueWrapper);
             when(mockValueWrapper.get()).thenReturn(preExistingList);
 
             java.lang.reflect.Method syncMethod = AdrClassService.class
-                .getDeclaredMethod("syncCacheAfterInsert", AdrClass.class);
+                    .getDeclaredMethod("syncCacheAfterInsert", AdrClass.class);
             syncMethod.setAccessible(true);
 
             // Act
@@ -796,15 +895,14 @@ class AdrClassServiceTests {
             // Assert - la lista deve contenere esattamente 1 elemento (no duplicati)
             ArgumentCaptor<Object> captorValue = ArgumentCaptor.forClass(Object.class);
             verify(mockAllAdrClassCache).put(
-                org.mockito.ArgumentMatchers.eq(CaffeineCacheConfiguration.ALL_ADR_CLASS_KEY),
-                captorValue.capture()
-            );
+                    org.mockito.ArgumentMatchers.eq(CaffeineCacheConfiguration.ALL_ADR_CLASS_KEY),
+                    captorValue.capture());
             @SuppressWarnings("unchecked")
             List<AdrClass> updatedList = (List<AdrClass>) captorValue.getValue();
             assertThat(updatedList)
-                .hasSize(1)
-                .extracting(AdrClass::getDescription)
-                .containsExactly("Descrizione aggiornata");
+                    .hasSize(1)
+                    .extracting(AdrClass::getDescription)
+                    .containsExactly("Descrizione aggiornata");
         }
     }
 
@@ -818,7 +916,8 @@ class AdrClassServiceTests {
      *
      * <p>
      * Il metodo implementa il pattern Data Mapper / Assembler: converte un
-     * {@link AdrClassRequestDTO} (oggetto di trasporto web) in un'entita' di dominio
+     * {@link AdrClassRequestDTO} (oggetto di trasporto web) in un'entita' di
+     * dominio
      * {@link AdrClass} nello stato Transient (senza ID). E' il "filtro di confine"
      * tra il layer REST e il layer di Business Logic.
      * </p>
@@ -837,10 +936,12 @@ class AdrClassServiceTests {
          * {@code classCode} e {@code description} senza alterazioni.
          *
          * <p>
-         * <b>Nessun mock necessario:</b> il metodo non interagisce ne' con il repository
+         * <b>Nessun mock necessario:</b> il metodo non interagisce ne' con il
+         * repository
          * ne' con la cache. Testa esclusivamente la logica di mapping puro.
          * </p>
-         * <b>Output atteso:</b> entita' non null, con classCode = "3" e description = "Liquidi infiammabili".
+         * <b>Output atteso:</b> entita' non null, con classCode = "3" e description =
+         * "Liquidi infiammabili".
          * L'ID deve essere null (stato Transient, non ancora persistito).
          */
         @Test
@@ -860,11 +961,14 @@ class AdrClassServiceTests {
         }
 
         /**
-         * [HAPPY PATH] Verifica che {@code mapToEntity} mappi correttamente un classCode
-         * complesso con punto e lettera finale (es. "1.4S"), tipico della normativa ADR.
+         * [HAPPY PATH] Verifica che {@code mapToEntity} mappi correttamente un
+         * classCode
+         * complesso con punto e lettera finale (es. "1.4S"), tipico della normativa
+         * ADR.
          *
          * <p>
-         * Testa la corretta preservazione di tutti i caratteri del classCode senza troncamenti
+         * Testa la corretta preservazione di tutti i caratteri del classCode senza
+         * troncamenti
          * o modifiche indesiderate durante il mapping.
          * </p>
          * <b>Output atteso:</b> classCode "1.4S" e description correttamente mappati.
@@ -885,15 +989,18 @@ class AdrClassServiceTests {
         }
 
         /**
-         * [ISOLATION PATH] Verifica che le istanze prodotte da {@code mapToEntity} siano
-         * indipendenti: due chiamate successive con DTO diversi devono produrre due oggetti
+         * [ISOLATION PATH] Verifica che le istanze prodotte da {@code mapToEntity}
+         * siano
+         * indipendenti: due chiamate successive con DTO diversi devono produrre due
+         * oggetti
          * distinti senza condivisione di stato (no Singleton pattern implicito).
          *
          * <p>
          * Testa che il metodo utilizzi {@code new AdrClass()} ad ogni invocazione e non
          * ricicli o condivida istanze tra mapping successivi.
          * </p>
-         * <b>Output atteso:</b> due entita' distinte con riferimenti diversi e classCode diversi.
+         * <b>Output atteso:</b> due entita' distinte con riferimenti diversi e
+         * classCode diversi.
          */
         @Test
         @DisplayName("[Isolation Path] Due mapping successivi: istanze separate e indipendenti")
@@ -913,40 +1020,49 @@ class AdrClassServiceTests {
         }
 
         /**
-         * [TDD-RED] Verifica che {@code mapToEntity} lanci {@link IllegalArgumentException}
+         * [TDD-RED] Verifica che {@code mapToEntity} lanci
+         * {@link IllegalArgumentException}
          * quando viene invocato con un DTO {@code null}.
          *
          * <p>
          * <b>QUESTO TEST E' PROGETTATO PER FALLIRE (Fase RED del TDD).</b><br>
-         * Il metodo {@link AdrClassService#mapToEntity(AdrClassRequestDTO)} tenta immediatamente
-         * di accedere a {@code dto.classCode()} e {@code dto.description()} senza alcun controllo
-         * preventivo (riga 185-188 del sorgente). Se {@code dto} e' {@code null}, viene lanciata
-         * una {@code NullPointerException} non gestita, anziche' un'eccezione semantica.
+         * Il metodo {@link AdrClassService#mapToEntity(AdrClassRequestDTO)} tenta
+         * immediatamente
+         * di accedere a {@code dto.classCode()} e {@code dto.description()} senza alcun
+         * controllo
+         * preventivo (riga 185-188 del sorgente). Se {@code dto} e' {@code null}, viene
+         * lanciata
+         * una {@code NullPointerException} non gestita, anziche' un'eccezione
+         * semantica.
          * </p>
          * <p>
          * <b>Fix richiesto:</b> Aggiungere come prima istruzione:
          * {@code if (dto == null) throw new IllegalArgumentException("AdrClassRequestDTO cannot be null");}
          * </p>
-         * <b>Output atteso:</b> {@link IllegalArgumentException} (non {@code NullPointerException}).
+         * <b>Output atteso:</b> {@link IllegalArgumentException} (non
+         * {@code NullPointerException}).
          */
         @Test
         @DisplayName("[TDD-RED] DTO null: mapToEntity(null) dovrebbe lanciare IllegalArgumentException (non NullPointerException)")
         void shouldThrowIllegalArgumentExceptionWhenDtoIsNull() {
             // Act & Assert
             assertThatThrownBy(() -> adrClassService.mapToEntity(null))
-                .isInstanceOf(IllegalArgumentException.class)
-                .isNotInstanceOf(NullPointerException.class);
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .isNotInstanceOf(NullPointerException.class);
         }
 
         /**
-         * [TDD-RED] Verifica che {@code mapToEntity} lanci {@link IllegalArgumentException}
+         * [TDD-RED] Verifica che {@code mapToEntity} lanci
+         * {@link IllegalArgumentException}
          * quando il DTO contiene un {@code classCode} null.
          *
          * <p>
          * <b>QUESTO TEST E' PROGETTATO PER FALLIRE (Fase RED del TDD).</b><br>
-         * Il metodo esegue {@code adrClass.setClassCode(dto.classCode())} senza validare
+         * Il metodo esegue {@code adrClass.setClassCode(dto.classCode())} senza
+         * validare
          * che {@code dto.classCode()} non sia null. L'entita' risultante avrebbe
-         * {@code classCode = null}, violando il vincolo {@code nullable = false} della colonna
+         * {@code classCode = null}, violando il vincolo {@code nullable = false} della
+         * colonna
          * e causando un'eccezione JPA non semantica al momento del {@code save()}.
          * La validazione dovrebbe avvenire nel Service, non al momento del persist.
          * </p>
@@ -964,18 +1080,21 @@ class AdrClassServiceTests {
 
             // Act & Assert
             assertThatThrownBy(() -> adrClassService.mapToEntity(dtoWithNullCode))
-                .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(IllegalArgumentException.class);
         }
 
         /**
-         * [TDD-RED] Verifica che {@code mapToEntity} lanci {@link IllegalArgumentException}
+         * [TDD-RED] Verifica che {@code mapToEntity} lanci
+         * {@link IllegalArgumentException}
          * quando il DTO contiene una {@code description} null.
          *
          * <p>
          * <b>QUESTO TEST E' PROGETTATO PER FALLIRE (Fase RED del TDD).</b><br>
-         * Analoga vulnerabilita' al test precedente: {@code dto.description()} non viene
+         * Analoga vulnerabilita' al test precedente: {@code dto.description()} non
+         * viene
          * validato (riga 187 del sorgente). Un'entity con {@code description = null}
-         * violerebbe il vincolo {@code nullable = false} della colonna {@code description}
+         * violerebbe il vincolo {@code nullable = false} della colonna
+         * {@code description}
          * al momento del persist, generando un'eccezione JPA non semantica.
          * </p>
          * <p>
@@ -992,7 +1111,7 @@ class AdrClassServiceTests {
 
             // Act & Assert
             assertThatThrownBy(() -> adrClassService.mapToEntity(dtoWithNullDescription))
-                .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(IllegalArgumentException.class);
         }
     }
 }
