@@ -1,4 +1,4 @@
-package dev.vinciguerra.adrsentinel.db.adrclass.shipmentroute;
+package dev.vinciguerra.adrsentinel.db.shipmentroute;
 
 import java.util.Optional;
 import org.slf4j.Logger;

@@ -61,9 +61,12 @@ public class AdrClassService extends AbstractGenericService {
      * @return L'entità {@link AdrClass} richiesta, se esistente.
      * @throws ResourceNotFoundException Se il database non contiene alcuna classe con il codice fornito 
      * (genera un HTTP 404 a livello di Controller).
+     * @throws IllegalArgumentException Se classCode è {@code null} o {@code blank}.
      */
 	@Cacheable(value = CaffeineCacheConfiguration.ADR_CLASS_BY_CLASS_CODE_CACHE, key = "#classCode")
-	public AdrClass getByClassCode(String classCode) throws ResourceNotFoundException {
+	public AdrClass getByClassCode(String classCode) throws ResourceNotFoundException, IllegalArgumentException {
+		if(classCode == null || classCode.isBlank())
+			throw new IllegalArgumentException("classCode cannot be null or blank");
 		logger.info("[DataBase CALL] Searching for the AdrClass by classCode: {}", classCode);
 		return adrClassRepository.findByClassCode(classCode)
 			.orElseThrow(() -> new ResourceNotFoundException("AdrClass not found: " + classCode));
@@ -99,9 +102,14 @@ public class AdrClassService extends AbstractGenericService {
      * </p>
      * @param newAdrClass L'entità AdrClass da salvare (i dati devono essere già validati).
      * @return L'entità salvata, arricchita con l'ID autogenerato dal Database.
+     * @throws IllegalArgumentException Se l'oggetto AdrClass da memorizzare è {@code null}.
      */
 	@Transactional
-	public AdrClass save(AdrClass newAdrClass) {
+	public AdrClass save(AdrClass newAdrClass) throws IllegalArgumentException {
+		if(newAdrClass == null)
+			throw new IllegalArgumentException("AdrClass entity cannot be null.");
+		if(newAdrClass.getClassCode() == null || newAdrClass.getClassCode().isBlank())
+			throw new IllegalArgumentException("classCode cannot be null or blank");
 		logger.info("[DataBase CALL] Saving new AdrClass with classCode: {}", newAdrClass.getClassCode());
 		AdrClass savedAdrClass = adrClassRepository.save(newAdrClass);
 		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
@@ -180,10 +188,18 @@ public class AdrClassService extends AbstractGenericService {
 	 * grazie alla barriera di validazione (Fail-Fast) posta nel Controller REST.
 	 * @return una nuova istanza pulita di {@link AdrClass}, popolata esclusivamente con i dati 
 	 * consentiti dal contratto DTO e pronta per l'inserimento nel contesto di persistenza.
+	 * @throws IllegalArgumentException Se il dto in ingresso è null oppure se il dto contiene classCode e description 
+	 * {@code null} o {@code blank}.
 	 */
-	public AdrClass mapToEntity(AdrClassRequestDTO dto) {
+	public AdrClass mapToEntity(AdrClassRequestDTO dto) throws IllegalArgumentException {
+		if(dto == null)
+			throw new IllegalArgumentException("dto cannot be null.");
 		AdrClass adrClass = new AdrClass();
+		if(dto.classCode() == null || dto.classCode().isBlank())
+			throw new IllegalArgumentException("class code in dto cannot be null or blank.");
 		adrClass.setClassCode(dto.classCode());
+		if(dto.description() == null || dto.description().isBlank())
+			throw new IllegalArgumentException("description in dto cannot be null or bank.");
 		adrClass.setDescription(dto.description());
 		return adrClass;
 	}

@@ -11,11 +11,12 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import dev.vinciguerra.adrsentinel.db.adrclass.shipmentroute.ShipmentRoute;
-import dev.vinciguerra.adrsentinel.db.adrclass.shipmentroute.ShipmentRouteService;
+
 import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumber.TunnelRestriction;
 import dev.vinciguerra.adrsentinel.db.shipment.Shipment;
 import dev.vinciguerra.adrsentinel.db.shipment.ShipmentService;
+import dev.vinciguerra.adrsentinel.db.shipmentroute.ShipmentRoute;
+import dev.vinciguerra.adrsentinel.db.shipmentroute.ShipmentRouteService;
 import dev.vinciguerra.adrsentinel.exception.ResourceNotFoundException;
 import dev.vinciguerra.adrsentinel.web.annotation.ValidatorUUID;
 import dev.vinciguerra.adrsentinel.web.dto.shipmentroute.ShipmentRouteRequestDTO;

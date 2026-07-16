@@ -10,7 +10,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import dev.vinciguerra.adrsentinel.db.adrclass.AdrClassCacheSetting;
-import dev.vinciguerra.adrsentinel.db.adrclass.shipmentroute.ShipmentRouteCacheSetting;
 import dev.vinciguerra.adrsentinel.db.compatibilityrule.CompatibilityRuleCacheSetting;
 import dev.vinciguerra.adrsentinel.db.customer.CustomerCacheSetting;
 import dev.vinciguerra.adrsentinel.db.customer.CustomerSnapshotCacheSetting;
@@ -19,6 +18,7 @@ import dev.vinciguerra.adrsentinel.db.driver.DriverSnapshotCacheSetting;
 import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumberCacheSetting;
 import dev.vinciguerra.adrsentinel.db.shipment.ShipmentCacheSetting;
 import dev.vinciguerra.adrsentinel.db.shipmentitem.ShipmentItemCacheSetting;
+import dev.vinciguerra.adrsentinel.db.shipmentroute.ShipmentRouteCacheSetting;
 import dev.vinciguerra.adrsentinel.db.vehicle.VehicleCacheSetting;
 import dev.vinciguerra.adrsentinel.db.vehicle.VehicleSnapshotCacheSetting;
 

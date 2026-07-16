@@ -1,4 +1,4 @@
-package dev.vinciguerra.adrsentinel.db.adrclass.shipmentroute;
+package dev.vinciguerra.adrsentinel.db.shipmentroute;
 
 import java.util.Objects;
 import java.util.UUID;

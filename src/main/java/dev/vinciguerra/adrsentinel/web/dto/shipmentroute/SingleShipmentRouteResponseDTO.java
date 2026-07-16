@@ -1,6 +1,6 @@
 package dev.vinciguerra.adrsentinel.web.dto.shipmentroute;
 
-import dev.vinciguerra.adrsentinel.db.adrclass.shipmentroute.ShipmentRoute;
+import dev.vinciguerra.adrsentinel.db.shipmentroute.ShipmentRoute;
 
 /**
  * Data Transfer Object (Response Payload) utilizzato dal Presentation Layer per esporre 

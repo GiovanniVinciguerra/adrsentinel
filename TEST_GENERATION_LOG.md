@@ -115,3 +115,47 @@ I test seguenti sono scritti appositamente per FALLIRE con il codice attuale e d
    **Fix:** `getDrivers()` deve restituire `Collections.unmodifiableSet(drivers)` o una copia difensiva `new HashSet<>(drivers)`.
 
 ---
+
+## [2026-07-16T01:53:46+02:00] — AdrClassService.java
+
+**Classe Analizzata:** AdrClassService
+**File Generato:** AdrClassServiceTests.java
+**Righe Generate:** 998
+**Test Totali:** 23
+**Stack:** JUnit 5 Jupiter · Mockito · AssertJ · Java Reflection (per metodo privato `syncCacheAfterInsert`)
+**Isolamento:** Puro — nessun contesto Spring, nessun H2, nessun ORM avviato.
+
+---
+
+### Metodi Coperti
+
+- **`getByClassCode(String)`** — 6 test (Happy Path, Failure Path, Edge Case x2, TDD-RED x2)
+- **`getAllAdrClasses()`** — 3 test (Happy Path, Edge Case vuoto, Edge Case singolo record)
+- **`save(AdrClass)`** — 4 test (Happy Path, Failure Path duplicato, TDD-RED x2)
+- **`syncCacheAfterInsert(AdrClass)` (privato, via Reflection)** — 4 test (Happy Path x2, Edge Case Cache Miss, Edge Case Upsert)
+- **`mapToEntity(AdrClassRequestDTO)`** — 6 test (Happy Path x2, Isolation Path, TDD-RED x3)
+
+---
+
+### Vulnerabilita' / Bug Rilevati (Fase RED TDD)
+
+I test seguenti sono scritti appositamente per FALLIRE con il codice attuale e devono essere portati in "verde" dallo sviluppatore implementando le correzioni indicate.
+
+1. **[CRITICA] Assenza di null/blank guard in `getByClassCode(String)`.**
+   - *Falla:* Il metodo non valida l'input prima di delegare al repository. `getByClassCode(null)` causa `NullPointerException` non gestita (HTTP 500). `getByClassCode("   ")` invia una stringa blank al DB producendo query non semantica.
+   - *Fix:* Aggiungere come prima istruzione: `if (classCode == null || classCode.isBlank()) throw new IllegalArgumentException("classCode cannot be null or blank");`
+
+2. **[CRITICA] Assenza di null guard in `save(AdrClass)` su entita' null e su `classCode` null nell'entita'.**
+   - *Falla 1:* `save(null)` accede a `newAdrClass.getClassCode()` per il log (riga 105) senza guard preventivo, causando `NullPointerException` (HTTP 500) anziche' `IllegalArgumentException`.
+   - *Falla 2:* `save(entityConClassCodeNull)` bypassa il service senza eccezione semantica e arriva al DB, dove viola il constraint `nullable = false` con eccezione JPA non contestualizzata.
+   - *Fix:* Aggiungere all'inizio di `save`: `if (newAdrClass == null) throw new IllegalArgumentException("entity cannot be null"); if (newAdrClass.getClassCode() == null || newAdrClass.getClassCode().isBlank()) throw new IllegalArgumentException(...);`
+
+3. **[ALTA] Assenza di null guard in `mapToEntity(AdrClassRequestDTO)` su DTO null, `classCode` null e `description` null.**
+   - *Falla:* Il metodo accede direttamente a `dto.classCode()` e `dto.description()` (righe 186-187) senza validazione preventiva. Qualsiasi campo null produce `NullPointerException` o un'entita' con stato invalido che viola i constraint `nullable = false` del DB al momento del persist.
+   - *Fix:* Aggiungere guard clause all'inizio del metodo per `dto`, `dto.classCode()` e `dto.description()` lanciando `IllegalArgumentException` con messaggi contestuali.
+
+4. **[MEDIA] Nessuna protezione contro la corruzione del contesto transazionale in `save()` quando invocato fuori da una transazione attiva.**
+   - *Falla:* Il metodo chiama `TransactionSynchronizationManager.registerSynchronization()` senza verificare preventivamente che una transazione sia attiva. Se invocato in un contesto non transazionale (es. da un job schedulato o da un test senza setup), lancia `IllegalStateException: Transaction synchronization is not active` non gestita.
+   - *Fix:* Aggiungere controllo `if (TransactionSynchronizationManager.isSynchronizationActive())` prima di registrare il synchronization, oppure demandare la chiamata a un metodo separato annotato con `@Transactional`.
+
+---

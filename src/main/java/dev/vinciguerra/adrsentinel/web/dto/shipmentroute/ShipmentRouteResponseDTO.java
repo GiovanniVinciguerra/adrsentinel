@@ -1,8 +1,9 @@
 package dev.vinciguerra.adrsentinel.web.dto.shipmentroute;
 
 import java.util.List;
-import dev.vinciguerra.adrsentinel.db.adrclass.shipmentroute.ShipmentRoute;
+
 import dev.vinciguerra.adrsentinel.db.onunumber.OnuNumber.TunnelRestriction;
+import dev.vinciguerra.adrsentinel.db.shipmentroute.ShipmentRoute;
 
 /**
  * Data Transfer Object (DTO) aggregatore (Response Payload) utilizzato dal Presentation Layer 
