@@ -243,3 +243,58 @@ I test seguenti sono scritti **appositamente per FALLIRE** con il codice attuale
 - Il metodo `getByAdrClassA()` manca di test di verifica per i casi in cui il repository lanci un'eccezione (es. `DataAccessException`): si consiglia di aggiungere un test che verifichi la propagazione di eccezioni infrastrutturali.
 - Il metodo `save()` non verifica che la `CompatibilityRule` passata non abbia un ID gia' valorizzato (che indicherebbe una risorsa esistente, non una nuova): considerare l'aggiunta di un controllo `if (rule.getId() != null) throw new IllegalArgumentException(...)` per forzare la semantica di creazione.
 
+
+---
+
+## Sessione del 2026-07-17T00:04+02:00
+
+**Classe Analizzata:** CompatibilityRule.java
+**File Generato:** CompatibilityRuleTests.java
+**Righe Generate:** 1349
+**Test Totali:** 47 (di cui 4 in FASE RED intenzionale)
+**Stack:** JUnit 5 Jupiter · AssertJ · Java Reflection (per lifecycle hook privati `@PrePersist`/`@PreUpdate`)
+**Isolamento:** Puro — nessun contesto Spring, nessun H2, nessun ORM avviato. Istanze di `AdrClass` costruite direttamente (no mock) per rispettare il comportamento reale di `compareTo`/`equals`.
+
+---
+
+### Metodi Coperti
+
+- `getId()` / `setId(Long)` — 2 test (Happy, transiente)
+- `getAdrClassA()` / `setAdrClassA(AdrClass)` — 1 test (Happy)
+- `getAdrClassB()` / `setAdrClassB(AdrClass)` — 1 test (Happy)
+- `isCompatible()` / `setCompatible(boolean)` — 3 test (default difensivo, true, reset a false)
+- `getWarningNote()` / `setWarningNote(String)` — 2 test (default, Happy)
+- `normalize()` (privato, via reflection) — 10 test (Happy, lowercase→uppercase, newline/tab, spazi multipli, trim, null, empty, blank, PDF paste, boundary 255 char, RED 256 char)
+- `safeOrderForUniqueConstraint()` (privato, via reflection) — 9 test (A<B, A>B swap, codici decimali, classi identiche, adiacenti, A=null, B=null, entrambe null, RED null parziale x2)
+- `onBeforeSaveOrUpdate()` (privato, orchestratore JPA) — 4 test (sequenza ordering+normalize, abort pre-normalizzazione, valori default, idempotenza)
+- `equals(Object)` — 5 test (same pair ID diversi, coppie diverse, riflessivita, null, tipo diverso, RED ordine invertito pre-persist)
+- `hashCode()` — 3 test (stesso hash per pair uguale, hash diversi, stabilita con null)
+- `toString()` — 4 test (campi essenziali, id=null transiente, stato default, warningNote=null)
+
+---
+
+### Vulnerabilita e Bug Rilevati
+
+#### VULNERABILITA 1 — Assenza di validazione MAX LENGTH in `normalize()` [TEST RED]
+- **Falla:** Il metodo `normalize()` non verifica che `warningNote` risultante rispetti il vincolo `@Column(length = 255)`. Una stringa di 256+ caratteri supera la normalizzazione senza eccezioni applicative, causando un DataException opaco a livello JDBC/MariaDB.
+- **Test RED:** `redShouldThrowExceptionWhenNoteExceedsMaxLength()` — FALLIRA fino a correzione.
+- **Azione Correttiva:** Aggiungere alla fine di `normalize()`, dopo `toUpperCase()`: `if (warningNote.length() > 255) throw new IllegalArgumentException("warningNote exceeds max length of 255 characters");`
+
+#### VULNERABILITA 2 — Assenza di Fail-Fast per classi ADR null parziali in `safeOrderForUniqueConstraint()` [TEST RED x2]
+- **Falla:** Il guard `if(adrClassA != null && adrClassB != null)` cortocircuita silenziosamente se solo una classe e null, lasciando propagare un'entita inconsistente fino al flush JPA. Il messaggio di errore risultante e opaco e non diagnosticabile a livello di dominio.
+- **Test RED:** `redShouldThrowExceptionWhenOnlyClassAIsNull()` e `redShouldThrowExceptionWhenOnlyClassBIsNull()` — FALLIRANNO fino a correzione.
+- **Azione Correttiva:** Aggiungere come prima istruzione di `safeOrderForUniqueConstraint()`: `if (adrClassA == null || adrClassB == null) throw new BadRequestException("Both ADR classes must be non-null to create a compatibility rule");`
+
+#### VULNERABILITA 3 — `equals()` non rispetta l'invarianza di direzionalita per entita transiente [TEST RED]
+- **Falla:** Il metodo `equals()` confronta direttamente `(adrClassA, adrClassB)` senza applicare preventivamente l'ordinamento canonico. Due istanze [3,8] e [8,3] risultano non uguali prima del passaggio per `@PrePersist`. Controlli di deduplicazione in-memory nel service layer possono produrre falsi negativi, consentendo l'inserimento di regole speculari duplicate.
+- **Test RED:** `redShouldReturnTrueForInvertedClassPairBeforePersist()` — FALLIRA fino a correzione.
+- **Azione Correttiva (opzione A):** Refactoring di `equals()` per confrontare i classCode nel loro ordine canonico. **Opzione B (documentazione):** Inserire un @apiNote esplicito in Javadoc che dichiari che `equals()` garantisce la simmeria SOLO post-`@PrePersist`.
+
+---
+
+### Aree che Richiedono Ulteriori Validazioni
+
+- La costante `WARNING_NOTE_GENERAL = "NOTHING TO SAY"` è `private static final` e non esposta pubblicamente: se il valore cambia in futuro, i test di fallback si romperanno silenziosamente. Si consiglia di renderla `package-private` o esporla tramite metodo statico per i test.
+- Il metodo `normalize()` applica `toUpperCase()` senza specificare un Locale. Per stringhe con caratteri locali (es. tedesco: 'ss' -> 'SS'), il comportamento dipende dalla JVM di sistema. Si consiglia di usare esplicitamente `toUpperCase(Locale.ROOT)` per garantire determinismo cross-platform.
+
+---
