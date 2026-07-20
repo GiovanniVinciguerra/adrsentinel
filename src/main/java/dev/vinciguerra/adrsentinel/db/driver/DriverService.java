@@ -56,7 +56,7 @@ public class DriverService extends AbstractGenericService {
 	 * @param cacheManager Il gestore della cache ereditato dalla superclasse.
 	 */
 	protected DriverService(DriverRepository driverRepository, CacheManager cacheManager) {
-		super(cacheManager);
+		super(Objects.requireNonNull(cacheManager, "cacheManager must be not null"));
 		this.driverRepository = Objects.requireNonNull(driverRepository, "driverRepository must not be null.");
 	}
 	

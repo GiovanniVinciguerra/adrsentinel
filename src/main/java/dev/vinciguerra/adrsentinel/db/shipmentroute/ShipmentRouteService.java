@@ -86,7 +86,7 @@ public class ShipmentRouteService extends AbstractGenericService {
 	protected ShipmentRouteService(ShipmentRouteRepository shipmentRouteRepository, ShipmentItemService shipmentItemService, ShipmentService shipmentService,
 			OrsGeocodingService orsGeocodingService, @Value("${ors.api.base-url:https://api.openrouteservice.org}") String baseUrl, 
 			@Value("${ors.api.key}") String apiKey, CacheManager cacheManager) {
-		super(cacheManager);
+		super(Objects.requireNonNull(cacheManager, "cacheManager must be not null"));
 		this.shipmentRouteRepository = Objects.requireNonNull(shipmentRouteRepository, "shipmentRouteRepository must not be null.");
 		this.shipmentItemService = Objects.requireNonNull(shipmentItemService, "shipmentItemService must not be null.");
 		this.shipmentService = Objects.requireNonNull(shipmentService, "shipmentService must not be null.");

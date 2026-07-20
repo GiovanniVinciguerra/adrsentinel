@@ -97,7 +97,7 @@ public class DispatchService extends AbstractGenericService {
 	 */
 	protected DispatchService(AdrClassService adrClassService, CompatibilityRuleService compatibilityRuleService, OnuNumberService onuNumberService,
 			ShipmentRouteService shipmentRouteService, VehicleService vehicleService, DriverService driverService, CacheManager cacheManager) {
-		super(cacheManager);
+		super(Objects.requireNonNull(cacheManager, "cacheManager must be not null"));
 		this.adrClassService = Objects.requireNonNull(adrClassService, "adrClassService must not be null.");
 		this.compatibilityRuleService = Objects.requireNonNull(compatibilityRuleService, "compatibilityRuleService must not be null.");
 		this.onuNumberService = Objects.requireNonNull(onuNumberService, "onuNumberService must not be null.");

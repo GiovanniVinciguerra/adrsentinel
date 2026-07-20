@@ -2,7 +2,6 @@ package dev.vinciguerra.adrsentinel.db.compatibilityrule;
 
 import java.util.List;
 import java.util.Objects;
-
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -67,7 +66,7 @@ public class CompatibilityRuleService extends AbstractGenericService {
 	 * delegata alla classe astratta base.
 	 */
 	public CompatibilityRuleService(CompatibilityRuleRepository compatibilityRuleRepository, AdrClassService adrClassService, CacheManager cacheManager)  {
-		super(cacheManager);
+		super(Objects.requireNonNull(cacheManager, "cacheManager must be not null"));
 		this.adrClassService = Objects.requireNonNull(adrClassService, "adrClassService must not be null.");
 		this.compatibilityRuleRepository = Objects.requireNonNull(compatibilityRuleRepository, "compatibilityRuleRepository must not be null.");
 	}

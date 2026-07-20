@@ -95,7 +95,7 @@ public class ShipmentService extends AbstractGenericService {
 	public ShipmentService(ShipmentRepository shipmentRepository, VehicleService vehicleService, VehicleSnapshotService vehicleSnapshotService, DriverService driverService,
 			DriverSnapshotService driverSnapshotService, CustomerService customerService, CustomerSnapshotService customerSnapshotService, @Lazy WaybillService waybillService,
 			CacheManager cacheManager) {
-		super(cacheManager);
+		super(Objects.requireNonNull(cacheManager, "cacheManager must be not null"));
 		this.shipmentRepository = Objects.requireNonNull(shipmentRepository, "shipmentRepository must not be null.");
 		this.vehicleService = Objects.requireNonNull(vehicleService, "vehicleService must not be null.");
 		this.vehicleSnapshotService = Objects.requireNonNull(vehicleSnapshotService, "vehicleSnapshotService must not be null.");

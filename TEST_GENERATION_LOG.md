@@ -294,7 +294,59 @@ I test seguenti sono scritti **appositamente per FALLIRE** con il codice attuale
 
 ### Aree che Richiedono Ulteriori Validazioni
 
-- La costante `WARNING_NOTE_GENERAL = "NOTHING TO SAY"` è `private static final` e non esposta pubblicamente: se il valore cambia in futuro, i test di fallback si romperanno silenziosamente. Si consiglia di renderla `package-private` o esporla tramite metodo statico per i test.
+- La costante `WARNING_NOTE_GENERAL = "Nothing to say"` è `private static final` e non esposta pubblicamente: se il valore cambia in futuro, i test di fallback si romperanno silenziosamente. Si consiglia di renderla `package-private` o esporla tramite metodo statico per i test.
 - Il metodo `normalize()` applica `toUpperCase()` senza specificare un Locale. Per stringhe con caratteri locali (es. tedesco: 'ss' -> 'SS'), il comportamento dipende dalla JVM di sistema. Si consiglia di usare esplicitamente `toUpperCase(Locale.ROOT)` per garantire determinismo cross-platform.
+
+---
+
+## Sessione del 2026-07-17T16:48+02:00
+
+**Classe Analizzata:** CustomerService.java
+**File Generato:** CustomerServiceTests.java
+**Righe Generate:** 1293
+**Test Totali:** 33 (21 GREEN + 12 RED-TDD)
+**Stack:** JUnit 5 Jupiter · Mockito · AssertJ
+**Isolamento:** Puro — nessun contesto Spring, nessun H2, nessun ORM avviato.
+
+---
+
+### Metodi Coperti
+
+- **`CustomerService(CustomerRepository, CacheManager)`** — Costruttore (3 test: 1 HP + 1 FP + 1 RED-TDD)
+- **`getByVatNumber(String)`** — 4 test (1 HP + 1 FP + 2 RED-TDD)
+- **`getByCompanyName(String)`** — 3 test (1 HP + 1 EDGE + 1 RED-TDD)
+- **`getAllCustomer()`** — 2 test (1 HP + 1 EDGE)
+- **`save(Customer)`** — 4 test (2 HP + 2 RED-TDD)
+- **`updateDetailsByVatNumber(CustomerUpdateDTO)`** — 5 test (2 HP + 1 FP + 2 RED-TDD)
+- **`updateActiveStatusByVatNumber(CustomerUpdateActiveStatusDTO)`** — 6 test (3 HP + 1 FP + 1 EDGE + 1 RED-TDD)
+- **`mapToEntity(CustomerRequestDTO)`** — 6 test (2 HP + 1 ISOLATION + 3 RED-TDD)
+- **`syncCacheAfterInsert` / `syncCacheAfterUpdate`** — metodi privati, copertura verificata indirettamente tramite i test dei metodi `save`, `updateDetailsByVatNumber` e `updateActiveStatusByVatNumber` (registrazione `TransactionSynchronization`).
+
+---
+
+### Vulnerabilita'/Bug Rilevati (FASE RED TDD)
+
+Questi test sono stati scritti appositamente per **FALLIRE** finche' lo sviluppatore non implementa le correzioni indicate. Sono marcati con `[TDD-RED]` nel Javadoc e con suffisso `_RED` nel nome del metodo.
+
+1. **[CRITICA] Assenza di null/blank guard in `getByVatNumber(String)` — 2 test RED**
+   - *Falla:* Il metodo non valida l'input prima di delegare al repository. `getByVatNumber(null)` causa `NullPointerException` non gestita (HTTP 500). `getByVatNumber("   ")` invia una stringa blank al DB producendo query non semantica o `ResourceNotFoundException` fuorviante.
+   - *Fix:* Aggiungere come prima istruzione: `if (vatNumber == null || vatNumber.isBlank()) throw new IllegalArgumentException("vatNumber cannot be null or blank");`
+
+2. **[CRITICA] Assenza di null guard in `save(Customer)` su entita' null e su `vatNumber` null — 2 test RED**
+   - *Falla 1:* `save(null)` accede a `newCustomer.getVatNumber()` per il log (riga 99) senza guard preventivo → `NullPointerException` (HTTP 500).
+   - *Falla 2:* `save(entityConVatNumberNull)` bypassa il service senza eccezione semantica e arriva al DB dove viola `nullable = false` con eccezione JPA opaca.
+   - *Fix:* Aggiungere all'inizio di `save`: `if (newCustomer == null) throw new IllegalArgumentException("entity cannot be null"); if (newCustomer.getVatNumber() == null || newCustomer.getVatNumber().isBlank()) throw new IllegalArgumentException(...);`
+
+3. **[ALTA] Assenza di null guard nei metodi di update su DTO null — 2 test RED**
+   - *Falla:* `updateDetailsByVatNumber(null)` e `updateActiveStatusByVatNumber(null)` accedono direttamente a `updateDto.vatNumber()` senza null-check → `NullPointerException` (HTTP 500).
+   - *Fix:* Aggiungere come prima istruzione di entrambi i metodi: `if (updateDto == null) throw new IllegalArgumentException("updateDto cannot be null");`
+
+4. **[ALTA] Assenza di null guard in `mapToEntity(CustomerRequestDTO)` su DTO null, vatNumber null e companyName null — 3 test RED**
+   - *Falla:* Il metodo accede direttamente a `dto.companyName()`, `dto.vatNumber()` e `dto.legalAddress()` (righe 226-228) senza validazione preventiva. Qualsiasi campo null produce `NullPointerException` o un'entita' con stato invalido che viola i constraint `nullable = false` del DB.
+   - *Fix:* Aggiungere guard clause all'inizio: `if (dto == null) throw new IllegalArgumentException(...); if (dto.vatNumber() == null || dto.vatNumber().isBlank()) throw new IllegalArgumentException(...);` e analogamente per `companyName`.
+
+5. **[MEDIA] Assenza di Fail-Fast nel costruttore per `cacheManager` null — 1 test RED**
+   - *Falla:* Il costruttore della superclasse `AbstractGenericService` assegna `this.cacheManager = cacheManager` senza null-check. Un `cacheManager` null non causa errore alla costruzione ma produce `NullPointerException` differite al primo utilizzo dei metodi cache (`storeInCache`, `deleteFromCache`).
+   - *Fix:* Aggiungere nel costruttore di `AbstractGenericService`: `this.cacheManager = Objects.requireNonNull(cacheManager, "cacheManager must be not null");`
 
 ---

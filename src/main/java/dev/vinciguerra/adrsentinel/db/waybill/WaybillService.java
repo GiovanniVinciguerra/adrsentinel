@@ -7,7 +7,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-
 import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -59,7 +58,7 @@ public class WaybillService extends AbstractGenericService  {
 	protected WaybillService(WaybillRepository waybillRepository, TemplateEngine templateEngine, ShipmentService shipmentService,
 			VehicleSnapshotService vehicleSnapshotService, DriverSnapshotService driverSnapshotService, CustomerSnapshotService customerSnapshotService,
 			ShipmentItemService shipmentItemService, CacheManager cacheManager) {
-		super(cacheManager);
+		super(Objects.requireNonNull(cacheManager, "cacheManager must be not null"));
 		this.waybillRepository = Objects.requireNonNull(waybillRepository, "waybillRepository must not be null.");
 		this.templateEngine = Objects.requireNonNull(templateEngine, "templateEngine must not be null.");
 		this.shipmentService = Objects.requireNonNull(shipmentService, "shipmentService must not be null.");

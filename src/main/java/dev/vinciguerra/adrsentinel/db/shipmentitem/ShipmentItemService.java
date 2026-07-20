@@ -2,7 +2,6 @@ package dev.vinciguerra.adrsentinel.db.shipmentitem;
 
 import java.util.List;
 import java.util.Objects;
-
 import org.hibernate.LazyInitializationException;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
@@ -65,7 +64,7 @@ public class ShipmentItemService extends AbstractGenericService {
 	 * @param cacheManager il gestore delle cache (es. Caffeine) passato alla superclasse.
 	 */
 	public ShipmentItemService(ShipmentItemRepository shipmentItemRepository, ShipmentService shipmentService, OnuNumberService onuNumberService, CacheManager cacheManager) {
-		super(cacheManager);
+		super(Objects.requireNonNull(cacheManager, "cacheManager must be not null"));
 		this.shipmentItemRepository = Objects.requireNonNull(shipmentItemRepository, "shipmentItemRepository must not be null.");
 		this.shipmentService = Objects.requireNonNull(shipmentService, "shipmentService must not be null.");
 		this.onuNumberService = Objects.requireNonNull(onuNumberService, "onuNumberService must not be null.");

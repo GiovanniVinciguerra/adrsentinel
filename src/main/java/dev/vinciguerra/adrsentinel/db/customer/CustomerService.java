@@ -2,7 +2,6 @@ package dev.vinciguerra.adrsentinel.db.customer;
 
 import java.util.List;
 import java.util.Objects;
-
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -44,7 +43,7 @@ public class CustomerService extends AbstractGenericService {
 	 * @param cacheManager Il gestore della cache (es. Caffeine) propagato alla superclasse per le operazioni manuali.
 	 */
 	protected CustomerService(CustomerRepository customerRepository, CacheManager cacheManager) {
-		super(cacheManager);
+		super(Objects.requireNonNull(cacheManager, "cacheManager must be not null"));
 		this.customerRepository = Objects.requireNonNull(customerRepository, "customerRepository must be not null.");
 	}
 	
@@ -55,9 +54,12 @@ public class CustomerService extends AbstractGenericService {
 	 * @param vatNumber La Partita IVA (Business Key) del cliente da ricercare.
 	 * @return L'entità {@link Customer} associata univocamente alla Partita IVA fornita.
 	 * @throws ResourceNotFoundException Se nessun record corrisponde alla Partita IVA indicata.
+	 * @throws IllegalArgumentException Se la partita iva è {@code null} oppure {@code blank}.
 	 */
 	@Cacheable(value = CaffeineCacheConfiguration.CUSTOMER_BY_VAT_NUMBER_CACHE, key = "#vatNumber")
 	public Customer getByVatNumber(String vatNumber) {
+		if (vatNumber == null || vatNumber.isBlank())
+			throw new IllegalArgumentException("vatNumber cannot be null or blank");
 		logger.info("[DataBase CALL] Searching for the Customer by vatNumber: {}", vatNumber);
 		return customerRepository.findByVatNumber(vatNumber)
 			.orElseThrow(() -> new ResourceNotFoundException("Customer not found: " + vatNumber));
@@ -72,6 +74,8 @@ public class CustomerService extends AbstractGenericService {
 	 */
 	@Cacheable(value = CaffeineCacheConfiguration.CUSTOMER_BY_COMPANY_NAME_CACHE, key = "#companyName")
 	public List<Customer> getByCompanyName(String companyName) {
+		if(companyName == null || companyName.isBlank())
+			throw new IllegalArgumentException("companyName cannot be null or blank.");
 		logger.info("[DataBase CALL] Searching for the Customer by companyName: {}", companyName);
 		return customerRepository.findByCompanyName(companyName);
 	}
@@ -94,10 +98,20 @@ public class CustomerService extends AbstractGenericService {
 	 * la RAM viene mutata solo se la transazione JPA esegue un Commit con successo.
 	 * @param newCustomer L'entità transiente da persistere.
 	 * @return L'entità consolidata (Managed) arricchita degli identificatori generati.
+	 * @throws IllegalStateException Se la partita esiste già nel DB.
+	 * @throws IllegalArgumentException Se il nuovo Customer è {@code null}, oppure la partita iva del nuovo Customer è 
+	 * {@code null} o {@code blank}.
 	 */
 	@Transactional
-	public Customer save(Customer newCustomer) {
+	public Customer save(Customer newCustomer) throws IllegalArgumentException, IllegalStateException {
+		if (newCustomer == null)
+			throw new IllegalArgumentException("Save aborted: new Customer cannot be null");
+		if (newCustomer.getVatNumber() == null || newCustomer.getVatNumber().isBlank())
+			throw new IllegalArgumentException("Save aborted: vatNumber cannot be null or blank");
 		logger.info("[DataBase CALL] Saving new Customer with Vat Number: {}", newCustomer.getVatNumber());
+		boolean exists = customerRepository.existsByVatNumber(newCustomer.getVatNumber());
+		if(exists)
+			throw new IllegalStateException("Save aborted: already exists a Customer with this vatNumber.");
 		Customer savedCustomer = customerRepository.save(newCustomer);
 		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
 			@Override
@@ -117,9 +131,14 @@ public class CustomerService extends AbstractGenericService {
 	 * @param updateDto Il DTO (Inbound Payload) contenente i nuovi valori anagrafici da sovrascrivere.
 	 * @return L'entità aggiornata e reidratata post-flush.
 	 * @throws ResourceNotFoundException Se la P.IVA bersaglio non esiste a sistema.
+	 * @throws IllegalArgumentException Se il dto è {@code null}, oppure la partita iva al suo interno è {@code null}.
 	 */
 	@Transactional
-	public Customer updateDetailsByVatNumber(CustomerUpdateDTO updateDto) throws ResourceNotFoundException {
+	public Customer updateDetailsByVatNumber(CustomerUpdateDTO updateDto) throws ResourceNotFoundException, IllegalArgumentException {
+		if (updateDto == null)
+			throw new IllegalArgumentException("Update details aborted: updateDto cannot be null");
+		if(updateDto.vatNumber() == null)
+			throw new IllegalArgumentException("Update details aborted: vatNumber cannot be null");
 		logger.info("[DataBase CALL] Updating Customer details with vatNumber: {}", updateDto.vatNumber());
 		Customer customer = customerRepository.findByVatNumber(updateDto.vatNumber())
 			.orElseThrow(() -> new ResourceNotFoundException("Customer not found: " + updateDto.vatNumber()));
@@ -142,9 +161,14 @@ public class CustomerService extends AbstractGenericService {
 	 * @param updateDto Payload isolato contenente il nuovo flag di attività.
 	 * @return L'entità aggiornata post-mutazione logica.
 	 * @throws ResourceNotFoundException Se il target non viene individuato.
+	 * @throws IllegalArgumentException Se il dto di update è {@code null}, oppure se il nuovo status è {@code null}.
 	 */
 	@Transactional
 	public Customer updateActiveStatusByVatNumber(CustomerUpdateActiveStatusDTO updateDto) throws ResourceNotFoundException {
+		if(updateDto == null)
+			throw new IllegalArgumentException("Update aborted: dto cannot be null.");
+		if(updateDto.active() == null)
+			throw new IllegalArgumentException("Update aborted: new status cannot be null.");
 		logger.info("[DataBase CALL] Updating Customer active status with vatNumber: {}", updateDto.vatNumber());
 		Customer customer = customerRepository.findByVatNumber(updateDto.vatNumber())
 			.orElseThrow(() -> new ResourceNotFoundException("Customer not found: " + updateDto.vatNumber()));
@@ -221,8 +245,15 @@ public class CustomerService extends AbstractGenericService {
 	 * le sole proprietà sicure esposte dalla barriera del Controller.
 	 * @param dto Il Data Transfer Object contenente il payload in ingresso.
 	 * @return Un'istanza transiente dell'entità {@link Customer}.
+	 * @throws IllegalArgumentException Se il dto è {@code null};
 	 */
-	public Customer mapToEntity(CustomerRequestDTO dto) {
+	public Customer mapToEntity(CustomerRequestDTO dto) throws IllegalArgumentException {
+		if (dto == null)
+			throw new IllegalArgumentException("CustomerRequestDTO cannot be null.");
+		if (dto.vatNumber() == null || dto.vatNumber().isBlank())
+			throw new IllegalArgumentException("vatNumber cannot be null ora blank.");
+		if (dto.companyName() == null || dto.companyName().isBlank())
+			throw new IllegalArgumentException("companyName cannot be null ora blank.");
 		Customer customer = new Customer();
 		customer.setCompanyName(dto.companyName());
 		customer.setVatNumber(dto.vatNumber());

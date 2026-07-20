@@ -2,7 +2,6 @@ package dev.vinciguerra.adrsentinel.db.adrclass;
 
 import java.util.List;
 import java.util.Objects;
-
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -47,7 +46,7 @@ public class AdrClassService extends AbstractGenericService {
      * @param cacheManager Il gestore della cache di Spring Boot.
      */
 	public AdrClassService(AdrClassRepository adrClassRepository, CacheManager cacheManager) {
-		super(cacheManager);
+		super(Objects.requireNonNull(cacheManager, "cacheManager must be not null"));
 		this.adrClassRepository = Objects.requireNonNull(adrClassRepository, "adrClassRepository must not be null.");
 	}
 	

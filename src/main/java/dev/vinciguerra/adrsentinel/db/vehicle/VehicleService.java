@@ -56,7 +56,7 @@ public class VehicleService extends AbstractGenericService {
 	 * @param cacheManager il gestore della memoria cache configurato nell'applicazione.
 	 */
 	public VehicleService(VehicleRepository vehicleRepository, CacheManager cacheManager) {
-		super(cacheManager);
+		super(Objects.requireNonNull(cacheManager, "cacheManager must be not null"));
 		this.vehicleRepository = Objects.requireNonNull(vehicleRepository, "vehicleRepository must not be null.");
 	}
 	

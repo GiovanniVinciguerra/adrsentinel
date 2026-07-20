@@ -44,7 +44,7 @@ public class CompanyNameValidator implements ConstraintValidator<ValidatorCompan
 	 * </ul>
 	 * </p>
 	 */
-	private final static Pattern COMPANY_NAME_PATTERN = Pattern.compile("^[\\p{L}\\d\\s\\-&.,'()/\"+]+$");
+	private static final Pattern COMPANY_NAME_PATTERN = Pattern.compile("^[\\p{L}\\d\\s\\-&.,'()/\"+]+$");
 	
 	/**
 	 * Esegue l'ispezione della stringa in ingresso per validarne la conformità strutturale 

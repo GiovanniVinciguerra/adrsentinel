@@ -1,7 +1,6 @@
 package dev.vinciguerra.adrsentinel.db.vehicle;
 
 import java.util.Objects;
-
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -44,7 +43,7 @@ public class VehicleSnapshotService extends AbstractGenericService {
 	 * @param cacheManager Il gestore centrale delle cache dell'applicazione (es. Caffeine).
 	 */
 	public VehicleSnapshotService(VehicleSnapshotRepository vehicleSnapshotRepository, CacheManager cacheManager) {
-		super(cacheManager);
+		super(Objects.requireNonNull(cacheManager, "cacheManager must be not null"));
 		this.vehicleSnapshotRepository = Objects.requireNonNull(vehicleSnapshotRepository, "vehicleSnapshotRepository must not be null.");
 	}
 	

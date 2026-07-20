@@ -2,7 +2,6 @@ package dev.vinciguerra.adrsentinel.db.onunumber;
 
 import java.util.List;
 import java.util.Objects;
-
 import org.hibernate.LazyInitializationException;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
@@ -71,7 +70,7 @@ public class OnuNumberService extends AbstractGenericService {
 	 * delegata alla classe astratta base.
 	 */
 	public OnuNumberService(OnuNumberRepository onuNumberRepository, AdrClassService adrClassService, CacheManager cacheManager) {
-		super(cacheManager);
+		super(Objects.requireNonNull(cacheManager, "cacheManager must be not null"));
 		this.onuNumberRepository = Objects.requireNonNull(onuNumberRepository, "onuNumberRepository must not be null.");
 		this.adrClassService = Objects.requireNonNull(adrClassService, "adrClassService must not be null.");
 	}

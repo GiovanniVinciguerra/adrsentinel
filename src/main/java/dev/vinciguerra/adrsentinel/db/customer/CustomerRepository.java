@@ -62,4 +62,35 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
 	 * vuota (mai {@code null}) se nessuna corrispondenza viene trovata.
 	 */
 	List<Customer> findByCompanyName(String companyName);
+	/**
+	 * Verifica l'esistenza di almeno un'entità avente il numero di partita IVA specificato.
+	 * <p>
+	 * Questo metodo sfrutta la query derivata di Spring Data JPA basata sul nome del metodo
+	 * ({@code existsByVatNumber}) per eseguire una verifica di esistenza senza recuperare
+	 * l'intera entità dal database, risultando generalmente più efficiente rispetto
+	 * all'utilizzo di metodi che caricano l'oggetto completo.
+	 * </p>
+	 * <p>
+	 * Il confronto viene effettuato sul valore del campo {@code vatNumber} dell'entità
+	 * gestita dal repository.
+	 * </p>
+	 * <h2>Comportamento</h2>
+	 * <ul>
+	 * <li>Restituisce {@code true} se esiste almeno un record con la partita IVA indicata.</li>
+	 * <li>Restituisce {@code false} se nessun record possiede la partita IVA specificata.</li>
+	 * </ul>
+	 * <h2>Note</h2>
+	 * <ul>
+	 * <li>Il comportamento in caso di valore {@code null} dipende dalla configurazione
+     * del provider JPA e dal mapping dell'entità. È consigliato invocare il metodo
+     * con un valore non {@code null}.</li>
+     * <li>Qualora il campo {@code vatNumber} sia vincolato come univoco nel database,
+     * il metodo verifica semplicemente l'esistenza dell'unico record corrispondente.</li>
+	 * </ul>
+	 * @param vatNumber la partita IVA da verificare; dovrebbe essere un valore non
+	 * {@code null} e conforme al formato previsto dall'applicazione.
+	 * @return {@code true} se esiste almeno un'entità con la partita IVA specificata;
+	 * {@code false} altrimenti.
+	 */
+	boolean existsByVatNumber(String vatNumber);
 }
