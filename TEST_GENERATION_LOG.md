@@ -350,3 +350,52 @@ Questi test sono stati scritti appositamente per **FALLIRE** finche' lo sviluppa
    - *Fix:* Aggiungere nel costruttore di `AbstractGenericService`: `this.cacheManager = Objects.requireNonNull(cacheManager, "cacheManager must be not null");`
 
 ---
+
+## Sessione del 2026-07-20T16:10+02:00
+
+**Classe Analizzata:** Customer.java
+**File Generato:** CustomerTests.java
+**Righe Generate:** 1440
+**Test Totali:** 63 (di cui 10 in FASE RED intenzionale)
+**Stack:** JUnit 5 Jupiter · AssertJ · Java Reflection (per lifecycle hook privati `@PrePersist`/`@PreUpdate`)
+**Isolamento:** Puro — nessun contesto Spring, nessun H2, nessun ORM avviato.
+
+---
+
+### Metodi Coperti
+
+- `getId()` / `setId(Long)` — 3 test (Happy, Transiente, Null-accept)
+- `getCompanyName()` / `setCompanyName(String)` — 2 test (Happy, Null-accept)
+- `getVatNumber()` / `setVatNumber(String)` — 2 test (Happy, Null-accept)
+- `getLegalAddress()` / `setLegalAddress(String)` — 2 test (Happy, Null-accept)
+- `isActive()` / `setActive(boolean)` — 3 test (Happy, Soft-delete, Default)
+- `CustomerRole` (Enum) — 5 test (SENDER, RECEIVER, CARRIER, fail-fast valueOf)
+- `normalize()` (privato, via reflection) — 15 test (Title case, trattini/apostrofi, regex vatNumber, newline/tab address, spazi multipli, PDF paste, stringhe gia pulite, idempotenza)
+- `equals(Object)` — 8 test (Riflessività, Simmetria, Transitività, Null-safety, Type-mismatch, Identità su ID diversi)
+- `hashCode()` — 4 test (Stabilità, Distribuzione su vatNumber, Null-safety)
+- `toString()` — 4 test (Presenza campi, Formato esatto, Entità transiente)
+- `HashSet` / `HashMap` Integration — 5 test (Deduplicazione Business Key, Lookup)
+
+---
+
+### Vulnerabilita' / Bug Rilevati (FASE RED TDD)
+
+Questi test sono stati scritti appositamente per **FALLIRE** finche' lo sviluppatore non implementa le correzioni indicate. Sono marcati con `[TDD-RED]` nel Javadoc e con suffisso `_RED` nel nome del metodo.
+
+1. **[CRITICA] `normalize()` causa NullPointerException per `companyName`, `vatNumber` o `legalAddress` null**
+   - *Falla:* Il metodo accede direttamente a questi campi senza eseguire check pre-condizionali prima del trim/replaceAll. Una istanza di Customer con uno di questi campi `null` genera una NPE a runtime (HTTP 500) prima del flush JPA.
+   - *Fix:* Inserire i controlli guard in cima al metodo `normalize()`: `if (companyName == null) throw new IllegalArgumentException("companyName cannot be null");`, e analogamente per gli altri campi.
+
+2. **[ALTA] `normalize()` accetta campi vuoti dopo la normalizzazione (post-trimming)**
+   - *Falla:* Se `companyName` è di soli spazi, se `vatNumber` è fatto solo di caratteri di punteggiatura (regex rimossi), o se `legalAddress` è di soli whitespace, i processi di pulizia li riducono a stringhe vuote (`""`). Tali stringhe passano, permettendo il salvataggio di record logicamente corrotti.
+   - *Fix:* Inserire i controlli post-normalizzazione: `if (companyName.isBlank()) throw new IllegalArgumentException("companyName cannot be blank after normalization");`, ecc.
+
+3. **[MEDIA] `normalize()` non valida la lunghezza massima dei campi**
+   - *Falla:* Dopo le operazioni, le stringhe potrebbero comunque superare le lunghezze massime definite nei vincoli JPA (`@Column(length = ...)`). Ad esempio, `vatNumber` (30) o `companyName`/`legalAddress` (255), generando un'eccezione SQL opaca.
+   - *Fix:* Aggiungere `if (vatNumber.length() > 30) throw new IllegalArgumentException(...)` alla fine di `normalize()`, ecc.
+
+4. **[MEDIA] `equals()` considera identici due Customer con `vatNumber = null`**
+   - *Falla:* `Objects.equals(null, null)` restituisce `true`. Due entità transienti (nessun ID) e senza Business Key vengono considerate identiche, collassando gli `HashSet` o sovrascrivendo l'`HashMap` inaspettatamente.
+   - *Fix:* Aggiungere all'inizio di `equals()`: `if (this.vatNumber == null) return false;`.
+
+---

@@ -143,21 +143,35 @@ public class Customer {
 	 * documenti PDF generati (es. lettere di vettura).</li>
 	 * </ul>
 	 * </p>
+	 * @throws IllegalArgumentException Se companyName, vatNumber e legalAddress sono {@code null}, oppure se sono {@code blank} o 
+	 * superano la loro lunghezza massima dopo la sanificazione.
 	 */
 	@PrePersist
 	@PreUpdate
-	private void normalize() {
+	private void normalize() throws IllegalArgumentException {
+		if(companyName == null)
+			throw new IllegalArgumentException("companyName cannot be null.");
+		if(vatNumber == null)
+			throw new IllegalArgumentException("vatNumber cannot be null.");
+		if(legalAddress == null)
+			throw new IllegalArgumentException("legalAddress cannot be null.");
 		companyName = WordUtils.capitalizeFully(
 			companyName.trim().replaceAll("\\s+", " "),
 			' ',
 			'-',
 			'\''
 		);
+		if(companyName.isBlank() || companyName.length() > 255)
+			throw new IllegalArgumentException("companyName cannot be blank or exceed 255 characters after normalization");
 		vatNumber = vatNumber.replaceAll("[\\s,\\.\\-/_]+", "").toUpperCase();
+		if(vatNumber.isBlank() || vatNumber.length() > 30)
+			throw new IllegalArgumentException("vatNumber cannot be blank or exceed 30 characters after normalization");
 		legalAddress = legalAddress
 			.replaceAll("[\\r\\n\\t]+", " ")
 			.replaceAll(" {2,}", " ")
-			.trim();;
+			.trim();
+		if(legalAddress.isBlank() || legalAddress.length() > 255)
+			throw new IllegalArgumentException("legalAddress cannot be blank or exceed 255 characters after normalization");
 	}
 	
 	/**
@@ -188,6 +202,8 @@ public class Customer {
 		if (getClass() != obj.getClass())
 			return false;
 		Customer other = (Customer) obj;
+		if(this.vatNumber == null)
+			return false;
 		return Objects.equals(vatNumber, other.vatNumber);
 	}
 
