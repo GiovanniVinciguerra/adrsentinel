@@ -399,3 +399,39 @@ Questi test sono stati scritti appositamente per **FALLIRE** finche' lo sviluppa
    - *Fix:* Aggiungere all'inizio di `equals()`: `if (this.vatNumber == null) return false;`.
 
 ---
+
+## Sessione del 2026-07-21T12:30+02:00
+
+**Classe Analizzata:** CustomerSnapshotService.java
+**File Generato:** CustomerSnapshotServiceTests.java
+**Righe Generate:** 296
+**Test Totali:** 8 (5 GREEN + 3 RED-TDD)
+**Stack:** JUnit 5 Jupiter · Mockito · AssertJ · TransactionSynchronizationManager
+**Isolamento:** Puro — nessun contesto Spring, nessun H2, nessun ORM avviato. Istanze create via factory.
+
+---
+
+### Metodi Coperti
+
+- `CustomerSnapshotService(CustomerSnapshotRepository, CacheManager)` — Costruttore (2 test: 1 HP + 1 FP)
+- `getByShipmentId(Long)` — 3 test (1 HP + 1 EDGE + 1 RED-TDD)
+- `save(CustomerSnapshot)` — 3 test (1 HP + 2 RED-TDD)
+- `syncCacheAfterInsert(CustomerSnapshot)` — (privato) Coperto indirettamente tramite validazione Post-Commit.
+
+---
+
+### Vulnerabilita' / Bug Rilevati (FASE RED TDD)
+
+Questi test sono stati scritti appositamente per **FALLIRE** finche' lo sviluppatore non implementa le correzioni indicate. Sono marcati con `[TDD-RED]` nel Javadoc.
+
+1. **[CRITICA] Assenza di null-check in `getByShipmentId(Long)`**
+   - *Falla:* Il metodo non valida l'input `id` prima di invocare il repository. Una chiamata con `id = null` passa silenziosamente e delega il problema a Spring Data JPA, portando potenzialmente a un'eccezione infrastrutturale opaca.
+   - *Fix:* Inserire all'inizio del metodo: `if (id == null) throw new IllegalArgumentException("Shipment ID cannot be null");`
+
+2. **[CRITICA] Assenza di null-check su entità in `save(CustomerSnapshot)`**
+   - *Falla:* Il metodo esegue il log invocando `newCustomerSnapshot.getVatNumberSnap()` senza prima verificare che l'entità non sia null, causando `NullPointerException` se l'input è nullo.
+   - *Fix:* Inserire all'inizio del metodo: `if (newCustomerSnapshot == null) throw new IllegalArgumentException("CustomerSnapshot cannot be null");`
+
+3. **[ALTA] Mancanza di validazione strutturale dell'entità Snapshot in `save`**
+   - *Falla:* Il metodo non valida che l'entità sia associata a una `Shipment`. Nella fase asincrona (Post-Commit), la riga `savedCustomerSnapshot.getShipment().getId()` provocherà una `NullPointerException` differita se la spedizione è assente, corrompendo la sincronizzazione e causando il fallimento (FATAL error logging) dell'orchestrazione cache della superclasse.
+   - *Fix:* Inserire: `if (newCustomerSnapshot.getShipment() == null) throw new IllegalArgumentException("Shipment associated to snapshot cannot be null");`

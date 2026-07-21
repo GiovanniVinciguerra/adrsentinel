@@ -2,7 +2,6 @@ package dev.vinciguerra.adrsentinel.db.customer;
 
 import java.util.List;
 import java.util.Objects;
-
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -55,9 +54,12 @@ public class CustomerSnapshotService extends AbstractGenericService {
 	 * @return Una lista di entità {@link CustomerSnapshot} contenenti le anagrafiche cristallizzate. Ritorna una lista vuota in 
 	 * assenza di match.
 	 * @throws ResourceNotFoundException (Eventualità predisposta per integrazioni di validazione custom a monte della chiamata).
+	 * @throws IllegalArgumentException Se l'ID in ingresso è {@code null}.
 	 */
 	@Cacheable(value = CaffeineCacheConfiguration.CUSTOMER_SNAPSHOT_BY_SHIPMENT_ID_CACHE, key = "#id")
-	public List<CustomerSnapshot> getByShipmentId(Long id) throws ResourceNotFoundException {
+	public List<CustomerSnapshot> getByShipmentId(Long id) throws ResourceNotFoundException, IllegalArgumentException {
+		if(id == null)
+			throw new IllegalArgumentException("Shipment ID cannot be null");
 		logger.info("[DataBase CALL] Searching for the CustomerSnapshot by Shipment.Id: {}", id);
 		return customerSnapshotRepository.findByShipment_Id(id);
 	}
@@ -70,9 +72,17 @@ public class CustomerSnapshotService extends AbstractGenericService {
 	 * della transazione con successo, garantendo la coerenza strutturale tra disco e RAM.
 	 * @param newCustomerSnapshot L'entità transiente generata dal factory method al momento della partenza del viaggio.
 	 * @return L'entità consolidata (Managed) arricchita dell'identificatore autogenerato dal database.
+	 * @throws IllegalArgumentException Se il nuovo snapshot di Customer è {@code null}, oppure contiene un vatNumber {@code null} o 
+	 * {@code blank}, oppure se la nuova istanza dello snapshot non è opportunamente collegata a un'istanza di {@code Shipment (= null)}.
 	 */
 	@Transactional
-	public CustomerSnapshot save(CustomerSnapshot newCustomerSnapshot) {
+	public CustomerSnapshot save(CustomerSnapshot newCustomerSnapshot) throws IllegalArgumentException {
+		if(newCustomerSnapshot == null)
+			throw new IllegalArgumentException("Save aborted: CustomerSnapshot cannot be null");
+		if(newCustomerSnapshot.getVatNumberSnap() == null || newCustomerSnapshot.getVatNumberSnap().isBlank())
+			throw new IllegalArgumentException("Save aborted: vatNumber cannot be null or blank.");
+		if(newCustomerSnapshot.getShipment() == null)
+			throw new IllegalArgumentException("Save aborted: Shipment associated to snapshot cannot be null.");
 		logger.info("[DataBase CALL] Saving new CustomerSnapshot with vat number: {}", newCustomerSnapshot.getVatNumberSnap());
 		CustomerSnapshot savedCustomerSnapshot = customerSnapshotRepository.save(newCustomerSnapshot);
 		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
