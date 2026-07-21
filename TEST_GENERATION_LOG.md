@@ -435,3 +435,36 @@ Questi test sono stati scritti appositamente per **FALLIRE** finche' lo sviluppa
 3. **[ALTA] Mancanza di validazione strutturale dell'entità Snapshot in `save`**
    - *Falla:* Il metodo non valida che l'entità sia associata a una `Shipment`. Nella fase asincrona (Post-Commit), la riga `savedCustomerSnapshot.getShipment().getId()` provocherà una `NullPointerException` differita se la spedizione è assente, corrompendo la sincronizzazione e causando il fallimento (FATAL error logging) dell'orchestrazione cache della superclasse.
    - *Fix:* Inserire: `if (newCustomerSnapshot.getShipment() == null) throw new IllegalArgumentException("Shipment associated to snapshot cannot be null");`
+
+---
+
+## Sessione del 2026-07-21T18:02+02:00
+
+**Classe Analizzata:** CustomerSnapshot.java
+**File Generato:** CustomerSnapshotTests.java
+**Righe Generate:** 300
+**Test Totali:** 12 (10 GREEN + 2 RED-TDD)
+**Stack:** JUnit 5 Jupiter · Mockito · AssertJ
+**Isolamento:** Puro — test dell'entità di dominio senza avvio del contesto JPA né di database relazionali (No H2). Istanziazione tramite Mock di dipendenze.
+
+---
+
+### Metodi Coperti
+
+- `CustomerSnapshot(Customer, CustomerRole)` — Costruttore protetto (3 test: 1 FP, 1 HP, 1 RED-TDD)
+- `fromCustomers(Shipment)` — Factory method (4 test: 1 HP, 2 FP, 1 RED-TDD)
+- `equals(Object)` & `hashCode()` — Uguaglianza su Business Key (3 test)
+
+---
+
+### Vulnerabilita' / Bug Rilevati (FASE RED TDD)
+
+Questi test sono stati scritti appositamente per **FALLIRE** finche' lo sviluppatore non implementa le correzioni indicate nel codice sorgente. Sono documentati come `RED TEST`.
+
+1. **[ALTA] Assenza di validazione null-check su campi copiati dal Master nel Costruttore**
+   - *Falla:* Il costruttore copia i campi `companyName`, `vatNumber` e `legalAddress` dal `Customer` senza verificarne la validità. Se il customer passato ha campi incompleti, questi vengono trasferiti silenziosamente nello Snapshot, pur essendo colonne fisiche non annullabili (nullable=false) sul database, portando ad un potenziale DataIntegrityViolationException a livello di JPA persistenza, in ritardo rispetto all'errore logico.
+   - *Fix:* Inserire controlli di validità sui campi estratti dal Customer all'interno del costruttore. Esempio: `if(customer.getVatNumber() == null) throw new IllegalArgumentException("VatNumber cannot be null");`
+
+2. **[MEDIA] Assenza di gestione elementi nulli nella mappa dei Customer fornita da Shipment in `fromCustomers`**
+   - *Falla:* Se il metodo `shipment.getCustomerAsMap()` restituisce una mappa che contiene una lista con elementi nulli, lo stream Java genererà un'eccezione a runtime. Anche se `Shipment` tenta di normalizzare internamente la mappa, il parametro in `fromCustomers` può provenire da mock o implementazioni che restituiscono dati corrotti. Manca gestione difensiva in `CustomerSnapshot.fromCustomers`.
+   - *Fix:* Aggiungere `filter(Objects::nonNull)` nello stream in modo da difendere la factory creation dai valori passati in modo erroneo.

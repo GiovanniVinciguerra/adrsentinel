@@ -95,13 +95,20 @@ public class CustomerSnapshot {
 	 * e congelati nei rispettivi campi con suffisso "Snap", recidendo il legame vitale con l'anagrafica mutabile.
 	 * @param customer L'entità master sorgente da cui estrarre i dati anagrafici.
 	 * @param role Il ruolo logistico (es. SENDER, RECEIVER) che l'azienda ricopre per questa specifica spedizione.
-	 * @throws IllegalArgumentException Se il cliente o il ruolo forniti risultano nulli, impedendo la creazione di record malformati.
+	 * @throws IllegalArgumentException Se il cliente o il ruolo forniti risultano {@code null} , impedendo la creazione di record malformati, oppure 
+	 * se le proprietà del cliente sono {@code null}.
 	 */
 	protected CustomerSnapshot(Customer customer, CustomerRole role) throws IllegalArgumentException {
 		if(customer == null)
 			throw new IllegalArgumentException("Unable to create customer snapshot. Customer is null.");
-		else if(role == null)
+		if(role == null)
 			throw new IllegalArgumentException("Unable to create customer snapshot. Role is null.");
+		if(customer.getCompanyName() == null)
+			throw new IllegalArgumentException("Unable to create customer snapshot. CompanyName cannot be null.");
+		if(customer.getVatNumber() == null)
+			throw new IllegalArgumentException("Unable to create customer snapshot. VatNumber cannot be null.");
+		if(customer.getLegalAddress() == null)
+			throw new IllegalArgumentException("Unable to create customer snapshot. LegalAddress cannot be null.");
 		this.companyNameSnap = customer.getCompanyName();
 		this.vatNumberSnap = customer.getVatNumber();
 		this.legalAddressSnap = customer.getLegalAddress();
@@ -118,15 +125,17 @@ public class CustomerSnapshot {
 	 * @param shipment L'entità Spedizione di cui si intendono cristallizzare gli attori logistici.
 	 * @return Un {@link Set} di snapshot popolati, mutuamente esclusivi per ruolo e Partita IVA, pronti per la persistenza.
 	 * @throws IllegalArgumentException Se la spedizione è nulla, o se non è presente alcuna mappa di clienti ad essa associata.
+	 * @throws IllegalStateException Se il set di snapshot, dopo la sua costruzione, risulta vuoto {@code isEmpty()}.
 	 */
-	public static Set<CustomerSnapshot> fromCustomers(Shipment shipment) throws IllegalArgumentException {
+	public static Set<CustomerSnapshot> fromCustomers(Shipment shipment) throws IllegalArgumentException, IllegalStateException {
 		if(shipment == null)
 			throw new IllegalArgumentException("Unable to create customer snapshot. Shipment is null.");
 		Map<CustomerRole, List<Customer>> customers = shipment.getCustomerAsMap();
 		if(customers == null || customers.isEmpty())
 			throw new IllegalArgumentException("Unable to create multiple customer snapshot. Customers map is null or empty.");
-		return customers.entrySet()
+		Set<CustomerSnapshot> customersSnap = customers.entrySet()
 			.stream()
+			.filter(Objects::nonNull)
 			.flatMap(entry -> entry.getValue().stream()
 				.map(customer -> {
 					CustomerSnapshot customerSnap = new CustomerSnapshot(customer, entry.getKey());
@@ -135,6 +144,9 @@ public class CustomerSnapshot {
 				})
 			)
 			.collect(Collectors.toSet());
+		if(customersSnap.isEmpty())
+			throw new IllegalStateException("Unable to create multiple customer snapshot. The result set is empty.");
+		return customersSnap;
 	}
 
 	public Long getId() {
@@ -186,6 +198,8 @@ public class CustomerSnapshot {
 		if (getClass() != obj.getClass())
 			return false;
 		CustomerSnapshot other = (CustomerSnapshot) obj;
+		if(this.vatNumberSnap == null)
+			return false;
 		return Objects.equals(vatNumberSnap, other.vatNumberSnap);
 	}
 
