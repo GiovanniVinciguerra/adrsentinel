@@ -468,3 +468,44 @@ Questi test sono stati scritti appositamente per **FALLIRE** finche' lo sviluppa
 2. **[MEDIA] Assenza di gestione elementi nulli nella mappa dei Customer fornita da Shipment in `fromCustomers`**
    - *Falla:* Se il metodo `shipment.getCustomerAsMap()` restituisce una mappa che contiene una lista con elementi nulli, lo stream Java genererà un'eccezione a runtime. Anche se `Shipment` tenta di normalizzare internamente la mappa, il parametro in `fromCustomers` può provenire da mock o implementazioni che restituiscono dati corrotti. Manca gestione difensiva in `CustomerSnapshot.fromCustomers`.
    - *Fix:* Aggiungere `filter(Objects::nonNull)` nello stream in modo da difendere la factory creation dai valori passati in modo erroneo.
+
+
+---
+
+## Sessione del 2026-07-21T23:56:00+02:00
+
+**Classe Analizzata:** DispatchService.java
+**File Generato:** DispatchServiceTests.java
+**Righe Generate:** 494
+**Test Totali:** 10 (5 GREEN + 5 RED-TDD)
+**Stack:** JUnit 5 Jupiter · Mockito · AssertJ
+**Isolamento:** Puro — nessun contesto Spring, nessun H2, nessun ORM avviato.
+
+---
+
+### Metodi Coperti
+
+- `vehicleDispatcher(VehicleDispatchRequestDTO)` — 5 test (1 Happy Path, 1 Failure Path (ResourceNotFound), 3 RED-TDD)
+- `driverDispatcher(DriverDispatchRequestDTO)` — 5 test (2 Happy Path, 1 Failure Path (ResourceNotFound), 2 RED-TDD)
+
+---
+
+### Vulnerabilita' / Bug Rilevati (FASE RED TDD)
+
+Questi test sono stati scritti appositamente per **FALLIRE** finche' lo sviluppatore non implementa le correzioni indicate. Sono marcati con `[TDD-RED]` nel Javadoc.
+
+1. **[CRITICA] Bug di immutabilita' nella rimozione veicoli (UnsupportedOperationException)**
+   - *Falla:* In `vehicleDispatcher`, i veicoli da assegnare vengono filtrati in una lista immutabile tramite `.toList()`. In caso di cluster multipli che richiedono piu' veicoli, il tentativo di rimuovere un veicolo gia' assegnato tramite `vehiclesToAssign.remove(i)` lancerà una `UnsupportedOperationException`, bloccando il Dispatcher.
+   - *Fix:* Sostituire `.toList()` con una Collector che restituisce una lista mutabile (es. `.collect(Collectors.toList())` o avvolgere il risultato in `new ArrayList<>()`).
+
+2. **[ALTA] Auto-Unboxing NullPointerException per categoria di trasporto in `calculateAdrPoints`**
+   - *Falla:* La proprieta' `transportCategory` su `OnuNumber` e' nullable (tipo `Integer`). In `calculateAdrPoints`, viene assegnata a una variabile di tipo primitivo `int`, causando un'eccezione silente di auto-unboxing (NPE) qualora il valore sul database sia null.
+   - *Fix:* Verificare la non nullita' prima dell'unboxing oppure assegnare a un tipo wrapper `Integer` e implementare un fallback o un blocco.
+
+3. **[MEDIA] Assenza di null-guard sui payload DTO in `vehicleDispatcher` e `driverDispatcher`**
+   - *Falla:* Entrambi i metodi assumono che le request in ingresso siano non-null. In particolare, `request.items()` e `request.routeUUID()` scatenano NPE al livello Service se il request e' nullo.
+   - *Fix:* Introdurre Guard Clauses preliminari: `if (request == null) throw new IllegalArgumentException("Payload cannot be null");`
+
+4. **[MEDIA] Assenza di gestione logica per rotte inesistenti in `driverDispatcher`**
+   - *Falla:* In `driverDispatcher`, l'invocazione `shipmentRouteService.getByRouteUUID()` restituisce null se l'UUID non viene trovato. Successivamente, si tenta di calcolare `route.getEtaMinutes()`, lanciando `NullPointerException` invece che una controllata `ResourceNotFoundException`.
+   - *Fix:* Controllare esplicitamente: `if (route == null) throw new ResourceNotFoundException("Shipment route not found for given UUID");`

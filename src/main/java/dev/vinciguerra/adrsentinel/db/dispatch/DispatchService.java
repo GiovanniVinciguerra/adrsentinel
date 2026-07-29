@@ -116,9 +116,12 @@ public class DispatchService extends AbstractGenericService {
 	 * @return Un {@link VehicleDispatchResponseDTO} contenente la lista dei viaggi programmati (dispatches), ognuno assegnato a un veicolo univoco.
 	 * @throws ResourceNotFoundException Se una merce non è censita, se il carico supera la capacità del mezzo più grande, 
 	 * o se la flotta idonea si esaurisce prima di aver allocato tutti i cluster (Out of Resources).
+	 * @throws IllegalArgumentException se il payload della richiesta è {@code null}.
 	 */
 	@Transactional(readOnly = true)
-	public VehicleDispatchResponseDTO vehicleDispatcher(VehicleDispatchRequestDTO request) throws ResourceNotFoundException {
+	public VehicleDispatchResponseDTO vehicleDispatcher(VehicleDispatchRequestDTO request) throws ResourceNotFoundException, IllegalArgumentException {
+		if(request == null)
+			throw new IllegalArgumentException("Payload cannot be null for a dispatcher request.");
 		List<OnuItemRequestDTO> itemsToShip = request.items();
 		// FASE 1 Arrichimento dati e costruzione grafo
 		List<EnrichedOnuItem> enrichedOnuItems = new ArrayList<EnrichedOnuItem>();
@@ -169,7 +172,7 @@ public class DispatchService extends AbstractGenericService {
 			List<Vehicle> vehiclesToAssign = vehicles
 				.stream()
 				.filter(vehicle -> vehicle.isActive() && !vehicle.isInTranit())
-				.toList();
+				.collect(Collectors.toList());
 			if(vehiclesToAssign == null || vehiclesToAssign.isEmpty())
 				throw new ResourceNotFoundException("No vehicle found with payload capacity: " + clusterTotalWeight_kg);
 			if(!alreadyAssignedVehicles.isEmpty()) {
@@ -206,16 +209,19 @@ public class DispatchService extends AbstractGenericService {
 	 * @param request I parametri del viaggio e del veicolo già validato.
 	 * @return Un {@link DriverDispatchResponseDTO} con 1 o 2 autisti assegnati.
 	 * @throws ResourceNotFoundException Se la flotta autisti idonea è esaurita oppure se non trova una risorsa richiesta.
+	 * @throws IllegalArgumentException Se il payload della richiesta è {@code null}.
 	 */
 	@Transactional(readOnly = true)
-	public DriverDispatchResponseDTO driverDispatcher(DriverDispatchRequestDTO request) {
+	public DriverDispatchResponseDTO driverDispatcher(DriverDispatchRequestDTO request) throws ResourceNotFoundException, IllegalArgumentException {
+		if (request == null)
+	        throw new IllegalArgumentException("Payload cannot be null for a dispatcher request.");
 		ShipmentRoute route = shipmentRouteService.getByRouteUUID(request.routeUUID());
 		// 1. Calcolo del numero di autisti (Relaxed Rule: 2 autisti se durata viaggio > 10 ore)
 		int requiredDriversCount = route.getEtaMinutes() > 600 ? 2 : 1;
 		// 1.5 Ottiene le AdrClass
 		Set<AdrClass> adrClasses = request.adrClasses()
 			.stream()
-			.map(adrClassCode -> adrClassService.getByClassCode(adrClassCode))
+			.map(adrClassService::getByClassCode)
 			.collect(Collectors.toSet());
 		// 1.6 Estrapola i classCode da ogni AdrClass
 		Set<String> adrClassCodes = adrClasses.stream()
@@ -277,12 +283,12 @@ public class DispatchService extends AbstractGenericService {
 	private boolean isDriverCompliant(Driver driver, boolean requiresCqc, Set<DriverApproval> requiredApprovals) {
 		LocalDate today = LocalDate.now();
 		// Patente scaduta?
-		if(driver.getLicenseExpireDate().isAfter(today))
+		if(driver.getLicenseExpireDate().isBefore(today))
 			return false;
 		// Serve la CQC?
 		if(requiresCqc) {
 			// La CQC è posseduta oppure è scaduta?
-			if(driver.getCqcExpireDate() == null || driver.getCqcExpireDate().isAfter(today))
+			if(driver.getCqcExpireDate() == null || driver.getCqcExpireDate().isBefore(today))
 				return false;
 		}
 		if(!requiredApprovals.isEmpty()) {
@@ -328,14 +334,17 @@ public class DispatchService extends AbstractGenericService {
 	 * <li><b>Categoria 3:</b> Moltiplicatore <b>x1</b> (es. liquidi infiammabili standard, vernici).</li>
 	 * <li><b>Categoria 4:</b> Moltiplicatore <b>x0</b>. La merce non concorre al conteggio dei punti (es. batterie scariche).</li>
 	 * </ul>
+	 * <p>
+	 * <b>Attenzione</b>: se la categoria di trasporto dovesse essere {@code null}, quest'ultima verrà assimilata come {@code 0} (categoria massima).
+	 * </p>
 	 * @param onu L'entità anagrafica {@link OnuNumber} che definisce la categoria di trasporto e il codice identificativo della sostanza.
 	 * @param netWeight_kg La quantità netta della sostanza trasportata, espressa in chilogrammi o litri.
 	 * @return I punti ADR calcolati per la quantità specificata. Se la merce appartiene alla categoria 0, restituisce 9999.
 	 * @throws IllegalArgumentException Se il database contiene un valore di categoria di trasporto non previsto dalla norma (diverso da 0, 1, 2, 3, 4).
 	 */
 	private int calculateAdrPoints(OnuNumber onu, int netWeight_kg) throws IllegalArgumentException {
-		int category = onu.getTransportCategory();
-		if(category == 0)
+		Integer category = onu.getTransportCategory();
+		if(category == null || category == 0)
 			return 9999;
 		int multiplier = switch(category) {
 			case 1 -> SPECIAL_MULTIPLIER_ONU.contains(onu.getOnuCode()) ? 50 : 20;
@@ -385,8 +394,11 @@ public class DispatchService extends AbstractGenericService {
 	 * @param enrichedOnuItem Il dettaglio dell'articolo ONU.
 	 * @param isExempt {@code true} se si applica l'esenzione ex Cap 1.1.3.6.
 	 * @return {@code true} se il veicolo possiede la struttura e le certificazioni (FL/AT/EX) per il trasporto.
+	 * @throws IllegalArgumentException Se la categoria del veicolo è {@code null}.
 	 */
-	private boolean isVehicleCompliantForSingleItem(Vehicle vehicleToCheck, EnrichedOnuItem enrichedOnuItem, boolean isExempt) {
+	private boolean isVehicleCompliantForSingleItem(Vehicle vehicleToCheck, EnrichedOnuItem enrichedOnuItem, boolean isExempt) throws IllegalArgumentException {
+		if(vehicleToCheck.getVehicleCategory() == null)
+			throw new IllegalArgumentException("Vehicle category cannot be null.");
 		TransportMode mode = enrichedOnuItem.mode();
 		VehicleType vType = vehicleToCheck.getVehicleCategory().getVehicleType();
 		LoadType vLoadType = vehicleToCheck.getVehicleCategory().getLoadType();

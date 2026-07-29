@@ -63,7 +63,7 @@ public record DriverResponseDTO(String fullName, String taxCode, String phoneNum
 			entity.getLicenseExpireDate().toString(),
 			entity.getCqcExpireDate().toString(),
 			entity.getDriverApprovals().stream()
-				.map(approval -> approval.name())
+				.map(Enum::name)
 				.collect(Collectors.toSet()),
 			entity.isActive(),
 			entity.isInTransit(),
