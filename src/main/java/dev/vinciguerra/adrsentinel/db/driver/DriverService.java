@@ -1,6 +1,8 @@
 package dev.vinciguerra.adrsentinel.db.driver;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -69,9 +71,12 @@ public class DriverService extends AbstractGenericService {
 	 * @param license Il numero di patente alfanumerico univoco dell'autista.
 	 * @return L'entità {@link Driver} corrispondente.
 	 * @throws ResourceNotFoundException Se nessun autista è associato alla patente fornita.
+	 * @throws IllegalArgumentException Se la patente passata come parametro è {@code null}.
 	 */
 	@Cacheable(value = CaffeineCacheConfiguration.DRIVER_BY_LICENSE_CACHE, key = "#license")
-	public Driver getByLicense(String license) throws ResourceNotFoundException {
+	public Driver getByLicense(String license) throws ResourceNotFoundException, IllegalArgumentException {
+		if(license == null)
+			throw new IllegalArgumentException("License param cannot be null.");
 		logger.info("[DataBase CALL] Searching for the Driver by license: {}", license);
 		return driverRepository.findByLicense(license)
 			.orElseThrow(() -> new ResourceNotFoundException("Driver not found: " + license));
@@ -100,9 +105,12 @@ public class DriverService extends AbstractGenericService {
 	 * </p>
 	 * @param newDriver L'entità {@link Driver} (transient) da salvare.
 	 * @return L'entità {@link Driver} persistita (managed), arricchita di Primary Key.
+	 * @throws IllegalArgumentException Se il nuovo autista è {@code null}.
 	 */
 	@Transactional
-	public Driver save(Driver newDriver) {
+	public Driver save(Driver newDriver) throws IllegalArgumentException {
+		if(newDriver == null)
+			throw new IllegalArgumentException("Save aborted: new driver cannot be null.");
 		logger.info("[DataBase CALL] Saving new Driver with license: {}", newDriver.getLicense());
 		Driver savedDriver = driverRepository.save(newDriver);
 		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
@@ -139,16 +147,23 @@ public class DriverService extends AbstractGenericService {
 	 * @param updateDto Il payload ({@link DriverUpdateDTO}) contenente i nuovi dati validati.
 	 * @return L'entità {@link Driver} aggiornata e salvata sul database.
 	 * @throws ResourceNotFoundException Se l'autista richiesto non è presente a sistema.
+	 * @throws IllegalArgumentException Se il payload è {@code null}.
 	 */
 	@Transactional
-	public Driver updateDetailsByLicense(DriverUpdateDTO updateDto) throws ResourceNotFoundException {
+	public Driver updateDetailsByLicense(DriverUpdateDTO updateDto) throws ResourceNotFoundException, IllegalArgumentException {
+		if(updateDto == null)
+			throw new IllegalArgumentException("Update aborted: payload cannot be null.");
 		logger.info("[DataBase CALL] Updating Driver details with license: {}", updateDto.license());
 		Driver driver = driverRepository.findByLicense(updateDto.license())
 			.orElseThrow(() -> new ResourceNotFoundException("Driver not found: " + updateDto.license()));
 		driver.setFullName(updateDto.fullName());
 		driver.setPhoneNumber(updateDto.phoneNumber());
-		driver.setLicenseExpireDate(LocalDate.parse(updateDto.licenseExpireDate()));
-		driver.setCqcExpireDate(LocalDate.parse(updateDto.cqcExpireDate()));
+		try {
+			driver.setLicenseExpireDate(LocalDate.parse(updateDto.licenseExpireDate()));
+			driver.setCqcExpireDate(LocalDate.parse(updateDto.cqcExpireDate()));
+		} catch(DateTimeParseException | NullPointerException error) {
+			throw new IllegalArgumentException("The date could not be parsed.", error);
+		}
 		Driver updatedDriver = driverRepository.save(driver);
 		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
 			@Override
@@ -188,9 +203,12 @@ public class DriverService extends AbstractGenericService {
 	 * @return L'entità {@link Driver} aggiornata, gestita (Managed) dal Persistence Context di Hibernate.
 	 * @throws ResourceNotFoundException Se il numero patente fornito non corrisponde ad alcuna anagrafica 
 	 * presente a sistema (approccio Fail-Fast).
+	 * @throws IllegalArgumentException Se il payload è {@code null}.
 	 */
 	@Transactional
-	public Driver updateActiveStatusByLicense(DriverUpdateActiveStatusDTO updateDto) throws ResourceNotFoundException {
+	public Driver updateActiveStatusByLicense(DriverUpdateActiveStatusDTO updateDto) throws ResourceNotFoundException, IllegalArgumentException {
+		if(updateDto == null)
+			throw new IllegalArgumentException("Update aborted: payload cannot be null.");
 		logger.info("[DataBase CALL] Updating Driver active status with license: {}", updateDto.license());
 		Driver driver = driverRepository.findByLicense(updateDto.license())
 			.orElseThrow(() -> new ResourceNotFoundException("Driver not found: " + updateDto.license()));
@@ -229,14 +247,18 @@ public class DriverService extends AbstractGenericService {
 	 * @param updateDto Il payload contenente il set aggiornato di certificazioni ADR.
 	 * @return L'entità {@link Driver} aggiornata con le nuove abilitazioni.
 	 * @throws ResourceNotFoundException Se l'autista non viene trovato.
+	 * @throws IllegalArgumentException Se il payload è {@code null}.
 	 */
 	@Transactional
-	public Driver updateAdrCertifiedByLicense(DriverUpdateAdrApprovalDTO updateDto) throws ResourceNotFoundException {
+	public Driver updateAdrCertifiedByLicense(DriverUpdateAdrApprovalDTO updateDto) throws ResourceNotFoundException, IllegalArgumentException {
+		if(updateDto == null)
+			throw new IllegalArgumentException("Update aborted: payload cannot be null.");
 		logger.info("[DataBase CALL] Updating Driver adrCertified with license: {}", updateDto.license());
 		Driver driver = driverRepository.findByLicense(updateDto.license())
 			.orElseThrow(() -> new ResourceNotFoundException("Driver not found: " + updateDto.license()));
 		Set<DriverApproval> approvals = new HashSet<DriverApproval>();
-		for(String approval : updateDto.approvals())
+		Set<String> receivedApprovals = updateDto.approvals() == null ? Collections.emptySet() : updateDto.approvals();
+		for(String approval : receivedApprovals)
 			approvals.add(Enum.valueOf(DriverApproval.class, approval));
 		driver.setDriverApprovals(approvals);
 		Driver updatedDriver = driverRepository.save(driver);
@@ -272,9 +294,12 @@ public class DriverService extends AbstractGenericService {
 	 * ({@code true} se attualmente impegnato in un viaggio, {@code false} altrimenti).
 	 * @return L'entità {@link Driver} aggiornata e persistita nel database.
 	 * @throws ResourceNotFoundException Se nessun autista corrisponde all'ID fornito.
+	 * @throws IllegalArgumentException Se l'id fornito è {@code null}, oppure se l'id fornito è minore o uguale di {@code 0}.
 	 */
 	@Transactional
-	public Driver updateInTransitStatusById(Long id, boolean status) throws ResourceNotFoundException {
+	public Driver updateInTransitStatusById(Long id, boolean status) throws ResourceNotFoundException, IllegalArgumentException {
+		if(id == null || id <= 0)
+			throw new IllegalArgumentException("Update aborted: id cannot be null or negative.");
 		logger.info("[DataBase CALL] Updating Driver inTransit with id: {}", id);
 		Driver driver = driverRepository.findById(id)
 			.orElseThrow(() -> new ResourceNotFoundException("Driver not found: " + id));
@@ -332,15 +357,26 @@ public class DriverService extends AbstractGenericService {
 	 * provenienti dal Controller REST.
 	 * @return Una nuova istanza dell'entità {@link Vehicle}, completamente idratata 
 	 * con le caratteristiche e normative, pronta per l'operazione di {@code save()}.
+	 * @throws IllegalArgumentException Se il DTO, il fullname o la license sono {@code null}.
 	 */
-	public Driver mapToEntity(DriverRequestDTO dto) {
+	public Driver mapToEntity(DriverRequestDTO dto) throws IllegalArgumentException {
+		if(dto == null)
+			throw new IllegalArgumentException("DTO cannot be null.");
+		if(dto.fullName() == null)
+			throw new IllegalArgumentException("Full name into DTO cannot be null.");
+		if(dto.license() == null)
+			throw new IllegalArgumentException("License into DTO cannot be null.");
 		Driver driver = new Driver();
 		driver.setFullName(dto.fullName());
 		driver.setTaxCode(dto.taxCode());
 		driver.setPhoneNumber(dto.phoneNumber());
 		driver.setLicense(dto.license());
-		driver.setLicenseExpireDate(LocalDate.parse(dto.licenseExpireDate()));
-		driver.setCqcExpireDate(LocalDate.parse(dto.cqcExpireDate()));
+		try {
+			driver.setLicenseExpireDate(LocalDate.parse(dto.licenseExpireDate()));
+			driver.setCqcExpireDate(LocalDate.parse(dto.cqcExpireDate()));
+		} catch(DateTimeParseException | NullPointerException error) {
+			throw new IllegalArgumentException("The date could not be parsed.", error);
+		}
 		if(dto.driverApprovals() != null) {
 			Set<DriverApproval> approvals = dto.driverApprovals().stream()
 				.map(approval -> Enum.valueOf(DriverApproval.class, approval))

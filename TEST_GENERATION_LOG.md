@@ -509,3 +509,38 @@ Questi test sono stati scritti appositamente per **FALLIRE** finche' lo sviluppa
 4. **[MEDIA] Assenza di gestione logica per rotte inesistenti in `driverDispatcher`**
    - *Falla:* In `driverDispatcher`, l'invocazione `shipmentRouteService.getByRouteUUID()` restituisce null se l'UUID non viene trovato. Successivamente, si tenta di calcolare `route.getEtaMinutes()`, lanciando `NullPointerException` invece che una controllata `ResourceNotFoundException`.
    - *Fix:* Controllare esplicitamente: `if (route == null) throw new ResourceNotFoundException("Shipment route not found for given UUID");`
+
+---
+
+## Test Generation Report – `DriverService.java`
+
+**Data e Ora:** 2026-07-30T15:22+02:00
+**Classe Analizzata:** DriverService
+**File di Test Generato:** DriverServiceTest.java
+**Righe Generate:** 1465
+**Totale Metodi di Test:** 51
+**Test in Fase RED (TDD):** 17
+**Stack:** JUnit 5 Jupiter · Mockito · AssertJ
+**Isolamento:** Puro — nessun contesto Spring, nessun H2, nessun ORM avviato.
+
+### Metodi Coperti
+
+- `DriverService(DriverRepository, CacheManager)` – Costruttore (3 test)
+- `getByLicense(String)` – (4 test: happy, failure, null, blank)
+- `getAllDriver()` – (2 test: happy, empty list)
+- `save(Driver)` – (3 test: happy, delegation, null driver)
+- `updateDetailsByLicense(DriverUpdateDTO)` – (6 test: happy, not found, null DTO, malformed license date, malformed CQC date, boundary date)
+- `updateActiveStatusByLicense(DriverUpdateActiveStatusDTO)` – (5 test: deactivate, reactivate, not found, null DTO, idempotency)
+- `updateAdrCertifiedByLicense(DriverUpdateAdrApprovalDTO)` – (8 test: valid approvals, all 4 approvals, empty set, not found, invalid enum, null approvals set, null DTO, case-sensitive enum)
+- `updateInTransitStatusById(Long, boolean)` – (7 test: set true, set false, not found, null ID, idempotency, min ID boundary, negative ID)
+- `mapToEntity(DriverRequestDTO)` – (11 test: full mapping, null approvals, empty approvals, single approval, invalid enum, null DTO, malformed license date, malformed CQC date, null fullName, null license, null licenseExpireDate, transient entity, default boolean flags)
+
+### Vulnerabilità/Bug Rilevati
+
+1. **[CRITICA] Assenza di null-guard su tutti i parametri dei metodi pubblici** – Nessuno dei metodi (`getByLicense`, `save`, `updateDetailsByLicense`, `updateActiveStatusByLicense`, `updateAdrCertifiedByLicense`, `updateInTransitStatusById`, `mapToEntity`) possiede guard clause (`Objects.requireNonNull` o `if (param == null)`) sui propri parametri in ingresso. Un input `null` causa un `NullPointerException` non gestito nel logger (es. `newDriver.getLicense()` alla riga 106, `updateDto.license()` alla riga 145/194/235). **FIX:** Aggiungere `Objects.requireNonNull(param, "message")` come prima istruzione di ogni metodo.
+
+2. **[ALTA] `LocalDate.parse()` non protetto da try-catch in `updateDetailsByLicense` e `mapToEntity`** – Alle righe 150-151 (updateDetailsByLicense) e 342-343 (mapToEntity), `LocalDate.parse()` viene invocato su stringhe ricevute dal DTO senza alcuna gestione del `DateTimeParseException`. Se la validazione del Controller viene bypassata (es. chiamata interna tra Service), un formato non ISO-8601 propaga un'eccezione raw al chiamante. **FIX:** Avvolgere il parsing in un try-catch e sollevare un'eccezione di business controllata (es. `IllegalArgumentException` con messaggio descrittivo).
+
+3. **[ALTA] `updateAdrCertifiedByLicense` non gestisce `approvals()` null** – Alla riga 239, il ciclo `for(String approval : updateDto.approvals())` itera direttamente sul set senza verificare la nullità. Se il validatore del Controller non interviene (invocazione diretta), un set null causa `NullPointerException`. **FIX:** Aggiungere `if (updateDto.approvals() == null) throw new IllegalArgumentException(...)` o assegnare `Collections.emptySet()` come default.
+
+4. **[MEDIA] `updateInTransitStatusById` non valida range dell'ID** – Il metodo accetta qualsiasi valore `Long`, inclusi valori negativi e zero, semanticamente invalidi per una Primary Key auto-generata (IDENTITY). **FIX:** Aggiungere validazione `if (id == null || id <= 0) throw new IllegalArgumentException("ID must be a positive number")`.
